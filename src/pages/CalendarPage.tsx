@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -22,7 +22,10 @@ export function CalendarPage({ onSelectReservation }: { onSelectReservation?: (i
   const [startDate, setStartDate] = useState(todayISO());
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
   const numDays = 14;
   const dates: string[] = [];
   for (let i = 0; i < numDays; i++) dates.push(addDays(startDate, i));
@@ -34,7 +37,10 @@ export function CalendarPage({ onSelectReservation }: { onSelectReservation?: (i
     const [{ data: r }, { data: res }, { data: g }] = await Promise.all([
       supabase.from('rooms').select('*').in('branch_id', branchIds).eq('is_active', true).order('room_number'),
       supabase.from('reservations').select('*').in('branch_id', branchIds).in('status', ['confirmed', 'checked_in', 'tentative']).lt('check_in_date', endDate).gt('check_out_date', startDate),
-      supabase.from('guests').select('*'),
+      supabase
+  .from('guests')
+  .select('*')
+  .in('branch_id', branchIds),
     ]);
     setRooms((r as Room[]) || []);
     setReservations((res as Reservation[]) || []);
@@ -46,9 +52,15 @@ export function CalendarPage({ onSelectReservation }: { onSelectReservation?: (i
 
   const guestMap = new Map(guests.map((g) => [g.id, g]));
 
-  const getResForRoomOnDate = (roomId: string, date: string): Reservation | null => {
-    return reservations.find((r) => r.room_id === roomId && r.check_in_date <= date && r.check_out_date > date) || null;
-  };
+  const getDateOnly = (d:string)=>d.substring(0,10);
+
+  const getResForRoomOnDate = (roomId:string,date:string)=>{
+ return reservations.find(r =>
+   r.room_id === roomId &&
+   getDateOnly(r.check_in_date) <= date &&
+   getDateOnly(r.check_out_date) > date
+ ) || null;
+};
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -91,21 +103,23 @@ export function CalendarPage({ onSelectReservation }: { onSelectReservation?: (i
                     const res = getResForRoomOnDate(room.id, d);
                     if (!res) return <div key={d} className="flex-shrink-0 border-r border-slate-100" style={{ width: DAY_WIDTH }} />;
                     const guest = guestMap.get(res.primary_guest_id || '');
-                    const isStart = res.check_in_date === d;
-                    const isEnd = res.check_out_date === addDays(d, 1);
+                    const isStart = getDateOnly(res.check_in_date) === d;
+                    const isEnd = getDateOnly(res.check_out_date) === addDays(d,1);
                     const color = res.status === 'checked_in' ? 'bg-emerald-500' : res.status === 'confirmed' ? 'bg-blue-500' : 'bg-amber-400';
+                    const startIndex = dates.indexOf(getDateOnly(res.check_in_date));
+const endIndex = dates.indexOf(getDateOnly(res.check_out_date));
+
+const width = (endIndex - startIndex) * DAY_WIDTH;
                     return (
-                      <div key={d} className="flex-shrink-0 border-r border-slate-100 relative" style={{ width: DAY_WIDTH }}>
-                        {isStart && (
-                          <button
-                            onClick={() => onSelectReservation?.(res.id)}
-                            className={`absolute top-1 left-1 right-1 bottom-1 ${color} text-white text-xs rounded px-2 py-1 truncate hover:opacity-90 transition-opacity`}
-                            title={`${guest?.full_name || ''} · ${formatDate(res.check_in_date)} → ${formatDate(res.check_out_date)}`}
-                          >
-                            {guest?.full_name || 'Guest'}
-                          </button>
-                        )}
-                      </div>
+                      <div
+ className="absolute top-1 bottom-1 rounded px-2"
+ style={{
+   left:startIndex * DAY_WIDTH,
+   width
+ }}
+>
+ {guest?.full_name}
+</div>
                     );
                   })}
                 </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -22,7 +22,10 @@ export function InvoicesPage({ searchQuery }: { searchQuery?: string }) {
   const [selected, setSelected] = useState<Invoice | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
 
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -67,7 +67,10 @@ export function ReportsPage() {
   const [reportSummary, setReportSummary] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
 
   const runReport = useCallback(async (report: ReportDef) => {
     setLoading(true);

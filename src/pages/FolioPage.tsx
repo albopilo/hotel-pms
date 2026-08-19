@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -10,27 +10,32 @@ import { Modal } from '@/components/ui/Modal';
 import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, formatDateTime, todayISO } from '@/lib/format';
+import { formatIDR, formatDateTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
+import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
+import { parseDbError } from '@/lib/error-handler';
 import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod } from '@/types/database';
 
 export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string; reservationId?: string | null }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
-  const { showToast } = useToast();
   const [folios, setFolios] = useState<Folio[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFolio, setSelectedFolio] = useState<Folio | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
 
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const { data } = await supabase.from('folios').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('folios').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
+    if (error) { setLoading(false); return; }
     setFolios((data as Folio[]) || []);
     setLoading(false);
   }, [branchIds]);
@@ -92,7 +97,7 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
 }
 
 function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => void }) {
-  const { user, branches } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
   const [items, setItems] = useState<FolioItem[]>([]);
@@ -108,6 +113,11 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
   const [showPostStay, setShowPostStay] = useState(false);
 
   const isFinalized = folio.status === 'finalized';
+
+  const reloadItems = useCallback(async () => {
+    const { data } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).order('created_at');
+    setItems((data as FolioItem[]) || []);
+  }, [folio.id]);
 
   useEffect(() => {
     (async () => {
@@ -144,17 +154,14 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
   const netBalance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   const voidItem = async (item: FolioItem) => {
-    const { error } = await supabase.from('folio_items').update({ voided: true, voided_by: user!.id, voided_at: new Date().toISOString() }).eq('id', item.id);
-    if (error) { showToast(error.message, 'error'); return; }
-    await supabase.from('audit_logs').insert({
-      organization_id: user!.organization_id, branch_id: folio.branch_id, user_id: user!.id,
-      action: 'charge_voided', object_type: 'folio_item', object_id: item.id,
-      previous_value: { description: item.description, amount: item.amount },
-    });
-    showToast('Item voided', 'success');
-    // Reload
-    const { data } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).order('created_at');
-    setItems((data as FolioItem[]) || []);
+    try {
+      await folioService.voidItem(item.id, folio.id, user!.id, user!.organization_id, folio.branch_id);
+      showToast('Item voided', 'success');
+      await reloadItems();
+    } catch (e) {
+      const err = e instanceof FinancialError ? e : parseDbError(e as { message?: string });
+      showToast(err.message, 'error');
+    }
   };
 
   if (loading) return <Modal open onClose={onClose} title={t('folio.title')}><LoadingPage /></Modal>;
@@ -233,10 +240,10 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
         )}
       </div>
 
-      {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); const { data } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).order('created_at'); setItems((data as FolioItem[]) || []); }} />}
-      {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async () => { setShowTakePayment(false); const { data } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).order('created_at'); setItems((data as FolioItem[]) || []); }} />}
+      {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); }} />}
+      {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async () => { setShowTakePayment(false); await reloadItems(); }} />}
       {showTransfer && <RoomTransferModal folio={folio} reservation={reservation} currentRoom={room} userId={user!.id} orgId={user!.organization_id} branchId={folio.branch_id} onClose={() => setShowTransfer(false)} onSaved={onClose} />}
-      {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); const { data } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).order('created_at'); setItems((data as FolioItem[]) || []); }} />}
+      {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); await reloadItems(); }} />}
     </Modal>
   );
 }
@@ -251,34 +258,24 @@ function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, o
   const [form, setForm] = useState({ category_id: '', description: '', amount: '0', quantity: '1', notes: '' });
 
   const handleSubmit = async () => {
-    const cat = chargeCats.find((c) => c.id === form.category_id);
     if (!form.description || parseFloat(form.amount) <= 0) { showToast('Description and amount required', 'error'); return; }
     setSaving(true);
-    const amount = parseFloat(form.amount) * parseFloat(form.quantity);
-    const needsApproval = cat?.requires_approval && amount > (cat?.approval_threshold || 0);
-    const payload = {
-      folio_id: folio.id, branch_id: folio.branch_id, reservation_id: folio.reservation_id,
-      guest_id: folio.guest_id, room_id: room?.id || reservation?.room_id || null,
-      item_type: 'charge', category: cat?.code || 'miscellaneous', description: form.description,
-      quantity: parseFloat(form.quantity), unit_amount: parseFloat(form.amount), amount,
-      business_date: todayISO(), created_by: userId, notes: form.notes || null,
-      approved_by: needsApproval ? null : userId,
-    };
-    const { error } = await supabase.from('folio_items').insert(payload);
-    if (error) { showToast(error.message, 'error'); setSaving(false); return; }
-    await supabase.from('transactions').insert({
-      branch_id: folio.branch_id, organization_id: orgId, reservation_id: folio.reservation_id,
-      guest_id: folio.guest_id, folio_id: folio.id, transaction_type: 'additional_charge',
-      description: form.description, amount, debit_credit: 'debit', business_date: todayISO(), created_by: user_id_or_null(userId),
-    });
-    await supabase.from('audit_logs').insert({
-      organization_id: orgId, branch_id: folio.branch_id, user_id: userId,
-      action: cat?.is_damage ? 'damage_charge' : 'additional_charge', object_type: 'folio', object_id: folio.id,
-      new_value: { description: form.description, amount, category: cat?.code },
-    });
-    showToast('Charge added', 'success');
-    setSaving(false);
-    onSaved();
+    try {
+      await chargeService.addCharge({
+        folioId: folio.id, branchId: folio.branch_id, reservationId: folio.reservation_id,
+        guestId: folio.guest_id, roomId: room?.id || reservation?.room_id || null,
+        categoryId: form.category_id, description: form.description,
+        amount: parseFloat(form.amount), quantity: parseFloat(form.quantity),
+        notes: form.notes, userId, orgId,
+      }, chargeCats);
+      showToast('Charge added', 'success');
+      setSaving(false);
+      onSaved();
+    } catch (e) {
+      const err = e instanceof FinancialError ? e : parseDbError(e as { message?: string });
+      showToast(err.message, 'error');
+      setSaving(false);
+    }
   };
 
   return (
@@ -314,43 +311,22 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
   const handleSubmit = async () => {
     if (!form.method_id || parseFloat(form.amount) <= 0) { showToast('Method and amount required', 'error'); return; }
     setSaving(true);
-    const amount = parseFloat(form.amount);
-    const method = selectedMethod!;
-    const payNum = `PAY-${Date.now().toString().slice(-8)}`;
-    // Insert payment record
-    const { error: payErr } = await supabase.from('payments').insert({
-      branch_id: folio.branch_id, reservation_id: folio.reservation_id, folio_id: folio.id,
-      guest_id: folio.guest_id, payment_number: payNum, amount,
-      payment_method_id: method.id, payment_method_code: method.code,
-      payment_subtype: form.subtype || null, edc_terminal: form.edc_terminal || null,
-      reference_number: form.reference_number || null, approval_code: form.approval_code || null,
-      is_ota: method.is_ota, business_date: todayISO(), created_by: userId, notes: form.notes || null,
-    });
-    if (payErr) { showToast(payErr.message, 'error'); setSaving(false); return; }
-    // Insert folio item (negative for payment)
-    await supabase.from('folio_items').insert({
-      folio_id: folio.id, branch_id: folio.branch_id, reservation_id: folio.reservation_id,
-      guest_id: folio.guest_id, item_type: 'payment', category: method.code,
-      description: `Payment: ${method.name}${form.subtype ? ` (${form.subtype})` : ''}`,
-      quantity: 1, unit_amount: -amount, amount: -amount, business_date: todayISO(), created_by: userId,
-      notes: form.notes || null,
-    });
-    // Ledger
-    await supabase.from('transactions').insert({
-      branch_id: folio.branch_id, organization_id: orgId, reservation_id: folio.reservation_id,
-      guest_id: folio.guest_id, folio_id: folio.id, transaction_type: 'payment',
-      description: `Payment ${method.name}${form.subtype ? ` ${form.subtype}` : ''}`, amount,
-      debit_credit: 'credit', payment_method_code: method.code,
-      reference_number: form.reference_number || null, business_date: todayISO(), created_by: userId,
-    });
-    await supabase.from('audit_logs').insert({
-      organization_id: orgId, branch_id: folio.branch_id, user_id: userId,
-      action: 'payment', object_type: 'folio', object_id: folio.id,
-      new_value: { amount, method: method.code, subtype: form.subtype },
-    });
-    showToast('Payment recorded', 'success');
-    setSaving(false);
-    onSaved();
+    try {
+      await paymentService.recordPayment({
+        folioId: folio.id, branchId: folio.branch_id, reservationId: folio.reservation_id,
+        guestId: folio.guest_id, methodId: form.method_id, amount: parseFloat(form.amount),
+        subtype: form.subtype, edcTerminal: form.edc_terminal,
+        referenceNumber: form.reference_number, approvalCode: form.approval_code,
+        notes: form.notes, userId, orgId,
+      }, paymentMethods);
+      showToast('Payment recorded', 'success');
+      setSaving(false);
+      onSaved();
+    } catch (e) {
+      const err = e instanceof FinancialError ? e : parseDbError(e as { message?: string });
+      showToast(err.message, 'error');
+      setSaving(false);
+    }
   };
 
   return (
@@ -400,27 +376,30 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
   const handleSubmit = async () => {
     if (!toRoomId) { showToast('Select a room', 'error'); return; }
     setSaving(true);
-    // Update reservation
-    await supabase.from('reservations').update({ room_id: toRoomId }).eq('id', folio.reservation_id);
-    // Old room -> dirty, new room -> occupied
-    if (currentRoom) await supabase.from('rooms').update({ status: 'dirty' }).eq('id', currentRoom.id);
-    await supabase.from('rooms').update({ status: 'occupied' }).eq('id', toRoomId);
-    // Record transfer
-    await supabase.from('room_transfers').insert({
-      reservation_id: folio.reservation_id, from_room_id: currentRoom?.id || null,
-      to_room_id: toRoomId, reason: reason || null, performed_by: userId,
-    });
-    await supabase.from('audit_logs').insert({
-      organization_id: orgId, branch_id: branchId, user_id: userId,
-      action: 'room_transfer', object_type: 'reservation', object_id: folio.reservation_id,
-      previous_value: { room: currentRoom?.room_number }, new_value: { room: rooms.find((r) => r.id === toRoomId)?.room_number },
-    });
-    // Invalidate old card
-    const provider = getLockProvider();
-    await provider.invalidateGuestCard({ cardId: folio.reservation_id });
-    showToast('Room transferred', 'success');
-    setSaving(false);
-    onSaved();
+    try {
+      const { error: resErr } = await supabase.from('reservations').update({ room_id: toRoomId }).eq('id', folio.reservation_id);
+      if (resErr) throw resErr;
+      if (currentRoom) await supabase.from('rooms').update({ status: 'dirty' }).eq('id', currentRoom.id);
+      await supabase.from('rooms').update({ status: 'occupied' }).eq('id', toRoomId);
+      await supabase.from('room_transfers').insert({
+        reservation_id: folio.reservation_id, from_room_id: currentRoom?.id || null,
+        to_room_id: toRoomId, reason: reason || null, performed_by: userId,
+      });
+      await supabase.from('audit_logs').insert({
+        organization_id: orgId, branch_id: branchId, user_id: userId,
+        action: 'room_transfer', object_type: 'reservation', object_id: folio.reservation_id,
+        previous_value: { room: currentRoom?.room_number }, new_value: { room: rooms.find((r) => r.id === toRoomId)?.room_number },
+      });
+      const provider = getLockProvider();
+      await provider.invalidateGuestCard({ cardId: folio.reservation_id });
+      showToast('Room transferred', 'success');
+      setSaving(false);
+      onSaved();
+    } catch (e) {
+      const err = parseDbError(e as { message?: string });
+      showToast(err.message, 'error');
+      setSaving(false);
+    }
   };
 
   return (
@@ -448,38 +427,23 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
   const [form, setForm] = useState({ category_id: '', description: '', amount: '0', notes: '' });
 
   const handleSubmit = async () => {
-    const cat = chargeCats.find((c) => c.id === form.category_id);
     if (!form.description || parseFloat(form.amount) <= 0) { showToast('Description and amount required', 'error'); return; }
     setSaving(true);
-    const amount = parseFloat(form.amount);
-    await supabase.from('folio_items').insert({
-      folio_id: folio.id, branch_id: folio.branch_id, reservation_id: folio.reservation_id,
-      guest_id: folio.guest_id, room_id: room?.id || reservation?.room_id || null,
-      item_type: 'charge', category: cat?.code || 'post_stay', description: `POST-STAY: ${form.description}`,
-      quantity: 1, unit_amount: amount, amount, business_date: todayISO(),
-      is_post_stay: true, created_by: userId, notes: form.notes || null,
-    });
-    await supabase.from('additional_charges').insert({
-      branch_id: folio.branch_id, reservation_id: folio.reservation_id, folio_id: folio.id,
-      guest_id: folio.guest_id, room_id: room?.id || reservation?.room_id || null,
-      charge_category_id: cat?.id || null, category_code: cat?.code || 'post_stay',
-      description: form.description, amount, quantity: 1, is_post_stay: true,
-      status: 'posted', business_date: todayISO(), created_by: userId, notes: form.notes || null,
-    });
-    await supabase.from('transactions').insert({
-      branch_id: folio.branch_id, organization_id: orgId, reservation_id: folio.reservation_id,
-      guest_id: folio.guest_id, folio_id: folio.id, transaction_type: 'post_stay_charge',
-      description: `Post-stay: ${form.description}`, amount, debit_credit: 'debit',
-      business_date: todayISO(), created_by: userId,
-    });
-    await supabase.from('audit_logs').insert({
-      organization_id: orgId, branch_id: folio.branch_id, user_id: userId,
-      action: 'post_stay_charge', object_type: 'folio', object_id: folio.id,
-      new_value: { description: form.description, amount },
-    });
-    showToast('Post-stay charge added', 'success');
-    setSaving(false);
-    onSaved();
+    try {
+      await chargeService.addPostStayCharge({
+        folioId: folio.id, branchId: folio.branch_id, reservationId: folio.reservation_id,
+        guestId: folio.guest_id, roomId: room?.id || reservation?.room_id || null,
+        categoryId: form.category_id, description: form.description,
+        amount: parseFloat(form.amount), notes: form.notes, userId, orgId,
+      }, chargeCats);
+      showToast('Post-stay charge added', 'success');
+      setSaving(false);
+      onSaved();
+    } catch (e) {
+      const err = e instanceof FinancialError ? e : parseDbError(e as { message?: string });
+      showToast(err.message, 'error');
+      setSaving(false);
+    }
   };
 
   return (
@@ -497,8 +461,4 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
       </div>
     </Modal>
   );
-}
-
-function user_id_or_null(id: string): string {
-  return id;
 }

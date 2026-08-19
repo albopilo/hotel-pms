@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -24,7 +24,10 @@ export function RoomTypesPage() {
   const [editing, setEditing] = useState<RoomType | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<RoomType | null>(null);
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
 
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }

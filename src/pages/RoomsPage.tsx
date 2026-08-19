@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -28,7 +28,10 @@ export function RoomsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
   const isSuperAdmin = user?.role === 'super_admin';
 
   const load = useCallback(async () => {
@@ -36,7 +39,7 @@ export function RoomsPage() {
     setLoading(true);
     const [{ data: roomData }, { data: typeData }] = await Promise.all([
       supabase.from('rooms').select('*').in('branch_id', branchIds).eq('is_active', true).order('room_number'),
-      supabase.from('room_types').select('*').in('branch_id', branchIds).order('sort_order'),
+      supabase.from('room_types').select('*')
     ]);
     setRooms((roomData as Room[]) || []);
     setRoomTypes((typeData as RoomType[]) || []);
@@ -53,14 +56,23 @@ export function RoomsPage() {
   const untyped = rooms.filter((r) => !roomTypes.find((rt) => rt.id === r.room_type_id));
 
   const changeStatus = async (room: Room, newStatus: RoomStatus) => {
-    const { error } = await supabase.from('rooms').update({ status: newStatus }).eq('id', room.id);
-    if (error) { showToast(error.message, 'error'); return; }
-    await supabase.from('room_status_history').insert({
+    await supabase
+.from('rooms')
+.update({
+ status:newStatus
+})
+.eq('id',room.id);
+    const {error:historyError}=await supabase
+.from('room_status_history')
+.insert({
       room_id: room.id,
       previous_status: room.status,
       new_status: newStatus,
       changed_by: user?.id,
     });
+    if(historyError){
+ console.error(historyError);
+}
     showToast(`${t('common.status')}: ${t(`room.${newStatus}`)}`, 'success');
     setSelectedRoom({ ...room, status: newStatus });
     load();
@@ -141,7 +153,7 @@ export function RoomsPage() {
         room={editingRoom}
         branches={branches}
         roomTypes={roomTypes}
-        userId={user!.id}
+        userId={user?.id || ''}
         onSaved={() => { setShowForm(false); load(); }}
       />
     </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -29,23 +29,43 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation }: { se
   const [statusFilter, setStatusFilter] = useState('all');
   const [localSearch, setLocalSearch] = useState(searchQuery);
 
-  const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
+  const branchIds = useMemo(
+  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+  [selectedBranchId, branches]
+);
 
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const [{ data: res }, { data: g }, { data: r }, { data: rt }, { data: bs }] = await Promise.all([
-      supabase.from('reservations').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(200),
-      supabase.from('guests').select('*').limit(500),
-      supabase.from('rooms').select('*').in('branch_id', branchIds),
-      supabase.from('room_types').select('*').in('branch_id', branchIds),
-      supabase.from('booking_sources').select('*').order('sort_order'),
-    ]);
-    setReservations((res as Reservation[]) || []);
-    setGuests((g as Guest[]) || []);
-    setRooms((r as Room[]) || []);
-    setRoomTypes((rt as RoomType[]) || []);
-    setBookingSources((bs as BookingSource[]) || []);
+const results = await Promise.all([
+  supabase.from('reservations').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(200),
+  supabase.from('guests').select('*').limit(500),
+  supabase.from('rooms').select('*').in('branch_id', branchIds),
+  supabase.from('room_types').select('*').in('branch_id', branchIds),
+  supabase.from('booking_sources').select('*').order('sort_order'),
+]);
+
+const [
+  reservationsResult,
+  guestsResult,
+  roomsResult,
+  roomTypesResult,
+  bookingSourcesResult,
+] = results;
+
+console.log({
+  reservationsError: reservationsResult.error,
+  guestsError: guestsResult.error,
+  roomsError: roomsResult.error,
+  roomTypesError: roomTypesResult.error,
+  bookingSourcesError: bookingSourcesResult.error,
+});
+
+setReservations(reservationsResult.data || []);
+setGuests(guestsResult.data || []);
+setRooms(roomsResult.data || []);
+setRoomTypes(roomTypesResult.data || []);
+setBookingSources(bookingSourcesResult.data || []);
     setLoading(false);
   }, [branchIds]);
 
