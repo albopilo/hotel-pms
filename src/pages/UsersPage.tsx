@@ -124,7 +124,7 @@ setSaving(false);
 return <Modal open={open} onClose={onClose} title={profile?t('common.edit'):t('common.add')} size="md" footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
 <form className="space-y-4">
 <Input label={t('common.name')} value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/>
-<Input label={t('common.email')} type="email" value={form.email} disabled={!!profile} onChange={e=>setForm({...form,email:e.target.value})}/>
+<Input label={t('common.email')} type="email" value={form.email} autoComplete="username" disabled={!!profile} onChange={e=>setForm({...form,email:e.target.value})}/>
 {!profile&&<Input autoComplete="new-password" label="Password" type="password" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/>}
 <Select label={t('common.role')} value={form.role} onChange={e=>setForm({...form,role:e.target.value as UserRole})}>
 <option value="receptionist">{t('auth.receptionist')}</option>
