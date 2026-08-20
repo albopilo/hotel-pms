@@ -118,11 +118,8 @@ if(form.deposit===''||isNaN(Number(form.deposit))||Number(form.deposit)<0)e.depo
 setErrors(e);return !Object.keys(e).length;
 };
 
-const checkConflict=async()=>{
-if(!form.room_id)return false;
-const {data}=await supabase.from('reservations').select('id,check_in_date,check_out_date,status,primary_guest_id').eq('room_id',form.room_id).in('status',['confirmed','checked_in']).lt('check_in_date',form.check_out_date).gt('check_out_date',form.check_in_date).neq('id',reservation?.id||'');
-return data||[];
-};
+const checkConflict=async()=>{ if(!form.room_id)return false; const query=supabase .from('reservations') .select('id,check_in_date,check_out_date,status,primary_guest_id') .eq('room_id',form.room_id) .in('status',['confirmed','checked_in']) .lt('check_in_date',form.check_out_date) .gt('check_out_date',form.check_in_date); if(reservation?.id){ query.neq('id',reservation.id);}
+const {data}=await query; return data||[]; };
 
 const checkOccupied=()=>{
 const room=rooms.find(r=>r.id===form.room_id);
@@ -176,21 +173,174 @@ await supabase.from('reservations').insert(payload).select().single();
 if(error){showToast(error.message,'error');setSaving(false);return}
 
 if(!reservation&&data){
-await supabase.from('folios').insert({
-branch_id:form.branch_id,
-reservation_id:data.id,
-guest_id:form.guest_id,
-folio_number:`FOL-${Date.now().toString().slice(-8)}`,
-status:'open'
+
+const {data:folio,error:folioError}=await supabase
+.from('folios')
+.insert({
+  branch_id:form.branch_id,
+  reservation_id:data.id,
+  guest_id:form.guest_id,
+  folio_number:`FOL-${Date.now().toString().slice(-8)}`,
+  status:'open'
+})
+.select()
+.single();
+
+if(folioError){
+  showToast(folioError.message,'error');
+}
+else if(folio){
+
+const items=[];
+
+items.push({
+  folio_id:folio.id,
+  branch_id:form.branch_id,
+  reservation_id:data.id,
+  guest_id:form.guest_id,
+  item_type:'charge',
+  category:'room',
+  description:'Room charge',
+  quantity:Number(nights)||1,
+  unit_amount:Number(form.rate),
+  amount:Number(form.rate)*(Number(nights)||1),
+  created_by:userId
 });
 
-await supabase.from('folio_items').insert({
-folio_id:(await supabase.from('folios').select('id').eq('reservation_id',data.id).single()).data?.id,
-item_type:'room_charge',
-description:'Room charge',
-amount:Number(form.rate)*nights
+if(Number(form.discount)>0){
+items.push({
+  folio_id:folio.id,
+  branch_id:form.branch_id,
+  reservation_id:data.id,
+  guest_id:form.guest_id,
+  item_type:'charge',
+  category:'discount',
+  description:'Discount',
+  quantity:1,
+  unit_amount:-Number(form.discount),
+  amount:-Number(form.discount),
+  created_by:userId
 });
 }
+
+if(Number(form.tax)>0){
+items.push({
+  folio_id:folio.id,
+  branch_id:form.branch_id,
+  reservation_id:data.id,
+  guest_id:form.guest_id,
+  item_type:'tax',
+  category:'tax',
+  description:'Tax',
+  quantity:1,
+  unit_amount:Number(form.tax),
+  amount:Number(form.tax),
+  created_by:userId
+});
+}
+
+if(Number(form.deposit)>0){
+items.push({
+  folio_id:folio.id,
+  branch_id:form.branch_id,
+  reservation_id:data.id,
+  guest_id:form.guest_id,
+  item_type:'payment',
+  category:'payment',
+  description:'Deposit',
+  quantity:1,
+  unit_amount:-Number(form.deposit),
+  amount:-Number(form.deposit),
+  created_by:userId
+});
+}
+
+console.log("ITEMS BEFORE INSERT",items);
+
+const {data:insertedItems,error:itemError}=await supabase
+.from('folio_items')
+.insert(
+  items.map(item=>({
+    ...item,
+    folio_id: folio.id,
+    reservation_id:data.id,
+    guest_id:form.guest_id,
+    branch_id:form.branch_id
+  }))
+)
+.select();
+
+console.log("CREATED FOLIO:",folio.id);
+console.log("INSERTED ITEMS:",insertedItems);
+
+if(itemError){
+
+ console.error(
+   'Folio item creation failed:',
+   itemError
+ );
+
+ showToast(itemError.message,'error');
+
+}
+else {
+
+ const {data:allItems}=await supabase .from('folio_items') .select('item_type,amount') .eq('folio_id',folio.id) .eq('voided',false);
+ const totals={ total_charges:0, total_payments:0, total_discounts:0, total_tax:0};
+
+ (allItems||[]).forEach(item=>{
+
+   switch(item.item_type){
+
+     case 'charge':
+       totals.total_charges += Number(item.amount);
+       break;
+
+     case 'payment':
+       totals.total_payments += Math.abs(Number(item.amount));
+       break;
+
+     case 'discount':
+       totals.total_discounts += Math.abs(Number(item.amount));
+       break;
+
+     case 'tax':
+       totals.total_tax += Number(item.amount);
+       break;
+
+   }
+
+ });
+
+
+ const {error:updateError}=await supabase
+ .from('folios')
+ .update({
+
+   total_charges: totals.total_charges,
+   total_payments: totals.total_payments,
+   total_discounts: totals.total_discounts,
+   total_tax: totals.total_tax,
+
+   deposit: totals.total_payments,
+
+   balance:
+      totals.total_charges
+      - totals.total_discounts
+      + totals.total_tax
+      - totals.total_payments
+
+ })
+ .eq('id',folio.id);
+
+
+ if(updateError){
+    console.error("FOLIO UPDATE FAILED",updateError);
+ }
+
+}
+
+}}
 
 if(form.room_id)await supabase.from('rooms').update({status:'reserved'}).eq('id',form.room_id);
 
