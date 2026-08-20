@@ -12,6 +12,7 @@ import { LoadingPage,EmptyState } from '@/components/ui/States';
 import { formatIDR,formatDate,formatDateTime } from '@/lib/format';
 import { Receipt,Search,Printer } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation } from '@/types/database';
+import { invoiceService } from '@/services/invoiceService';
 
 export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
   const {branches}=useAuth();
@@ -29,13 +30,11 @@ export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
     if(!branchIds.length){setLoading(false);return;}
     setLoading(true);
 
-    const {data}=await supabase.from('invoices')
-      .select('*')
-      .in('branch_id',branchIds)
-      .order('created_at',{ascending:false})
-      .limit(100);
+    const data =
+ await invoiceService.getInvoicesByBranch(branchIds);
 
-    setInvoices((data as Invoice[])||[]);
+
+setInvoices(data || []);
     setLoading(false);
   },[branchIds]);
 
@@ -121,28 +120,14 @@ export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
 }
 
 async function createInvoiceSnapshot(invoiceId:string){
-  const {data:invoice}=await supabase.from('invoices').select('*').eq('id',invoiceId).single();
-  if(!invoice)return;
-
-  const [{data:items},{data:guest},{data:branch},{data:reservation},{data:folio}]=await Promise.all([
-    supabase.from('invoice_items').select('*').eq('invoice_id',invoiceId).order('sort_order'),
-    supabase.from('guests').select('*').eq('id',invoice.guest_id).maybeSingle(),
-    supabase.from('branches').select('*').eq('id',invoice.branch_id).maybeSingle(),
-    supabase.from('reservations').select('*').eq('id',invoice.reservation_id).maybeSingle(),
-    supabase.from('folios').select('*').eq('id',invoice.folio_id).maybeSingle()
-  ]);
+  const invoice = await invoiceService.getInvoiceDetail(invoice.id);
 
   await supabase.from('invoice_snapshots').upsert({
     invoice_id:invoiceId,
     snapshot:{
       invoice,
-      items:items||[],
-      guest:guest||null,
-      branch:branch||null,
-      reservation:reservation||null,
-      folio:folio||null,
       generated_at:new Date().toISOString()
-    }
+   }
   });
 }
 
@@ -165,17 +150,12 @@ function InvoiceDetailModal({invoice,onClose}:{invoice:Invoice;onClose:()=>void}
 
   useEffect(()=>{
     (async()=>{
-      const [{data:i},{data:g},{data:b},{data:r}]=await Promise.all([
-        supabase.from('invoice_items').select('*').eq('invoice_id',invoice.id).order('sort_order'),
-        supabase.from('guests').select('*').eq('id',invoice.guest_id).maybeSingle(),
-        supabase.from('branches').select('*').eq('id',invoice.branch_id).maybeSingle(),
-        supabase.from('reservations').select('*').eq('id',invoice.reservation_id).maybeSingle()
-      ]);
+      const detail = await invoiceService.getInvoiceDetail(invoice.id);
 
-      setItems((i as InvoiceItem[])||[]);
-      setGuest(g as Guest);
-      setBranch(b as Branch);
-      setReservation(r as Reservation);
+      setItems(detail.invoice_items || []);
+      setGuest(detail.guests || null);
+      setBranch(detail.branches || null);
+      setReservation(detail.reservations || null);
       setLoading(false);
     })();
   },[invoice]);

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import type { Folio, FolioItem, PaymentMethod, ChargeCategory } from '@/types/database';
-import { todayISO } from '@/lib/format';
+import { getBusinessDate } from '@/services/businessDateService';
 
 export interface FolioTotals {
   totalCharges: number;
@@ -155,7 +155,7 @@ export const paymentService = {
     const method = methods.find((m) => m.id === input.methodId);
     if (!method) throw new FinancialError('Invalid payment method', 'invalid_method');
 
-    const payNum = `PAY-${Date.now().toString().slice(-8)}`;
+    const payNum = `PAY-${new Date().getFullYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
 
     const { error: payErr } = await supabase.from('payments').insert({
       branch_id: input.branchId,
@@ -171,7 +171,7 @@ export const paymentService = {
       reference_number: input.referenceNumber || null,
       approval_code: input.approvalCode || null,
       is_ota: method.is_ota,
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
       notes: input.notes || null,
     });
@@ -193,7 +193,7 @@ export const paymentService = {
       quantity: 1,
       unit_amount: -input.amount,
       amount: -input.amount,
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
       notes: input.notes || null,
     });
@@ -211,7 +211,7 @@ export const paymentService = {
       debit_credit: 'credit',
       payment_method_code: method.code,
       reference_number: input.referenceNumber || null,
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
     });
     if (txnErr) throw new FinancialError(txnErr.message, 'db_error');
@@ -251,7 +251,7 @@ export const chargeService = {
       quantity: input.quantity || 1,
       unit_amount: input.amount,
       amount,
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
       notes: input.notes || null,
       approved_by: needsApproval ? null : input.userId,
@@ -273,7 +273,7 @@ export const chargeService = {
       description: input.description,
       amount,
       debit_credit: 'debit',
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
     });
     if (txnErr) throw new FinancialError(txnErr.message, 'db_error');
@@ -309,7 +309,7 @@ export const chargeService = {
       quantity: 1,
       unit_amount: input.amount,
       amount: input.amount,
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       is_post_stay: true,
       created_by: input.userId,
       notes: input.notes || null,
@@ -334,7 +334,7 @@ export const chargeService = {
       quantity: 1,
       is_post_stay: true,
       status: 'posted',
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
       notes: input.notes || null,
     });
@@ -350,7 +350,7 @@ export const chargeService = {
       description: `Post-stay: ${input.description}`,
       amount: input.amount,
       debit_credit: 'debit',
-      business_date: todayISO(),
+      business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
     });
     if (txnErr) throw new FinancialError(txnErr.message, 'db_error');

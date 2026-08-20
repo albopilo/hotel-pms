@@ -480,12 +480,6 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
 
     setCompleting(true);
 
-    const { error } = await supabase.from('reservations').update({
-      status:'checked_out',
-      actual_check_out:`${todayISO()}T${checkoutTime}:00`,
-      check_out_time:checkoutTime
-    }).eq('id',reservation.id);
-
     if(error){
       showToast(error.message,'error');
       return setCompleting(false);
@@ -493,11 +487,49 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
 
     if(room) await supabase.from('rooms').update({status:'dirty'}).eq('id',room.id);
 
-    if(folio) await supabase.from('folios').update({
-      status:'finalized',
-      finalized_at:new Date().toISOString(),
-      finalized_by:user!.id
-    }).eq('id',folio.id);
+// 1. Calculate balance first
+
+const totals = await folioService.getTotals(folio.id);
+
+if(totals.netBalance > 0){
+  throw new FinancialError(
+    'Cannot finalize folio with outstanding balance',
+    'balance_due'
+  );
+}
+
+
+// 2. Create invoice
+
+const invoiceId =
+ await invoiceService.createInvoice({
+   folioId:folio.id,
+   branchId:reservation.branch_id,
+   organizationId:user!.organization_id,
+   reservationId:reservation.id,
+   guestId:reservation.guest_id,
+   userId:user!.id
+ });
+
+
+// 3. Finalize folio
+
+await supabase.from('folios').update({
+ status:'finalized',
+ finalized_at:new Date().toISOString(),
+ finalized_by:user!.id
+})
+.eq('id',folio.id);
+
+
+// 4. Checkout reservation
+
+await supabase.from('reservations').update({
+ status:'checked_out',
+ actual_check_out:`${todayISO()}T${checkoutTime}:00`,
+ check_out_time:checkoutTime
+})
+.eq('id',reservation.id); 
 
     await getLockProvider().invalidateGuestCard({cardId:reservation.id});
 
@@ -518,7 +550,7 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
 
   if(loading) return <Modal open onClose={onClose} title={t('checkout.title')}><LoadingPage/></Modal>;
 
-  return (
+  return (<>
     <Modal open onClose={onClose} title={t('checkout.title')} size="lg">
       <div className="space-y-4">
 
@@ -625,20 +657,20 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
           </Button>
         </div>
       </div>
-
-      <ConfirmModal
-        open={showOverrideConfirm}
-        onClose={()=>setShowOverrideConfirm(false)}
-        onConfirm={()=>{
-          setOverrideUnpaid(true);
-          setShowOverrideConfirm(false);
-        }}
-        title={t('checkout.unpaid_balance')}
-        message={t('checkout.unpaid_balance_warning')}
-        confirmLabel={t('checkout.override')}
-        variant="danger"
-      />
     </Modal>
+      <ConfirmModal
+      open={showOverrideConfirm}
+      onClose={()=>setShowOverrideConfirm(false)}
+      onConfirm={()=>{
+        setOverrideUnpaid(true);
+        setShowOverrideConfirm(false);
+      }}
+      title={t('checkout.unpaid_balance')}
+      message={t('checkout.unpaid_balance_warning')}
+      confirmLabel={t('checkout.override')}
+      variant="danger"
+    />
+  </>
   );
 }
 
