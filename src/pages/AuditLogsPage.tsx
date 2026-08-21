@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useState, useEffect, useCallback, Fragment, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -81,12 +81,19 @@ function formatValueObj(val: Record<string, unknown> | null): { label: string; v
     });
 }
 
+interface RefInfo {
+  refNumber: string;
+  roomNumber: string;
+  guestName: string;
+}
+
 export function AuditLogsPage() {
   const { user } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [profiles, setProfiles] = useState<Record<string, string>>({});
+  const [refMap, setRefMap] = useState<Record<string, RefInfo>>({});
   const [loading, setLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState(addDays(todayISO(), -30));
   const [dateTo, setDateTo] = useState(addDays(todayISO(), 1));
@@ -100,31 +107,121 @@ export function AuditLogsPage() {
     if (selectedBranchId) query = query.eq('branch_id', selectedBranchId);
     if (actionFilter !== 'all') query = query.eq('action', actionFilter);
     const { data } = await query;
-    setLogs((data as AuditLog[]) || []);
+    const logData = (data as AuditLog[]) || [];
+    setLogs(logData);
 
     const { data: prof } = await supabase.from('profiles').select('id, full_name');
     const map: Record<string, string> = {};
     (prof || []).forEach((p: any) => { map[p.id] = p.full_name; });
     setProfiles(map);
+
+    // Resolve object_ids to reference numbers, room numbers, and guest names
+    const objectIds = logData.map(l => l.object_id).filter(Boolean) as string[];
+    const refInfoMap: Record<string, RefInfo> = {};
+
+    if (objectIds.length > 0) {
+      const [{ data: reservations }, { data: folios }, { data: invoices }] = await Promise.all([
+        supabase.from('reservations').select('id, reservation_number, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', objectIds),
+        supabase.from('folios').select('id, folio_number, reservation_id, guest_id, guest:guests(full_name)').in('id', objectIds),
+        supabase.from('invoices').select('id, invoice_number, reservation_id, folio_id, guest_id, guest:guests(full_name)').in('id', objectIds),
+      ]);
+
+      const roomIds = new Set<string>();
+      (reservations || []).forEach((r: any) => {
+        if (r.room_id) roomIds.add(r.room_id);
+        refInfoMap[r.id] = {
+          refNumber: r.reservation_number,
+          roomNumber: '',
+          guestName: r.primary_guest?.full_name || '',
+        };
+      });
+
+      // Collect folio reservation room_ids
+      const folioResIds = (folios || []).map((f: any) => f.reservation_id).filter(Boolean);
+      if (folioResIds.length > 0) {
+        const { data: folioRes } = await supabase.from('reservations').select('id, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', folioResIds);
+        const folioResMap: Record<string, any> = {};
+        (folioRes || []).forEach((r: any) => { folioResMap[r.id] = r; if (r.room_id) roomIds.add(r.room_id); });
+
+        (folios || []).forEach((f: any) => {
+          const res = folioResMap[f.reservation_id];
+          refInfoMap[f.id] = {
+            refNumber: f.folio_number,
+            roomNumber: '',
+            guestName: f.guest?.full_name || res?.primary_guest?.full_name || '',
+          };
+        });
+      }
+
+      // Collect invoice reservation/folio room_ids
+      const invResIds = (invoices || []).filter((i: any) => i.reservation_id).map((i: any) => i.reservation_id);
+      if (invResIds.length > 0) {
+        const { data: invRes } = await supabase.from('reservations').select('id, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', invResIds);
+        const invResMap: Record<string, any> = {};
+        (invRes || []).forEach((r: any) => { invResMap[r.id] = r; if (r.room_id) roomIds.add(r.room_id); });
+
+        (invoices || []).forEach((i: any) => {
+          const res = invResMap[i.reservation_id];
+          refInfoMap[i.id] = {
+            refNumber: i.invoice_number,
+            roomNumber: '',
+            guestName: i.guest?.full_name || res?.primary_guest?.full_name || '',
+          };
+        });
+      }
+
+      // Resolve room numbers
+      if (roomIds.size > 0) {
+        const { data: rooms } = await supabase.from('rooms').select('id, room_number').in('id', Array.from(roomIds));
+        const roomMap: Record<string, string> = {};
+        (rooms || []).forEach((r: any) => { roomMap[r.id] = r.room_number; });
+
+        // Fill in room numbers for reservations
+        (reservations || []).forEach((r: any) => {
+          if (refInfoMap[r.id]) refInfoMap[r.id].roomNumber = roomMap[r.room_id] || '';
+        });
+        (folios || []).forEach((f: any) => {
+          if (refInfoMap[f.id]) {
+            const res = (folioRes || [])?.find((r: any) => r.id === f.reservation_id);
+            if (res) refInfoMap[f.id].roomNumber = roomMap[res.room_id] || '';
+          }
+        });
+        (invoices || []).forEach((i: any) => {
+          if (refInfoMap[i.id]) {
+            const res = (invRes || [])?.find((r: any) => r.id === i.reservation_id);
+            if (res) refInfoMap[i.id].roomNumber = roomMap[res.room_id] || '';
+          }
+        });
+      }
+    }
+
+    setRefMap(refInfoMap);
     setLoading(false);
   }, [user, selectedBranchId, dateFrom, dateTo, actionFilter]);
 
   useEffect(() => { load(); }, [load]);
 
-  const filteredLogs = logs.filter((log) => {
-    if (!searchText.trim()) return true;
-    const q = searchText.toLowerCase().trim();
-    const userName = profiles[log.user_id || ''] || '';
-    if (userName.toLowerCase().includes(q)) return true;
-    const detailStr = [
-      log.reason || '',
-      log.new_value ? JSON.stringify(log.new_value).toLowerCase() : '',
-      log.previous_value ? JSON.stringify(log.previous_value).toLowerCase() : '',
-      log.object_id || '',
-      formatActionLabel(log.action).toLowerCase(),
-    ].join(' ');
-    return detailStr.toLowerCase().includes(q);
-  });
+  const filteredLogs = useMemo(() => {
+    return logs.filter((log) => {
+      if (!searchText.trim()) return true;
+      const q = searchText.toLowerCase().trim();
+      const userName = profiles[log.user_id || ''] || '';
+      if (userName.toLowerCase().includes(q)) return true;
+      const ref = refMap[log.object_id || ''];
+      if (ref) {
+        if (ref.refNumber.toLowerCase().includes(q)) return true;
+        if (ref.roomNumber.toLowerCase().includes(q)) return true;
+        if (ref.guestName.toLowerCase().includes(q)) return true;
+      }
+      const detailStr = [
+        log.reason || '',
+        log.new_value ? JSON.stringify(log.new_value).toLowerCase() : '',
+        log.previous_value ? JSON.stringify(log.previous_value).toLowerCase() : '',
+        formatActionLabel(log.action).toLowerCase(),
+      ].join(' ');
+      return detailStr.toLowerCase().includes(q);
+    });
+  }, [logs, searchText, profiles, refMap]);
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -132,7 +229,7 @@ export function AuditLogsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{t('nav.audit_logs')}</h1>
-        <span className="text-sm text-slate-500">{logs.length} {logs.length === 1 ? 'entry' : 'entries'}</span>
+        <span className="text-sm text-slate-500">{filteredLogs.length} {filteredLogs.length === 1 ? 'entry' : 'entries'}</span>
       </div>
 
       <Card>
@@ -147,7 +244,7 @@ export function AuditLogsPage() {
                 type="text"
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
-                placeholder="Guest, RES-, FOL-, INV-..."
+                placeholder="Guest, RES-, FOL-, INV-, room..."
                 className="rounded-lg border border-slate-300 pl-10 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -185,7 +282,9 @@ export function AuditLogsPage() {
                   <th className="text-left py-3 px-4">{t('common.date')}</th>
                   <th className="text-left py-3 px-4">{t('audit.user')}</th>
                   <th className="text-left py-3 px-4">{t('audit.action')}</th>
-                  <th className="text-left py-3 px-4">{t('audit.object_type')}</th>
+                  <th className="text-left py-3 px-4">Reference</th>
+                  <th className="text-left py-3 px-4">{t('common.room')}</th>
+                  <th className="text-left py-3 px-4">{t('common.guest')}</th>
                   <th className="text-left py-3 px-4">Details</th>
                   <th className="w-8"></th>
                 </tr>
@@ -196,6 +295,7 @@ export function AuditLogsPage() {
                   const newValues = formatValueObj(log.new_value);
                   const hasDetails = prevValues.length > 0 || newValues.length > 0 || !!log.reason;
                   const isExpanded = expandedId === log.id;
+                  const ref = refMap[log.object_id || ''];
 
                   return (
                     <Fragment key={log.id}>
@@ -203,11 +303,13 @@ export function AuditLogsPage() {
                         className={`border-b border-slate-100 hover:bg-slate-50 ${hasDetails ? 'cursor-pointer' : ''}`}
                         onClick={() => hasDetails && setExpandedId(isExpanded ? null : log.id)}
                       >
-                        <td className="py-2 px-4 text-xs text-slate-400">{formatDateTime(log.created_at)}</td>
-                        <td className="py-2 px-4 font-medium text-slate-700">{profiles[log.user_id || ''] || '-'}</td>
+                        <td className="py-2 px-4 text-xs text-slate-400 whitespace-nowrap">{formatDateTime(log.created_at)}</td>
+                        <td className="py-2 px-4 font-medium text-slate-700 whitespace-nowrap">{profiles[log.user_id || ''] || '-'}</td>
                         <td className="py-2 px-4"><Badge color={getActionColor(log.action)}>{formatActionLabel(log.action)}</Badge></td>
-                        <td className="py-2 px-4 text-slate-500">{formatObjectType(log.object_type)}</td>
-                        <td className="py-2 px-4 text-xs text-slate-500 max-w-md truncate">
+                        <td className="py-2 px-4 font-medium text-blue-600 whitespace-nowrap">{ref?.refNumber || '-'}</td>
+                        <td className="py-2 px-4 text-slate-600 whitespace-nowrap">{ref?.roomNumber || '-'}</td>
+                        <td className="py-2 px-4 text-slate-600 whitespace-nowrap">{ref?.guestName || '-'}</td>
+                        <td className="py-2 px-4 text-xs text-slate-500 max-w-xs truncate">
                           {log.reason || (newValues.length > 0 ? newValues.map(v => `${v.label}: ${v.value}`).join(', ') : '-')}
                         </td>
                         <td className="py-2 px-2">
@@ -218,7 +320,7 @@ export function AuditLogsPage() {
                       </tr>
                       {isExpanded && (
                         <tr>
-                          <td colSpan={6} className="bg-slate-50 px-6 py-4">
+                          <td colSpan={8} className="bg-slate-50 px-6 py-4">
                             <div className="space-y-3">
                               {log.reason && (
                                 <div className="text-sm">

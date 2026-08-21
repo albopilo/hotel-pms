@@ -26,10 +26,10 @@ const SECTIONS: GuideSection[] = [
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
       { en: 'The dashboard is your home screen. It shows a live snapshot of your hotel: total rooms, occupied rooms, available rooms, and rooms needing cleaning.', id: 'Dasbor adalah layar utama Anda. Ini menampilkan snapshot langsung hotel Anda: total kamar, kamar terisi, kamar tersedia, dan kamar yang perlu dibersihkan.' },
-      { en: 'You also see today\'s arrivals, departures, in-house guests, and revenue figures.', id: 'Anda juga melihat kedatangan, keberangkatan, tamu menginap, dan angka pendapatan hari ini.' },
-      { en: 'If you are a Super Admin viewing "All Branches", a comparison table shows each branch side by side.', id: 'Jika Anda adalah Super Admin yang melihat "Semua Cabang", tabel perbandingan menampilkan setiap cabang secara berdampingan.' },
+      { en: 'You also see today\'s arrivals, departures, in-house guests, and revenue figures including room revenue, additional revenue, and total income.', id: 'Anda juga melihat kedatangan, keberangkatan, tamu menginap, dan angka pendapatan hari ini termasuk pendapatan kamar, pendapatan tambahan, dan total pendapatan.' },
+      { en: 'If you are a Super Admin viewing "All Branches", a comparison table shows each branch side by side with occupancy and revenue figures.', id: 'Jika Anda adalah Super Admin yang melihat "Semua Cabang", tabel perbandingan menampilkan setiap cabang secara berdampingan dengan angka hunian dan pendapatan.' },
     ],
-    tip: { en: 'Use the branch selector in the top bar to switch between branches or view all at once.', id: 'Gunakan pemilih cabang di bilah atas untuk beralih antar cabang atau melihat semua sekaligus.' },
+    tip: { en: 'Use the branch selector in the top bar to switch between branches or view all at once. The dashboard updates automatically when you switch.', id: 'Gunakan pemilih cabang di bilah atas untuk beralih antar cabang atau melihat semua sekaligus. Dasbor diperbarui secara otomatis saat Anda beralih.' },
     visual: <DashboardVisual />,
   },
   {
@@ -39,13 +39,13 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Reservasi',
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
-      { en: 'Click "New Reservation" to create a booking. Select the branch, guest, and booking source.', id: 'Klik "Reservasi Baru" untuk membuat pemesanan. Pilih cabang, tamu, dan sumber pemesanan.' },
-      { en: 'Choose check-in and check-out dates and times, then assign a room type and specific room.', id: 'Pilih tanggal dan waktu check-in serta check-out, lalu tetapkan jenis kamar dan kamar spesifik.' },
-      { en: 'For group bookings, click "Add Room" to assign multiple rooms under one reservation.', id: 'Untuk pemesanan grup, klik "Tambah Kamar" untuk menetapkan beberapa kamar dalam satu reservasi.' },
-      { en: 'Enter the room rate, discount, tax, and deposit. The system auto-calculates the total.', id: 'Masukkan tarif kamar, diskon, pajak, dan deposit. Sistem menghitung total secara otomatis.' },
-      { en: 'Click any reservation row to view details or proceed to check-in.', id: 'Klik baris reservasi mana pun untuk melihat detail atau melanjutkan ke check-in.' },
+      { en: 'Click "New Reservation" to create a booking. Select the branch, guest, and booking source (e.g. Walk-in, Booking.com, Agoda).', id: 'Klik "Reservasi Baru" untuk membuat pemesanan. Pilih cabang, tamu, dan sumber pemesanan (mis. Walk-in, Booking.com, Agoda).' },
+      { en: 'Choose check-in and check-out dates and times, then assign a room type and specific room. The system auto-calculates the number of nights.', id: 'Pilih tanggal dan waktu check-in serta check-out, lalu tetapkan jenis kamar dan kamar spesifik. Sistem menghitung jumlah malam secara otomatis.' },
+      { en: 'For group bookings, click "Add Room" to assign multiple rooms under one reservation. Each room can have its own rate.', id: 'Untuk pemesanan grup, klik "Tambah Kamar" untuk menetapkan beberapa kamar dalam satu reservasi. Setiap kamar dapat memiliki tarif tersendiri.' },
+      { en: 'Enter the room rate, discount, tax, and deposit. The system auto-calculates the total including all charges.', id: 'Masukkan tarif kamar, diskon, pajak, dan deposit. Sistem menghitung total secara otomatis termasuk semua biaya.' },
+      { en: 'Click any reservation row to view details or proceed to check-in. Use the status filter to narrow down by confirmed, checked in, checked out, cancelled, or no-show.', id: 'Klik baris reservasi mana pun untuk melihat detail atau melanjutkan ke check-in. Gunakan filter status untuk mempersempit berdasarkan dikonfirmasi, sudah check-in, sudah check-out, dibatalkan, atau tidak hadir.' },
     ],
-    tip: { en: 'The system warns you if a room is already booked for the selected dates or is currently occupied.', id: 'Sistem memperingatkan Anda jika kamar sudah dipesan untuk tanggal terpilih atau sedang terisi.' },
+    tip: { en: 'The system warns you if a room is already booked for the selected dates or is currently occupied. You can still proceed with a confirmation override.', id: 'Sistem memperingatkan Anda jika kamar sudah dipesan untuk tanggal terpilih atau sedang terisi. Anda tetap dapat melanjutkan dengan konfirmasi lewati.' },
     visual: <ReservationVisual />,
   },
   {
@@ -55,11 +55,12 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Kalender',
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
-      { en: 'The calendar shows a 14-day view of all rooms. Each colored bar represents a reservation.', id: 'Kalender menampilkan tampilan 14 hari untuk semua kamar. Setiap batang berwarna mewakili reservasi.' },
-      { en: 'Green = checked in, Blue = confirmed, Gray = checked out, Amber = tentative.', id: 'Hijau = sudah check-in, Biru = dikonfirmasi, Abu-abu = sudah check-out, Kuning = sementara.' },
-      { en: 'Use the left/right arrows to navigate weeks, or click "Today" to jump back.', id: 'Gunakan panah kiri/kanan untuk menavigasi minggu, atau klik "Hari Ini" untuk kembali.' },
+      { en: 'The calendar shows a 14-day view of all rooms. Each colored bar represents a reservation spanning its check-in to check-out dates.', id: 'Kalender menampilkan tampilan 14 hari untuk semua kamar. Setiap batang berwarna mewakili reservasi yang membentang dari tanggal check-in hingga check-out.' },
+      { en: 'Green = checked in, Blue = confirmed, Gray = checked out, Amber = tentative. The header shows occupancy count per day.', id: 'Hijau = sudah check-in, Biru = dikonfirmasi, Abu-abu = sudah check-out, Kuning = sementara. Header menampilkan jumlah hunian per hari.' },
+      { en: 'Use the left/right arrows to navigate weeks, or click "Today" to jump back to the current week.', id: 'Gunakan panah kiri/kanan untuk menavigasi minggu, atau klik "Hari Ini" untuk kembali ke minggu saat ini.' },
       { en: 'Click any reservation bar to jump to the check-in/check-out page for that guest.', id: 'Klik batang reservasi mana pun untuk melompat ke halaman check-in/check-out tamu tersebut.' },
     ],
+    tip: { en: 'The calendar is the fastest way to see your hotel\'s occupancy at a glance and identify gaps for new bookings.', id: 'Kalender adalah cara tercepat untuk melihat hunian hotel Anda secara sekilas dan mengidentifikasi celah untuk pemesanan baru.' },
     visual: <CalendarVisual />,
   },
   {
@@ -70,10 +71,10 @@ const SECTIONS: GuideSection[] = [
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
       { en: 'The room grid displays all rooms grouped by room type. Each tile shows the room number and current status.', id: 'Kisi kamar menampilkan semua kamar dikelompokkan berdasarkan jenis kamar. Setiap ubin menunjukkan nomor kamar dan status saat ini.' },
-      { en: 'Click any room to view details and change its status (Available, Occupied, Dirty, Cleaning, Inspected, Out of Service, Out of Order).', id: 'Klik kamar mana pun untuk melihat detail dan mengubah statusnya (Tersedia, Terisi, Kotor, Pembersihan, Diperiksa, Tidak Beroperasi, Rusak).' },
-      { en: 'Managers and Super Admins can add or edit rooms and room types.', id: 'Manajer dan Super Admin dapat menambah atau mengedit kamar dan jenis kamar.' },
+      { en: 'Click any room to view details and change its status: Available, Reserved, Occupied, Dirty, Cleaning, Inspected, Out of Service, or Out of Order.', id: 'Klik kamar mana pun untuk melihat detail dan mengubah statusnya: Tersedia, Dipesan, Terisi, Kotor, Pembersihan, Diperiksa, Tidak Beroperasi, atau Rusak.' },
+      { en: 'Managers and Super Admins can add or edit rooms and room types, including base rates and max occupancy.', id: 'Manajer dan Super Admin dapat menambah atau mengedit kamar dan jenis kamar, termasuk tarif dasar dan kapasitas maksimum.' },
     ],
-    tip: { en: 'After a guest checks out, the room is automatically set to "Dirty" so housekeeping knows to clean it.', id: 'Setelah tamu check-out, kamar otomatis diatur ke "Kotor" sehingga housekeeping tahu untuk membersihkannya.' },
+    tip: { en: 'After a guest checks out, the room is automatically set to "Dirty" so housekeeping knows to clean it. Set it to "Inspected" when ready for the next guest.', id: 'Setelah tamu check-out, kamar otomatis diatur ke "Kotor" sehingga housekeeping tahu untuk membersihkannya. Atur ke "Diperiksa" saat siap untuk tamu berikutnya.' },
     visual: <RoomGridVisual />,
   },
   {
@@ -83,11 +84,11 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Tamu',
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
-      { en: 'Search for existing guests by name, phone, ID number, or email using the search bar.', id: 'Cari tamu yang ada berdasarkan nama, telepon, nomor ID, atau email menggunakan bilah pencarian.' },
-      { en: 'Click "New Guest" to add a guest. Fill in their full name (required), ID type and number, phone, and other details.', id: 'Klik "Tamu Baru" untuk menambahkan tamu. Isi nama lengkap (wajib), jenis dan nomor ID, telepon, dan detail lainnya.' },
-      { en: 'Click any guest row to see their full profile, previous stays, total spending, and outstanding balances.', id: 'Klik baris tamu mana pun untuk melihat profil lengkap, menginap sebelumnya, total pengeluaran, dan saldo tertunggak.' },
+      { en: 'Search for existing guests by name, phone, ID number, or email using the search bar at the top of the page.', id: 'Cari tamu yang ada berdasarkan nama, telepon, nomor ID, atau email menggunakan bilah pencarian di bagian atas halaman.' },
+      { en: 'Click "New Guest" to add a guest. Fill in their full name (required), ID type and number, phone, and other details like nationality and company.', id: 'Klik "Tamu Baru" untuk menambahkan tamu. Isi nama lengkap (wajib), jenis dan nomor ID, telepon, dan detail lain seperti kewarganegaraan dan perusahaan.' },
+      { en: 'Click any guest row to see their full profile, previous stays, total spending, and any outstanding balances.', id: 'Klik baris tamu mana pun untuk melihat profil lengkap, menginap sebelumnya, total pengeluaran, dan saldo tertunggak apa pun.' },
     ],
-    tip: { en: 'Always search for an existing guest first to avoid creating duplicates.', id: 'Selalu cari tamu yang ada terlebih dahulu untuk menghindari duplikat.' },
+    tip: { en: 'Always search for an existing guest first to avoid creating duplicates. The system matches by name, phone, ID number, and email.', id: 'Selalu cari tamu yang ada terlebih dahulu untuk menghindari duplikat. Sistem mencocokkan berdasarkan nama, telepon, nomor ID, dan email.' },
     visual: <GuestVisual />,
   },
   {
@@ -97,15 +98,15 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Check-in / Check-out',
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
-      { en: 'The left column shows arrivals (confirmed reservations ready for check-in). Click "Check In" to process.', id: 'Kolom kiri menampilkan kedatangan (reservasi dikonfirmasi siap untuk check-in). Klik "Check In" untuk memproses.' },
+      { en: 'The left column shows arrivals (confirmed reservations ready for check-in). Click "Check In" to process a guest.', id: 'Kolom kiri menampilkan kedatangan (reservasi dikonfirmasi siap untuk check-in). Klik "Check In" untuk memproses tamu.' },
       { en: 'During check-in, set the actual arrival time. The system compares the full date and time against the scheduled check-in (date + standard time). If the actual arrival is earlier, an early check-in charge can be added.', id: 'Saat check-in, atur waktu kedatangan aktual. Sistem membandingkan tanggal dan waktu lengkap dengan jadwal check-in (tanggal + waktu standar). Jika kedatangan lebih awal, biaya check-in awal dapat ditambahkan.' },
       { en: 'You can encode a room key card (in development/mock mode for now). Click "Encode Room Card" before completing check-in.', id: 'Anda dapat mengenkoded kartu kunci kamar (dalam mode pengembangan/mock untuk saat ini). Klik "Enkoded Kartu Kamar" sebelum menyelesaikan check-in.' },
       { en: 'The right column shows today\'s departures. Click "Check Out" to process. The system shows a full charge summary and balance.', id: 'Kolom kanan menampilkan keberangkatan hari ini. Klik "Check Out" untuk memproses. Sistem menampilkan ringkasan biaya lengkap dan saldo.' },
       { en: 'If the guest checks out late (past the standard time or past the checkout date), a late checkout warning appears with an option to add a charge.', id: 'Jika tamu check-out terlambat (melewati waktu standar atau melewati tanggal checkout), peringatan check-out terlambat muncul dengan opsi untuk menambah biaya.' },
-      { en: 'A "Departures Later" section shows guests checking out on future dates.', id: 'Bagian "Keberangkatan Nanti" menampilkan tamu yang check-out pada tanggal mendatang.' },
-      { en: 'Use "Extend Stay" to add extra nights. Use "Split Room" for group reservations to separate a room into its own reservation.', id: 'Gunakan "Perpanjang Menginap" untuk menambah malam tambahan. Gunakan "Pisah Kamar" untuk reservasi grup untuk memisahkan kamar menjadi reservasi sendiri.' },
+      { en: 'A "Departures Later" section shows guests checking out on future dates, so you can plan ahead.', id: 'Bagian "Keberangkatan Nanti" menampilkan tamu yang check-out pada tanggal mendatang, sehingga Anda dapat merencanakan ke depan.' },
+      { en: 'Use "Extend Stay" to add extra nights. Use "Split Room" for group reservations to separate a room into its own reservation with its own folio.', id: 'Gunakan "Perpanjang Menginap" untuk menambah malam tambahan. Gunakan "Pisah Kamar" untuk reservasi grup untuk memisahkan kamar menjadi reservasi sendiri dengan folio tersendiri.' },
     ],
-    tip: { en: 'If a guest has an unpaid balance at checkout, you must confirm an override to proceed. This is logged in the audit trail.', id: 'Jika tamu memiliki saldo belum dibayar saat checkout, Anda harus mengonfirmasi lewati untuk melanjutkan. Ini dicatat dalam jejak audit.' },
+    tip: { en: 'If a guest has an unpaid balance at checkout, you must confirm an override to proceed. This is logged in the audit trail for accountability.', id: 'Jika tamu memiliki saldo belum dibayar saat checkout, Anda harus mengonfirmasi lewati untuk melanjutkan. Ini dicatat dalam jejak audit untuk akuntabilitas.' },
     visual: <CheckinVisual />,
   },
   {
@@ -116,13 +117,13 @@ const SECTIONS: GuideSection[] = [
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
       { en: 'The Payments page lists all folios with the guest name and room number for easy identification.', id: 'Halaman Pembayaran mencantumkan semua folio dengan nama tamu dan nomor kamar untuk identifikasi mudah.' },
-      { en: 'Click any folio to open the detail view. You\'ll see all charges and payments in the transaction history.', id: 'Klik folio mana pun untuk membuka tampilan detail. Anda akan melihat semua biaya dan pembayaran dalam riwayat transaksi.' },
-      { en: 'Click "Add Charge" to post an additional charge (amenities, damage, etc.). Select a category and enter the amount.', id: 'Klik "Tambah Biaya" untuk memposting biaya tambahan (fasilitas, kerusakan, dll.). Pilih kategori dan masukkan jumlahnya.' },
+      { en: 'Click any folio to open the detail view. You\'ll see all charges and payments in the transaction history, with running totals.', id: 'Klik folio mana pun untuk membuka tampilan detail. Anda akan melihat semua biaya dan pembayaran dalam riwayat transaksi, dengan total berjalan.' },
+      { en: 'Click "Add Charge" to post an additional charge (amenities, damage, etc.). Select a category and enter the amount and quantity.', id: 'Klik "Tambah Biaya" untuk memposting biaya tambahan (fasilitas, kerusakan, dll.). Pilih kategori dan masukkan jumlah dan kuantitas.' },
       { en: 'Click "Take Payment" to record a payment. Choose the method (Cash, EDC, OTA/Xendit). For EDC, enter the terminal, reference, and approval code.', id: 'Klik "Terima Pembayaran" untuk mencatat pembayaran. Pilih metode (Tunai, EDC, OTA/Xendit). Untuk EDC, masukkan terminal, referensi, dan kode persetujuan.' },
       { en: 'Use "Transfer Room" to move a guest to a different room. The old room is marked dirty and the new room becomes occupied.', id: 'Gunakan "Pindah Kamar" untuk memindahkan tamu ke kamar berbeda. Kamar lama ditandai kotor dan kamar baru menjadi terisi.' },
       { en: 'For finalized folios, use "Post-Stay Charge" to add charges after checkout without modifying the original invoice.', id: 'Untuk folio yang sudah difinalisasi, gunakan "Biaya Tambahan Pasca-Menginap" untuk menambah biaya setelah checkout tanpa mengubah faktur asli.' },
     ],
-    tip: { en: 'Voided items show with a line-through. Only managers can void charges.', id: 'Item yang dibatalkan ditampilkan dengan coretan. Hanya manajer yang dapat membatalkan biaya.' },
+    tip: { en: 'Voided items show with a line-through. Only managers can void charges. All voids are logged in the audit trail.', id: 'Item yang dibatalkan ditampilkan dengan coretan. Hanya manajer yang dapat membatalkan biaya. Semua pembatalan dicatat dalam jejak audit.' },
     visual: <FolioVisual />,
   },
   {
@@ -132,10 +133,11 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Faktur',
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
-      { en: 'Invoices are generated automatically at check-in and finalized at check-out.', id: 'Faktur dibuat secara otomatis saat check-in dan difinalisasi saat check-out.' },
-      { en: 'Click any invoice to view its details, including line items and totals.', id: 'Klik faktur mana pun untuk melihat detailnya, termasuk item baris dan total.' },
-      { en: 'Click "Print" to open a print-ready preview of the invoice.', id: 'Klik "Cetak" untuk membuka pratinjau siap cetak dari faktur.' },
+      { en: 'Invoices are generated automatically at check-in and finalized at check-out. They sync with the folio to reflect all charges and payments.', id: 'Faktur dibuat secara otomatis saat check-in dan difinalisasi saat check-out. Faktur tersinkron dengan folio untuk mencerminkan semua biaya dan pembayaran.' },
+      { en: 'Click any invoice to view its details, including line items and totals (subtotal, tax, discount, and final total).', id: 'Klik faktur mana pun untuk melihat detailnya, termasuk item baris dan total (subtotal, pajak, diskon, dan total akhir).' },
+      { en: 'Click "Print" to open a print-ready preview of the invoice. You can print directly from your browser.', id: 'Klik "Cetak" untuk membuka pratinjau siap cetak dari faktur. Anda dapat mencetak langsung dari browser Anda.' },
     ],
+    tip: { en: 'The invoice shows a "CHECK IN INVOICE" label during the stay and a "FINAL CHECK OUT INVOICE" label after checkout.', id: 'Faktur menampilkan label "FAKTUR CHECK IN" selama menginap dan label "FAKTUR CHECK OUT FINAL" setelah checkout.' },
     visual: <InvoiceVisual />,
   },
   {
@@ -145,12 +147,12 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Laporan',
     roles: ['super_admin', 'manager'],
     steps: [
-      { en: 'Choose a report category: Front Office, Financial, or Management.', id: 'Pilih kategori laporan: Front Office, Keuangan, atau Manajemen.' },
-      { en: 'Set the date range using the From and To date pickers.', id: 'Atur rentang tanggal menggunakan pemilih tanggal Dari dan Ke.' },
-      { en: 'Click a report from the left panel to generate it. Results appear on the right.', id: 'Klik laporan dari panel kiri untuk membuatnya. Hasil muncul di kanan.' },
-      { en: 'Click "Export CSV" to download the report data as a spreadsheet file.', id: 'Klik "Ekspor CSV" untuk mengunduh data laporan sebagai file spreadsheet.' },
+      { en: 'Choose a report category: Front Office (arrivals, departures, in-house guests, reservations, cancellations, no-shows), Financial (daily income, cash, EDC, OTA, outstanding balances), or Management (occupancy %, ADR, RevPAR).', id: 'Pilih kategori laporan: Front Office (kedatangan, keberangkatan, tamu menginap, reservasi, pembatalan, tidak hadir), Keuangan (pendapatan harian, tunai, EDC, OTA, saldo tertunggak), atau Manajemen (persentase hunian, ADR, RevPAR).' },
+      { en: 'Set the date range using the From and To date pickers. Reports filter by business date within the selected range.', id: 'Atur rentang tanggal menggunakan pemilih tanggal Dari dan Ke. Laporan difilter berdasarkan tanggal bisnis dalam rentang terpilih.' },
+      { en: 'Click a report from the left panel to generate it. Results appear on the right with summary cards and a detail table.', id: 'Klik laporan dari panel kiri untuk membuatnya. Hasil muncul di kanan dengan kartu ringkasan dan tabel detail.' },
+      { en: 'Click "Export CSV" to download the report data as a spreadsheet file for further analysis.', id: 'Klik "Ekspor CSV" untuk mengunduh data laporan sebagai file spreadsheet untuk analisis lebih lanjut.' },
     ],
-    tip: { en: 'The Daily Income Report shows payments by method and charges by category in separate blocks.', id: 'Laporan Pendapatan Harian menampilkan pembayaran per metode dan biaya per kategori dalam blok terpisah.' },
+    tip: { en: 'The Daily Income Report shows payments by method and charges by category in separate blocks, giving you a clear picture of your revenue breakdown.', id: 'Laporan Pendapatan Harian menampilkan pembayaran per metode dan biaya per kategori dalam blok terpisah, memberikan gambaran jelas tentang rincian pendapatan Anda.' },
     visual: <ReportVisual />,
   },
   {
@@ -160,11 +162,12 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Audit Malam',
     roles: ['super_admin', 'manager'],
     steps: [
-      { en: 'The night audit runs automatically at the business day cutoff (default 4:30 AM).', id: 'Audit malam berjalan secara otomatis pada batas hari bisnis (default 04:30).' },
-      { en: 'It captures arrivals, departures, in-house guests, room charges, additional charges, payments, and outstanding balances.', id: 'Ini menangkap kedatangan, keberangkatan, tamu menginap, biaya kamar, biaya tambahan, pembayaran, dan saldo tertunggak.' },
-      { en: 'Exceptions (like unpaid folios or rooms still occupied past checkout) are flagged for review.', id: 'Pengecualian (seperti folio belum dibayar atau kamar masih terisi setelah checkout) ditandai untuk ditinjau.' },
-      { en: 'Recent audit history is shown in a table at the bottom of the page.', id: 'Riwayat audit terbaru ditampilkan dalam tabel di bagian bawah halaman.' },
+      { en: 'The night audit runs automatically at the business day cutoff (default 4:30 AM). It captures the day\'s activity and closes the business date.', id: 'Audit malam berjalan secara otomatis pada batas hari bisnis (default 04:30). Ini menangkap aktivitas hari ini dan menutup tanggal bisnis.' },
+      { en: 'It records arrivals, departures, in-house guests, room charges, additional charges, payments, and outstanding balances.', id: 'Ini mencatat kedatangan, keberangkatan, tamu menginap, biaya kamar, biaya tambahan, pembayaran, dan saldo tertunggak.' },
+      { en: 'Exceptions (like unpaid folios or rooms still occupied past checkout) are flagged for review so you can take action.', id: 'Pengecualian (seperti folio belum dibayar atau kamar masih terisi setelah checkout) ditandai untuk ditinjau sehingga Anda dapat mengambil tindakan.' },
+      { en: 'Recent audit history is shown in a table at the bottom of the page, with financial summaries for each closed business day.', id: 'Riwayat audit terbaru ditampilkan dalam tabel di bagian bawah halaman, dengan ringkasan keuangan untuk setiap hari bisnis yang ditutup.' },
     ],
+    tip: { en: 'You don\'t need to manually trigger the night audit — it runs automatically. Just review the results and any exceptions each morning.', id: 'Anda tidak perlu memicu audit malam secara manual — ini berjalan otomatis. Cukup tinjau hasil dan pengecualian setiap pagi.' },
     visual: <NightAuditVisual />,
   },
   {
@@ -174,13 +177,12 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Integrasi Kunci Hotel',
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
-      { en: 'This page shows the status of the hotel lock system (currently in development/mock mode).', id: 'Halaman ini menunjukkan status sistem kunci hotel (saat ini dalam mode pengembangan/mock).' },
-      { en: 'Use "Test Connection" to check if the bridge is reachable.', id: 'Gunakan "Tes Koneksi" untuk memeriksa apakah bridge dapat dijangkau.' },
-      { en: 'Use "Test Encoder" to check the card encoder hardware status.', id: 'Gunakan "Tes Enkoder" untuk memeriksa status perangkat enkoder kartu.' },
-      { en: 'Use "Test Card" to perform a test card encoding.', id: 'Gunakan "Tes Kartu" untuk melakukan enkoding kartu uji.' },
-      { en: 'Recent card issuances and integration logs are shown at the bottom.', id: 'Penerbitan kartu terbaru dan log integrasi ditampilkan di bagian bawah.' },
+      { en: 'This page shows the status of the hotel lock system (currently in development/mock mode). You can see the bridge connection, encoder status, and last heartbeat.', id: 'Halaman ini menunjukkan status sistem kunci hotel (saat ini dalam mode pengembangan/mock). Anda dapat melihat koneksi bridge, status enkoder, dan heartbeat terakhir.' },
+      { en: 'Use "Test Connection" to check if the bridge is reachable. Use "Test Encoder" to check the card encoder hardware status.', id: 'Gunakan "Tes Koneksi" untuk memeriksa apakah bridge dapat dijangkau. Gunakan "Tes Enkoder" untuk memeriksa status perangkat enkoder kartu.' },
+      { en: 'Use "Test Card" to perform a test card encoding. This verifies the full workflow from connection to card write.', id: 'Gunakan "Tes Kartu" untuk melakukan enkoding kartu uji. Ini memverifikasi alur kerja lengkap dari koneksi hingga penulisan kartu.' },
+      { en: 'Recent card issuances and integration logs are shown at the bottom, so you can track all key card activity.', id: 'Penerbitan kartu terbaru dan log integrasi ditampilkan di bagian bawah, sehingga Anda dapat melacak semua aktivitas kartu kunci.' },
     ],
-    tip: { en: 'In mock mode, all operations succeed automatically. In production, this connects to a local bridge device.', id: 'Dalam mode mock, semua operasi berhasil secara otomatis. Dalam produksi, ini terhubung ke perangkat bridge lokal.' },
+    tip: { en: 'In mock mode, all operations succeed automatically. In production, this connects to a local bridge device that communicates with the card encoder.', id: 'Dalam mode mock, semua operasi berhasil secara otomatis. Dalam produksi, ini terhubung ke perangkat bridge lokal yang berkomunikasi dengan enkoder kartu.' },
     visual: <LockVisual />,
   },
   {
@@ -190,13 +192,13 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Administrasi (Super Admin Saja)',
     roles: ['super_admin'],
     steps: [
-      { en: 'Branches: Create and manage hotel branches. Set standard check-in/out times and business day cutoff.', id: 'Cabang: Buat dan kelola cabang hotel. Atur waktu check-in/out standar dan batas hari bisnis.' },
-      { en: 'Room Types: Define room categories (e.g. Deluxe, Suite) with base rates and max occupancy.', id: 'Jenis Kamar: Tentukan kategori kamar (mis. Deluxe, Suite) dengan tarif dasar dan kapasitas maks.' },
-      { en: 'Booking Sources: Track where reservations come from (Walk-in, Booking.com, Agoda, etc.). Mark OTA sources.', id: 'Sumber Pemesanan: Lacak dari mana reservasi berasal (Walk-in, Booking.com, Agoda, dll.). Tandai sumber OTA.' },
-      { en: 'Users: Create staff accounts with roles (Receptionist, Manager, Super Admin). Assign branch access.', id: 'Pengguna: Buat akun staf dengan peran (Resepsionis, Manajer, Super Admin). Tetapkan akses cabang.' },
-      { en: 'Charge Categories: Define charge types (amenities, damage, etc.). Set approval thresholds for damage charges.', id: 'Kategori Biaya: Tentukan jenis biaya (fasilitas, kerusakan, dll.). Atur batas persetujuan untuk biaya kerusakan.' },
-      { en: 'Payment Settings: Configure payment methods (Cash, EDC, OTA/Xendit).', id: 'Pengaturan Pembayaran: Konfigurasi metode pembayaran (Tunai, EDC, OTA/Xendit).' },
-      { en: 'System Settings: Set company info, default charges, tax rates, and document prefixes.', id: 'Pengaturan Sistem: Atur info perusahaan, biaya default, tarif pajak, dan prefix dokumen.' },
+      { en: 'Branches: Create and manage hotel branches. Set standard check-in/out times and business day cutoff for each branch.', id: 'Cabang: Buat dan kelola cabang hotel. Atur waktu check-in/out standar dan batas hari bisnis untuk setiap cabang.' },
+      { en: 'Room Types: Define room categories (e.g. Deluxe, Suite) with base rates, max occupancy, and default tax rates.', id: 'Jenis Kamar: Tentukan kategori kamar (mis. Deluxe, Suite) dengan tarif dasar, kapasitas maksimum, dan tarif pajak default.' },
+      { en: 'Booking Sources: Track where reservations come from (Walk-in, Booking.com, Agoda, etc.). Mark OTA sources for financial reporting.', id: 'Sumber Pemesanan: Lacak dari mana reservasi berasal (Walk-in, Booking.com, Agoda, dll.). Tandai sumber OTA untuk pelaporan keuangan.' },
+      { en: 'Users: Create staff accounts with roles (Receptionist, Manager, Super Admin). Assign branch access per user.', id: 'Pengguna: Buat akun staf dengan peran (Resepsionis, Manajer, Super Admin). Tetapkan akses cabang per pengguna.' },
+      { en: 'Charge Categories: Define charge types (amenities, damage, etc.). Set approval thresholds for damage charges that require manager sign-off.', id: 'Kategori Biaya: Tentukan jenis biaya (fasilitas, kerusakan, dll.). Atur batas persetujuan untuk biaya kerusakan yang memerlukan persetujuan manajer.' },
+      { en: 'Payment Settings: Configure payment methods (Cash, EDC, OTA/Xendit). Each method can be flagged as cash, EDC, or OTA for reporting.', id: 'Pengaturan Pembayaran: Konfigurasi metode pembayaran (Tunai, EDC, OTA/Xendit). Setiap metode dapat ditandai sebagai tunai, EDC, atau OTA untuk pelaporan.' },
+      { en: 'System Settings: Set company info, default charges (early check-in, late checkout), tax rates, and document prefixes.', id: 'Pengaturan Sistem: Atur info perusahaan, biaya default (check-in awal, checkout terlambat), tarif pajak, dan prefix dokumen.' },
       { en: 'Audit Logs: View a detailed trail of all actions taken in the system, with before/after values. Search by guest name, reservation number, folio number, or invoice number.', id: 'Log Audit: Lihat jejak detail semua tindakan yang diambil dalam sistem, dengan nilai sebelum/sesudah. Cari berdasarkan nama tamu, nomor reservasi, nomor folio, atau nomor faktur.' },
     ],
     visual: <AdminVisual />,
@@ -208,13 +210,13 @@ const SECTIONS: GuideSection[] = [
     titleId: 'Log Audit',
     roles: ['super_admin', 'manager'],
     steps: [
-      { en: 'The Audit Logs page shows a chronological trail of every important action in the system.', id: 'Halaman Log Audit menampilkan jejak kronologis setiap tindakan penting dalam sistem.' },
-      { en: 'Use the date pickers to narrow results to a specific date range.', id: 'Gunakan pemilih tanggal untuk mempersempit hasil ke rentang tanggal tertentu.' },
-      { en: 'Use the search box to filter by guest name, reservation number (RES-), folio number (FOL-), or invoice number (INV-).', id: 'Gunakan kotak pencarian untuk memfilter berdasarkan nama tamu, nomor reservasi (RES-), nomor folio (FOL-), atau nomor faktur (INV-).' },
-      { en: 'Use the action dropdown to filter by a specific action type (check-in, payment, charge, etc.).', id: 'Gunakan dropdown tindakan untuk memfilter berdasarkan jenis tindakan tertentu (check-in, pembayaran, biaya, dll).' },
-      { en: 'Click any row with details to expand and see the previous and new values, plus any reason provided.', id: 'Klik baris mana pun dengan detail untuk memperluas dan melihat nilai sebelum dan baru, ditambah alasan yang diberikan.' },
+      { en: 'The Audit Logs page shows a chronological trail of every important action in the system, including who did it and when.', id: 'Halaman Log Audit menampilkan jejak kronologis setiap tindakan penting dalam sistem, termasuk siapa yang melakukannya dan kapan.' },
+      { en: 'Each row shows the reference number (RES-, FOL-, INV-), room number, and guest name so you can quickly identify the related booking.', id: 'Setiap baris menampilkan nomor referensi (RES-, FOL-, INV-), nomor kamar, dan nama tamu sehingga Anda dapat dengan cepat mengidentifikasi pemesanan terkait.' },
+      { en: 'Use the date pickers to narrow results to a specific date range. Use the action dropdown to filter by action type (check-in, payment, charge, etc.).', id: 'Gunakan pemilih tanggal untuk mempersempit hasil ke rentang tanggal tertentu. Gunakan dropdown tindakan untuk memfilter berdasarkan jenis tindakan (check-in, pembayaran, biaya, dll).' },
+      { en: 'Use the search box to filter by guest name, reservation number (RES-), folio number (FOL-), invoice number (INV-), or room number.', id: 'Gunakan kotak pencarian untuk memfilter berdasarkan nama tamu, nomor reservasi (RES-), nomor folio (FOL-), nomor faktur (INV-), atau nomor kamar.' },
+      { en: 'Click any row with details to expand and see the previous and new values, plus any reason provided for the action.', id: 'Klik baris mana pun dengan detail untuk memperluas dan melihat nilai sebelum dan baru, ditambah alasan yang diberikan untuk tindakan tersebut.' },
     ],
-    tip: { en: 'Early check-in and late checkout decisions (with or without charge) are logged here for accountability.', id: 'Keputusan check-in awal dan check-out terlambat (dengan atau tanpa biaya) dicatat di sini untuk akuntabilitas.' },
+    tip: { en: 'Early check-in and late checkout decisions (with or without charge) are logged here for accountability. You can review who approved each override.', id: 'Keputusan check-in awal dan check-out terlambat (dengan atau tanpa biaya) dicatat di sini untuk akuntabilitas. Anda dapat meninjau siapa yang menyetujui setiap lewati.' },
     visual: <AuditVisual />,
   },
 ];
@@ -632,6 +634,8 @@ function AuditVisual() {
           <span className="text-xs text-slate-700 font-medium">John Doe</span>
           <span className="text-xs text-slate-400">·</span>
           <span className="text-xs text-slate-500">RES-001</span>
+          <span className="text-xs text-slate-400">·</span>
+          <span className="text-xs text-slate-500">Room 106</span>
           <span className="text-xs text-slate-400 ml-auto">21 Aug 14:30</span>
         </div>
         <div className="border border-slate-100 rounded p-2 flex items-center gap-2">
