@@ -40,7 +40,7 @@ export function CalendarPage({onSelectReservation}:{onSelectReservation?: (id:st
     const [{data:r},{data:res},{data:g}]=await Promise.all([
       supabase.from('rooms').select('*').in('branch_id',branchIds).eq('is_active',true).order('room_number'),
       supabase.from('reservations').select('*').in('branch_id',branchIds).in('status',['confirmed','checked_in','checked_out','tentative']).lt('check_in_date',endDate).gt('check_out_date',startDate),
-      supabase.from('guests').select('*').in('branch_id',branchIds)
+      supabase.from('guests').select('*')
     ]);
 
     setRooms((r as Room[])||[]);
@@ -52,6 +52,21 @@ export function CalendarPage({onSelectReservation}:{onSelectReservation?: (id:st
   useEffect(()=>{load()},[load]);
 
   const guestMap=useMemo(()=>new Map(guests.map(g=>[g.id,g])),[guests]);
+
+  const occupiedCountByDate=useMemo(()=>{
+    const counts=new Map<string,number>();
+    dates.forEach(d=>counts.set(d,0));
+    visibleReservations.forEach(res=>{
+      const ci=normalizeDate(res.check_in_date);
+      const co=normalizeDate(res.check_out_date);
+      dates.forEach(d=>{
+        if(d>=ci&&d<co){
+          counts.set(d,(counts.get(d)||0)+1);
+        }
+      });
+    });
+    return counts;
+  },[visibleReservations,dates]);
 
   const visibleReservations=useMemo(()=>reservations.filter(r=>{
     const ci=normalizeDate(r.check_in_date);
@@ -104,6 +119,7 @@ export function CalendarPage({onSelectReservation}:{onSelectReservation?: (id:st
                 {dates.map(d=>{
                   const dt=new Date(d);
                   const isToday=d===todayISO();
+                  const occupied=occupiedCountByDate.get(d)||0;
 
                   return (
                     <div key={d} className={`flex-shrink-0 px-2 py-2 text-center text-xs border-r border-slate-100 ${isToday?'bg-blue-50':''}`} style={{width:DAY_WIDTH}}>
@@ -112,6 +128,9 @@ export function CalendarPage({onSelectReservation}:{onSelectReservation?: (id:st
                       </div>
                       <div className={isToday?'text-blue-600 font-bold':'text-slate-500'}>
                         {dt.getDate()}/{dt.getMonth()+1}
+                      </div>
+                      <div className={`mt-0.5 font-medium ${occupied>0?'text-emerald-600':'text-slate-300'}`}>
+                        {occupied}/{rooms.length}
                       </div>
                     </div>
                   );

@@ -71,6 +71,10 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
   const arrivals = reservations.filter(r => r.status === 'confirmed');
   const departures = reservations.filter(r => r.status === 'checked_in');
 
+  const today = todayISO();
+  const departuresToday = departures.filter(r => r.check_out_date === today);
+  const departuresLater = departures.filter(r => r.check_out_date > today);
+
   const q = (searchQuery || '').toLowerCase().trim();
 
   const filterFn = (r: Reservation) => {
@@ -122,8 +126,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
         </Card>
 
         <Card title={`${t('dash.departures_today')} / ${t('res.checked_in')}`}>
-          {departures.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
-          <div className="space-y-2">{departures.filter(filterFn).map(r => {
+          {departuresToday.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
+          <div className="space-y-2">{departuresToday.filter(filterFn).map(r => {
             const g = guestMap.get(r.primary_guest_id || '');
             const rm = roomMap.get(r.room_id || '');
             return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50">
@@ -140,6 +144,25 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
           })}</div>}
         </Card>
       </div>
+
+      <Card title="Departures Later">
+        {departuresLater.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
+        <div className="space-y-2">{departuresLater.filter(filterFn).map(r => {
+          const g = guestMap.get(r.primary_guest_id || '');
+          const rm = roomMap.get(r.room_id || '');
+          return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50">
+            <div>
+              <p className="font-medium text-slate-800">{g?.full_name || '-'} {r.is_group && <Badge color="purple" size="sm">Group</Badge>}</p>
+              <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {formatDate(r.check_out_date)} {formatTime(r.check_out_time)}</p>
+            </div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
+              {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
+              <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}><LogOut size={14}/>{t('action.check_out')}</Button>
+            </div>
+          </div>;
+        })}</div>}
+      </Card>
 
       <Card title={t('res.checked_out')}>
         {checkedOut.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
@@ -408,7 +431,11 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
     })();
   },[reservation]);
 
-  useEffect(()=>setLateWarning(isLateCheckout(standardTime,checkoutTime)),[standardTime,checkoutTime]);
+  useEffect(()=>{
+    const scheduled = new Date(`${reservation.check_out_date}T${standardTime}:00`);
+    const actual = new Date(`${todayISO()}T${checkoutTime}:00`);
+    setLateWarning(actual.getTime() > scheduled.getTime());
+  },[standardTime,checkoutTime,reservation.check_out_date]);
 
   const charges=folioItems.filter(i=>i.item_type==='charge'&&i.amount>0);
   const payments=folioItems.filter(i=>i.item_type==='payment');
