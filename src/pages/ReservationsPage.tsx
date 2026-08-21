@@ -174,6 +174,7 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [occupiedWarning, setOccupiedWarning] = useState<any>(null);
+  const [dirtyWarning, setDirtyWarning] = useState<any>(null);
 
   const [form, setForm] = useState({
     branch_id: '', guest_id: '',
@@ -285,6 +286,11 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
     return room && room.status === 'occupied' ? room : null;
   };
 
+  const checkDirty = (roomId: string) => {
+    const room = rooms.find(r => r.id === roomId);
+    return room && room.status === 'dirty' ? room : null;
+  };
+
   const save = async (force = false) => {
     if (!validate()) return;
 
@@ -303,6 +309,14 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
         const occupied = checkOccupied(row.room_id);
         if (occupied) {
           setOccupiedWarning(occupied);
+          return;
+        }
+      }
+      // Check dirty for all rooms
+      for (const row of roomRows) {
+        const dirty = checkDirty(row.room_id);
+        if (dirty) {
+          setDirtyWarning(dirty);
           return;
         }
       }
@@ -574,6 +588,23 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
             <div className="flex justify-end gap-2">
               <Button variant="secondary" onClick={() => setOccupiedWarning(null)}>Cancel</Button>
               <Button onClick={() => { setOccupiedWarning(null); save(true); }}>Continue</Button>
+            </div>
+          </div>
+        </Modal>
+      }
+      {dirtyWarning &&
+        <Modal open={true} onClose={() => setDirtyWarning(null)} title={t('rooms.housekeeping')}>
+          <div className="space-y-4">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={20} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium text-slate-800">Room {dirtyWarning.room_number} — {t('room.dirty')}</p>
+                <p className="text-sm text-slate-600 mt-1">{t('rooms.dirty_warning')}</p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setDirtyWarning(null)}>{t('common.cancel')}</Button>
+              <Button onClick={() => { setDirtyWarning(null); save(true); }}>{t('rooms.dirty_warning_continue')}</Button>
             </div>
           </div>
         </Modal>

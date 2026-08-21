@@ -394,6 +394,18 @@ const translations: Record<string, { en: string; id: string }> = {
   'rooms.change_status': { en: 'Change Status', id: 'Ubah Status' },
   'rooms.room_number': { en: 'Room Number', id: 'Nomor Kamar' },
   'rooms.base_rate': { en: 'Base Rate', id: 'Tarif Dasar' },
+  'rooms.housekeeping': { en: 'Housekeeping', id: 'Housekeeping' },
+  'rooms.current_status': { en: 'Current Status', id: 'Status Saat Ini' },
+  'rooms.new_status': { en: 'New Status', id: 'Status Baru' },
+  'rooms.reason': { en: 'Reason', id: 'Alasan' },
+  'rooms.reason_required': { en: 'A reason is required for Out of Order / Out of Service', id: 'Alasan wajib diisi untuk Rusak / Tidak Beroperasi' },
+  'rooms.reason_placeholder': { en: 'e.g. Broken AC, plumbing repair, renovation', id: 'mis. AC rusak, perbaikan ledeng, renovasi' },
+  'rooms.revert_nights': { en: 'Nights until auto-revert', id: 'Malam hingga otomatis kembali' },
+  'rooms.revert_until': { en: 'Revert date', id: 'Tanggal kembali' },
+  'rooms.revert_hint': { en: 'The room will automatically revert to Dirty after this many nights.', id: 'Kamar akan otomatis kembali ke Kotor setelah sekian malam.' },
+  'rooms.cannot_change_occupied': { en: 'Cannot change status of an occupied room. Check out the guest first.', id: 'Tidak dapat mengubah status kamar yang terisi. Lakukan check-out tamu terlebih dahulu.' },
+  'rooms.dirty_warning': { en: 'The selected room is currently Dirty. Please verify it has been cleaned before assigning it to a guest.', id: 'Kamar yang dipilih saat ini Kotor. Mohon verifikasi kamar sudah dibersihkan sebelum ditetapkan ke tamu.' },
+  'rooms.dirty_warning_continue': { en: 'Continue anyway', id: 'Tetap lanjutkan' },
 
   // Common actions
   'action.new_reservation': { en: 'New Reservation', id: 'Reservasi Baru' },

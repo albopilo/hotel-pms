@@ -124,6 +124,8 @@ export interface Room {
   status: RoomStatus;
   is_active: boolean;
   notes: string | null;
+  out_of_service_reason: string | null;
+  out_of_service_until: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -459,6 +461,8 @@ export interface RoomStatusHistory {
   new_status: string;
   changed_by: string | null;
   reason: string | null;
+  revert_after_nights: number | null;
+  revert_to: string | null;
   created_at: string;
 }
 

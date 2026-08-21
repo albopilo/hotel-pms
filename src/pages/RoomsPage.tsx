@@ -10,11 +10,13 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input, Select, Textarea } from '@/components/ui/Form';
 import { RoomStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR } from '@/lib/format';
-import { Plus, Edit, BedDouble, X } from 'lucide-react';
+import { formatIDR, todayISO, addDays } from '@/lib/format';
+import { Plus, CreditCard as Edit, BedDouble, Sparkles } from 'lucide-react';
 import type { Room, RoomType, RoomStatus, Branch } from '@/types/database';
 
 const STATUSES: RoomStatus[] = ['available', 'reserved', 'occupied', 'dirty', 'cleaning', 'inspected', 'out_of_service', 'out_of_order'];
+
+const HOUSEKEEPING_TARGETS: RoomStatus[] = ['available', 'dirty', 'cleaning', 'inspected', 'out_of_service', 'out_of_order'];
 
 export function RoomsPage() {
   const { user, branches } = useAuth();
@@ -27,11 +29,12 @@ export function RoomsPage() {
   const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [showHousekeeping, setShowHousekeeping] = useState(false);
 
   const branchIds = useMemo(
-  () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
-  [selectedBranchId, branches]
-);
+    () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+    [selectedBranchId, branches]
+  );
   const isSuperAdmin = user?.role === 'super_admin';
 
   const load = useCallback(async () => {
@@ -57,24 +60,24 @@ export function RoomsPage() {
 
   const changeStatus = async (room: Room, newStatus: RoomStatus) => {
     await supabase
-.from('rooms')
-.update({
- status:newStatus
-})
-.eq('id',room.id);
-    const {error:historyError}=await supabase
-.from('room_status_history')
-.insert({
-      room_id: room.id,
-      previous_status: room.status,
-      new_status: newStatus,
-      changed_by: user?.id,
-    });
-    if(historyError){
- console.error(historyError);
-}
+      .from('rooms')
+      .update({
+        status: newStatus,
+        out_of_service_reason: null,
+        out_of_service_until: null,
+      })
+      .eq('id', room.id);
+    const { error: historyError } = await supabase
+      .from('room_status_history')
+      .insert({
+        room_id: room.id,
+        previous_status: room.status,
+        new_status: newStatus,
+        changed_by: user?.id,
+      });
+    if (historyError) console.error(historyError);
     showToast(`${t('common.status')}: ${t(`room.${newStatus}`)}`, 'success');
-    setSelectedRoom({ ...room, status: newStatus });
+    setSelectedRoom({ ...room, status: newStatus, out_of_service_reason: null, out_of_service_until: null });
     load();
   };
 
@@ -84,11 +87,16 @@ export function RoomsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{t('rooms.title')}</h1>
-        {(isSuperAdmin || user?.role === 'manager') && (
-          <Button onClick={() => { setEditingRoom(null); setShowForm(true); }}>
-            <Plus size={18} /> {t('common.add')}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowHousekeeping(true)}>
+            <Sparkles size={18} /> {t('rooms.housekeeping')}
           </Button>
-        )}
+          {(isSuperAdmin || user?.role === 'manager') && (
+            <Button onClick={() => { setEditingRoom(null); setShowForm(true); }}>
+              <Plus size={18} /> {t('common.add')}
+            </Button>
+          )}
+        </div>
       </div>
 
       {rooms.length === 0 ? (
@@ -146,6 +154,15 @@ export function RoomsPage() {
         )}
       </Modal>
 
+      {/* Housekeeping modal */}
+      <HousekeepingModal
+        open={showHousekeeping}
+        onClose={() => setShowHousekeeping(false)}
+        rooms={rooms}
+        userId={user?.id || ''}
+        onSaved={() => { setShowHousekeeping(false); load(); }}
+      />
+
       {/* Room form */}
       <RoomFormModal
         open={showForm}
@@ -157,6 +174,201 @@ export function RoomsPage() {
         onSaved={() => { setShowForm(false); load(); }}
       />
     </div>
+  );
+}
+
+function HousekeepingModal({ open, onClose, rooms, userId, onSaved }: {
+  open: boolean;
+  onClose: () => void;
+  rooms: Room[];
+  userId: string;
+  onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { showToast } = useToast();
+  const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [newStatus, setNewStatus] = useState<RoomStatus>('available');
+  const [reason, setReason] = useState('');
+  const [revertNights, setRevertNights] = useState('1');
+  const [saving, setSaving] = useState(false);
+
+  const selectedRoom = rooms.find((r) => r.id === selectedRoomId) || null;
+
+  const isOutOfService = newStatus === 'out_of_order' || newStatus === 'out_of_service';
+  const isOccupied = selectedRoom?.status === 'occupied';
+
+  useEffect(() => {
+    if (open) {
+      setSelectedRoomId('');
+      setNewStatus('available');
+      setReason('');
+      setRevertNights('1');
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (selectedRoom) {
+      if (selectedRoom.status === 'occupied') {
+        setNewStatus(selectedRoom.status);
+      } else if (selectedRoom.status === 'dirty') {
+        setNewStatus('available');
+      } else {
+        setNewStatus(selectedRoom.status);
+      }
+    }
+  }, [selectedRoomId]);
+
+  const handleSubmit = async () => {
+    if (!selectedRoom) { showToast('Select a room', 'error'); return; }
+    if (selectedRoom.status === 'occupied') {
+      showToast(t('rooms.cannot_change_occupied'), 'error');
+      return;
+    }
+    if (newStatus === selectedRoom.status && !isOutOfService) {
+      showToast('Status is already set', 'error');
+      return;
+    }
+    if (isOutOfService && !reason.trim()) {
+      showToast(t('rooms.reason_required'), 'error');
+      return;
+    }
+
+    setSaving(true);
+    const update: Record<string, unknown> = { status: newStatus };
+    if (isOutOfService) {
+      update.out_of_service_reason = reason.trim();
+      const nights = parseInt(revertNights) || 1;
+      update.out_of_service_until = addDays(todayISO(), nights);
+    } else {
+      update.out_of_service_reason = null;
+      update.out_of_service_until = null;
+    }
+
+    const { error } = await supabase.from('rooms').update(update).eq('id', selectedRoom.id);
+    if (error) {
+      showToast(error.message, 'error');
+      setSaving(false);
+      return;
+    }
+
+    await supabase.from('room_status_history').insert({
+      room_id: selectedRoom.id,
+      previous_status: selectedRoom.status,
+      new_status: newStatus,
+      changed_by: userId,
+      reason: isOutOfService ? reason.trim() : null,
+      revert_after_nights: isOutOfService ? parseInt(revertNights) || 1 : null,
+      revert_to: isOutOfService ? 'dirty' : null,
+    });
+
+    showToast(`${t('common.status')}: ${t(`room.${newStatus}`)}`, 'success');
+    setSaving(false);
+    onSaved();
+  };
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={t('rooms.housekeeping')}
+      size="md"
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
+          <Button loading={saving} onClick={handleSubmit} disabled={isOccupied}>
+            {t('common.save')}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {/* Room selection */}
+        <Select
+          label={t('common.room')}
+          value={selectedRoomId}
+          onChange={(e) => setSelectedRoomId(e.target.value)}
+        >
+          <option value="">--</option>
+          {rooms.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.room_number} — {t(`room.${r.status}`)}
+            </option>
+          ))}
+        </Select>
+
+        {/* Current status info */}
+        {selectedRoom && (
+          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">{t('rooms.current_status')}</span>
+              <RoomStatusBadge status={selectedRoom.status} label={t(`room.${selectedRoom.status}`)} />
+            </div>
+            {selectedRoom.out_of_service_reason && (
+              <div className="text-xs text-slate-500">
+                <span className="font-medium">{t('rooms.reason')}:</span> {selectedRoom.out_of_service_reason}
+              </div>
+            )}
+            {selectedRoom.out_of_service_until && (
+              <div className="text-xs text-slate-500">
+                <span className="font-medium">{t('rooms.revert_until')}:</span> {selectedRoom.out_of_service_until}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Occupied warning */}
+        {isOccupied && (
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-700">
+            {t('rooms.cannot_change_occupied')}
+          </div>
+        )}
+
+        {/* New status */}
+        <div>
+          <label className="text-sm font-medium text-slate-700 mb-1.5 block">{t('rooms.new_status')}</label>
+          <div className="flex flex-wrap gap-2">
+            {HOUSEKEEPING_TARGETS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                disabled={isOccupied}
+                onClick={() => setNewStatus(s)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                  s === newStatus
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+                }`}
+              >
+                {t(`room.${s}`)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Reason + revert nights for out of order / out of service */}
+        {isOutOfService && (
+          <div className="space-y-3 rounded-lg bg-slate-50 border border-slate-200 p-3">
+            <Textarea
+              label={t('rooms.reason')}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              rows={2}
+              placeholder={t('rooms.reason_placeholder')}
+            />
+            <Input
+              label={t('rooms.revert_nights')}
+              type="number"
+              value={revertNights}
+              onChange={(e) => setRevertNights(e.target.value)}
+              min="1"
+            />
+            <p className="text-xs text-slate-500">
+              {t('rooms.revert_hint')}
+            </p>
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 }
 
@@ -179,6 +391,14 @@ function RoomDetail({ room, roomType, branch, onStatusChange, onEdit, canEdit }:
         <div><span className="text-slate-500">{t('rooms.base_rate')}:</span> <span className="font-medium">{formatIDR(room.base_rate)}</span></div>
         <div><span className="text-slate-500">{t('common.status')}:</span> <RoomStatusBadge status={room.status} label={t(`room.${room.status}`)} /></div>
       </div>
+      {room.out_of_service_reason && (
+        <div className="text-sm bg-amber-50 border border-amber-200 rounded-lg p-2">
+          <span className="font-medium text-amber-700">{t('rooms.reason')}:</span> <span className="text-amber-800">{room.out_of_service_reason}</span>
+          {room.out_of_service_until && (
+            <span className="block text-xs text-amber-600 mt-0.5">{t('rooms.revert_until')}: {room.out_of_service_until}</span>
+          )}
+        </div>
+      )}
       {room.notes && <div className="text-sm"><span className="text-slate-500">{t('common.notes')}:</span> <span>{room.notes}</span></div>}
 
       {canEdit && (
