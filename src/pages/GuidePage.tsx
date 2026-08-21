@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/Badge';
 import { BookOpen, LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, Wallet, Receipt, FileSpreadsheet, Moon, Building2, DoorOpen, Settings, ScrollText, CreditCard, Tags, KeyRound, Users as UsersIcon, ChevronDown, ChevronUp, Lightbulb, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Info } from 'lucide-react';
 import type { UserRole } from '@/types/database';
 
+type Role = 'all' | UserRole;
+
 interface GuideSection {
   id: string;
   icon: React.ReactNode;
@@ -87,7 +89,6 @@ const SECTIONS: GuideSection[] = [
       { en: 'Click "New Guest" to add a guest. Fill in their full name (required), ID type and number, phone, and other details.', id: 'Klik "Tamu Baru" untuk menambahkan tamu. Isi nama lengkap (wajib), jenis dan nomor ID, telepon, dan detail lainnya.' },
       { en: 'Click any guest row to see their full profile, previous stays, total spending, and outstanding balances.', id: 'Klik baris tamu mana pun untuk melihat profil lengkap, menginap sebelumnya, total pengeluaran, dan saldo tertunggak.' },
     ],
-    tip: { en: 'Always search for an existing guest first to avoid creating duplicates.', id: 'Selalu cari tamu yang ada terlebih dahulu untuk menghindari duplikat.' },
     visual: <GuestVisual />,
   },
   {
@@ -98,7 +99,7 @@ const SECTIONS: GuideSection[] = [
     roles: ['super_admin', 'manager', 'receptionist'],
     steps: [
       { en: 'The left column shows arrivals (confirmed reservations ready for check-in). Click "Check In" to process.', id: 'Kolom kiri menampilkan kedatangan (reservasi dikonfirmasi siap untuk check-in). Klik "Check In" untuk memproses.' },
-      { en: 'During check-in, set the actual arrival time. The system compares the full date and time against the scheduled check-in (date + standard time). If the actual arrival is earlier, an early check-in charge can be added.', id: 'Saat check-in, atur waktu kedatangan aktual. Sistem membandingkan tanggal dan waktu lengkap dengan jadwal check-in (tanggal + waktu standar). Jika kedatangan lebih awal, biaya check-in awal dapat ditambahkan.' },
+      { en: 'During check-in, set the actual arrival time. If it\'s earlier than the standard check-in time, the system detects an early check-in and can add a charge.', id: 'Saat check-in, atur waktu kedatangan aktual. Jika lebih awal dari waktu check-in standar, sistem mendeteksi check-in awal dan dapat menambah biaya.' },
       { en: 'You can encode a room key card (in development/mock mode for now). Click "Encode Room Card" before completing check-in.', id: 'Anda dapat mengenkoded kartu kunci kamar (dalam mode pengembangan/mock untuk saat ini). Klik "Enkoded Kartu Kamar" sebelum menyelesaikan check-in.' },
       { en: 'The right column shows today\'s departures. Click "Check Out" to process. The system shows a full charge summary and balance.', id: 'Kolom kanan menampilkan keberangkatan hari ini. Klik "Check Out" untuk memproses. Sistem menampilkan ringkasan biaya lengkap dan saldo.' },
       { en: 'If the guest checks out late (past the standard time or past the checkout date), a late checkout warning appears with an option to add a charge.', id: 'Jika tamu check-out terlambat (melewati waktu standar atau melewati tanggal checkout), peringatan check-out terlambat muncul dengan opsi untuk menambah biaya.' },
@@ -168,6 +169,24 @@ const SECTIONS: GuideSection[] = [
     visual: <NightAuditVisual />,
   },
   {
+    id: 'admin',
+    icon: <Settings size={20} />,
+    titleEn: 'Administration (Super Admin Only)',
+    titleId: 'Administrasi (Super Admin Saja)',
+    roles: ['super_admin'],
+    steps: [
+      { en: 'Branches: Create and manage hotel branches. Set standard check-in/out times and business day cutoff.', id: 'Cabang: Buat dan kelola cabang hotel. Atur waktu check-in/out standar dan batas hari bisnis.' },
+      { en: 'Room Types: Define room categories (e.g. Deluxe, Suite) with base rates and max occupancy.', id: 'Jenis Kamar: Tentukan kategori kamar (mis. Deluxe, Suite) dengan tarif dasar dan kapasitas maks.' },
+      { en: 'Booking Sources: Track where reservations come from (Walk-in, Booking.com, Agoda, etc.). Mark OTA sources.', id: 'Sumber Pemesanan: Lacak dari mana reservasi berasal (Walk-in, Booking.com, Agoda, dll.). Tandai sumber OTA.' },
+      { en: 'Users: Create staff accounts with roles (Receptionist, Manager, Super Admin). Assign branch access.', id: 'Pengguna: Buat akun staf dengan peran (Resepsionis, Manajer, Super Admin). Tetapkan akses cabang.' },
+      { en: 'Charge Categories: Define charge types (amenities, damage, etc.). Set approval thresholds for damage charges.', id: 'Kategori Biaya: Tentukan jenis biaya (fasilitas, kerusakan, dll.). Atur batas persetujuan untuk biaya kerusakan.' },
+      { en: 'Payment Settings: Configure payment methods (Cash, EDC, OTA/Xendit).', id: 'Pengaturan Pembayaran: Konfigurasi metode pembayaran (Tunai, EDC, OTA/Xendit).' },
+      { en: 'System Settings: Set company info, default charges, tax rates, and document prefixes.', id: 'Pengaturan Sistem: Atur info perusahaan, biaya default, tarif pajak, dan prefix dokumen.' },
+      { en: 'Audit Logs: View a detailed trail of all actions taken in the system, with before/after values.', id: 'Log Audit: Lihat jejak detail semua tindakan yang diambil dalam sistem, dengan nilai sebelum/sesudah.' },
+    ],
+    visual: <AdminVisual />,
+  },
+  {
     id: 'hotel_lock',
     icon: <KeyRound size={20} />,
     titleEn: 'Hotel Lock Integration',
@@ -183,55 +202,28 @@ const SECTIONS: GuideSection[] = [
     tip: { en: 'In mock mode, all operations succeed automatically. In production, this connects to a local bridge device.', id: 'Dalam mode mock, semua operasi berhasil secara otomatis. Dalam produksi, ini terhubung ke perangkat bridge lokal.' },
     visual: <LockVisual />,
   },
-  {
-    id: 'admin',
-    icon: <Settings size={20} />,
-    titleEn: 'Administration (Super Admin Only)',
-    titleId: 'Administrasi (Super Admin Saja)',
-    roles: ['super_admin'],
-    steps: [
-      { en: 'Branches: Create and manage hotel branches. Set standard check-in/out times and business day cutoff.', id: 'Cabang: Buat dan kelola cabang hotel. Atur waktu check-in/out standar dan batas hari bisnis.' },
-      { en: 'Room Types: Define room categories (e.g. Deluxe, Suite) with base rates and max occupancy.', id: 'Jenis Kamar: Tentukan kategori kamar (mis. Deluxe, Suite) dengan tarif dasar dan kapasitas maks.' },
-      { en: 'Booking Sources: Track where reservations come from (Walk-in, Booking.com, Agoda, etc.). Mark OTA sources.', id: 'Sumber Pemesanan: Lacak dari mana reservasi berasal (Walk-in, Booking.com, Agoda, dll.). Tandai sumber OTA.' },
-      { en: 'Users: Create staff accounts with roles (Receptionist, Manager, Super Admin). Assign branch access.', id: 'Pengguna: Buat akun staf dengan peran (Resepsionis, Manajer, Super Admin). Tetapkan akses cabang.' },
-      { en: 'Charge Categories: Define charge types (amenities, damage, etc.). Set approval thresholds for damage charges.', id: 'Kategori Biaya: Tentukan jenis biaya (fasilitas, kerusakan, dll.). Atur batas persetujuan untuk biaya kerusakan.' },
-      { en: 'Payment Settings: Configure payment methods (Cash, EDC, OTA/Xendit).', id: 'Pengaturan Pembayaran: Konfigurasi metode pembayaran (Tunai, EDC, OTA/Xendit).' },
-      { en: 'System Settings: Set company info, default charges, tax rates, and document prefixes.', id: 'Pengaturan Sistem: Atur info perusahaan, biaya default, tarif pajak, dan prefix dokumen.' },
-      { en: 'Audit Logs: View a detailed trail of all actions taken in the system, with before/after values. Search by guest name, reservation number, folio number, or invoice number.', id: 'Log Audit: Lihat jejak detail semua tindakan yang diambil dalam sistem, dengan nilai sebelum/sesudah. Cari berdasarkan nama tamu, nomor reservasi, nomor folio, atau nomor faktur.' },
-    ],
-    visual: <AdminVisual />,
-  },
-  {
-    id: 'audit_logs',
-    icon: <ScrollText size={20} />,
-    titleEn: 'Audit Logs',
-    titleId: 'Log Audit',
-    roles: ['super_admin', 'manager'],
-    steps: [
-      { en: 'The Audit Logs page shows a chronological trail of every important action in the system.', id: 'Halaman Log Audit menampilkan jejak kronologis setiap tindakan penting dalam sistem.' },
-      { en: 'Use the date pickers to narrow results to a specific date range.', id: 'Gunakan pemilih tanggal untuk mempersempit hasil ke rentang tanggal tertentu.' },
-      { en: 'Use the search box to filter by guest name, reservation number (RES-), folio number (FOL-), or invoice number (INV-).', id: 'Gunakan kotak pencarian untuk memfilter berdasarkan nama tamu, nomor reservasi (RES-), nomor folio (FOL-), atau nomor faktur (INV-).' },
-      { en: 'Use the action dropdown to filter by a specific action type (check-in, payment, charge, etc.).', id: 'Gunakan dropdown tindakan untuk memfilter berdasarkan jenis tindakan tertentu (check-in, pembayaran, biaya, dll).' },
-      { en: 'Click any row with details to expand and see the previous and new values, plus any reason provided.', id: 'Klik baris mana pun dengan detail untuk memperluas dan melihat nilai sebelum dan baru, ditambah alasan yang diberikan.' },
-    ],
-    tip: { en: 'Early check-in and late checkout decisions (with or without charge) are logged here for accountability.', id: 'Keputusan check-in awal dan check-out terlambat (dengan atau tanpa biaya) dicatat di sini untuk akuntabilitas.' },
-    visual: <AuditVisual />,
-  },
 ];
 
 export function GuidePage() {
   const { user } = useAuth();
   const { t, language } = useI18n();
+  const [roleFilter, setRoleFilter] = useState<Role>('all');
   const [expandedId, setExpandedId] = useState<string | null>('dashboard');
 
   const isEn = language === 'en';
 
   const userRole = user?.role || 'receptionist';
-  const visibleSections = SECTIONS.filter((s) => s.roles.includes(userRole));
+  const visibleSections = SECTIONS.filter((s) => {
+    if (roleFilter !== 'all') return s.roles.includes(roleFilter as UserRole);
+    return s.roles.includes(userRole);
+  });
 
-  const roleLabel = isEn
-    ? { super_admin: 'Super Admin', manager: 'Manager', receptionist: 'Receptionist' }[userRole]
-    : { super_admin: 'Super Admin', manager: 'Manajer', receptionist: 'Resepsionis' }[userRole];
+  const roleLabels: Record<string, { en: string; id: string }> = {
+    all: { en: 'My Role', id: 'Peran Saya' },
+    super_admin: { en: 'Super Admin', id: 'Super Admin' },
+    manager: { en: 'Manager', id: 'Manajer' },
+    receptionist: { en: 'Receptionist', id: 'Resepsionis' },
+  };
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
@@ -245,10 +237,33 @@ export function GuidePage() {
           </h1>
           <p className="text-sm text-slate-500">
             {isEn
-              ? `Learn how to use the hotel management system — tailored for your role (${roleLabel}).`
-              : `Pelajari cara menggunakan sistem manajemen hotel — disesuaikan untuk peran Anda (${roleLabel}).`}
+              ? 'Learn how to use the hotel management system — step by step.'
+              : 'Pelajari cara menggunakan sistem manajemen hotel — langkah demi langkah.'}
           </p>
         </div>
+      </div>
+
+      {/* Role filter */}
+      <div className="flex flex-wrap gap-2">
+        <button
+          onClick={() => setRoleFilter('all')}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            roleFilter === 'all' ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+          }`}
+        >
+          {isEn ? roleLabels.all.en : roleLabels.all.id}
+        </button>
+        {(['super_admin', 'manager', 'receptionist'] as UserRole[]).map((r) => (
+          <button
+            key={r}
+            onClick={() => setRoleFilter(r)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              roleFilter === r ? 'bg-blue-600 text-white' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            {isEn ? roleLabels[r].en : roleLabels[r].id}
+          </button>
+        ))}
       </div>
 
       {/* Sections */}
@@ -268,6 +283,17 @@ export function GuidePage() {
                   <h3 className="font-semibold text-slate-800">
                     {isEn ? section.titleEn : section.titleId}
                   </h3>
+                  <div className="flex gap-1 mt-0.5">
+                    {section.roles.map((r) => (
+                      <span key={r} className="text-xs text-slate-400">
+                        {isEn ? roleLabels[r].en : roleLabels[r].id}
+                      </span>
+                    )).reduce((acc: React.ReactNode[], el, i) => {
+                      if (i > 0) acc.push(<span key={`sep-${i}`} className="text-xs text-slate-300">·</span>);
+                      acc.push(el);
+                      return acc;
+                    }, [])}
+                  </div>
                 </div>
                 {isExpanded ? <ChevronUp size={20} className="text-slate-400" /> : <ChevronDown size={20} className="text-slate-400" />}
               </button>
@@ -613,34 +639,6 @@ function AdminVisual() {
             <span className="text-xs text-slate-600 font-medium">{item.label}</span>
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function AuditVisual() {
-  return (
-    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-      <div className="bg-white rounded-lg p-3 border border-slate-200 space-y-2">
-        <div className="flex gap-2 items-end">
-          <div className="bg-slate-100 rounded px-2 py-1 text-xs text-slate-600">From: 01 Aug</div>
-          <div className="bg-slate-100 rounded px-2 py-1 text-xs text-slate-600">To: 21 Aug</div>
-          <div className="flex-1 bg-slate-100 rounded px-2 py-1 text-xs text-slate-500">Search: RES-001...</div>
-        </div>
-        <div className="border border-slate-100 rounded p-2 flex items-center gap-2">
-          <Badge color="teal">Check In</Badge>
-          <span className="text-xs text-slate-700 font-medium">John Doe</span>
-          <span className="text-xs text-slate-400">·</span>
-          <span className="text-xs text-slate-500">RES-001</span>
-          <span className="text-xs text-slate-400 ml-auto">21 Aug 14:30</span>
-        </div>
-        <div className="border border-slate-100 rounded p-2 flex items-center gap-2">
-          <Badge color="green">Payment</Badge>
-          <span className="text-xs text-slate-700 font-medium">Jane Smith</span>
-          <span className="text-xs text-slate-400">·</span>
-          <span className="text-xs text-slate-500">FOL-002 · Rp 500K</span>
-          <span className="text-xs text-slate-400 ml-auto">21 Aug 15:00</span>
-        </div>
       </div>
     </div>
   );
