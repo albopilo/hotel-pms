@@ -11,7 +11,7 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input, Select } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Badge } from '@/components/ui/Badge';
-import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
+import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, todayInTimezone, nowInTimezone, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split } from 'lucide-react';
@@ -194,13 +194,14 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
   const [folio, setFolio] = useState<Folio | null>(null);
   const [loading, setLoading] = useState(true);
   const [earlyWarning, setEarlyWarning] = useState(false);
-  const [checkinTime, setCheckinTime] = useState(new Date().toTimeString().slice(0,5));
+  const [checkinTime, setCheckinTime] = useState(nowInTimezone('Asia/Jakarta'));
   const [cardState, setCardState] = useState<'idle'|'connecting'|'writing'|'confirming'|'success'|'failed'|'unavailable'>('idle');
   const [cardMessage, setCardMessage] = useState('');
   const [completing, setCompleting] = useState(false);
 
   const branch = branches.find(b => b.id === reservation.branch_id);
   const standardTime = branch?.standard_checkin_time || '14:00';
+  const branchTimezone = branch?.timezone || 'Asia/Jakarta';
 
   useEffect(() => {
     (async () => {
@@ -218,12 +219,16 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
   }, [reservation]);
 
   useEffect(() => {
-    // Compare full datetimes: scheduled check-in (date + standard time) vs actual (today + actual time).
-    // This correctly handles cases like 22 Aug 00:01 vs 21 Aug 14:00 standard (not early).
+    // Use the branch's timezone to determine the actual local date.
+    // The actual check-in datetime is: today (in branch timezone) + the entered check-in time.
+    // The scheduled check-in datetime is: reservation.check_in_date + standard check-in time.
+    // Early check-in = actual datetime < scheduled datetime.
+    // This correctly handles cases like 22 Aug 00:01 Jakarta (business date 21 Aug) vs standard 21 Aug 14:00.
+    const localDate = todayInTimezone(branchTimezone);
     const scheduledDateTime = new Date(`${reservation.check_in_date}T${standardTime}:00`);
-    const actualDateTime = new Date(`${todayISO()}T${checkinTime}:00`);
+    const actualDateTime = new Date(`${localDate}T${checkinTime}:00`);
     setEarlyWarning(actualDateTime < scheduledDateTime);
-  }, [standardTime, checkinTime, reservation.check_in_date]);
+  }, [standardTime, checkinTime, reservation.check_in_date, branchTimezone]);
 
   const handleAddEarlyCharge = async () => {
     if (!folio) return;
@@ -231,18 +236,20 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
     const charge = parseFloat(data?.value || '0');
     if (charge <= 0) return showToast('No early check-in charge configured','warning');
 
+    const businessDate = todayInTimezone(branchTimezone);
+
     await supabase.from('folio_items').insert({
       folio_id: folio.id, branch_id: reservation.branch_id, reservation_id: reservation.id,
       guest_id: reservation.primary_guest_id, room_id: reservation.room_id,
       item_type:'charge', category:'early_checkin', description:'Early check-in charge',
-      quantity:1, unit_amount:charge, amount:charge, business_date:todayISO(), created_by:user!.id
+      quantity:1, unit_amount:charge, amount:charge, business_date, created_by:user!.id
     });
 
     await supabase.from('transactions').insert({
       branch_id:reservation.branch_id, organization_id:user!.organization_id,
       reservation_id:reservation.id, guest_id:reservation.primary_guest_id, folio_id:folio.id,
       transaction_type:'early_checkin_charge', description:'Early check-in charge',
-      amount:charge, debit_credit:'debit', business_date:todayISO(), created_by:user!.id
+      amount:charge, debit_credit:'debit', business_date, created_by:user!.id
     });
 
     showToast(`Early check-in charge added: ${formatIDR(charge)}`,'success');
@@ -253,7 +260,7 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
     await supabase.from('audit_logs').insert({
       organization_id:user!.organization_id, branch_id:reservation.branch_id, user_id:user!.id,
       action:'early_checkin_no_charge', object_type:'reservation', object_id:reservation.id,
-      reason:`Early check-in at ${checkinTime} (standard: ${standardTime}) - no charge applied`
+      reason:`Early check-in at ${todayInTimezone(branchTimezone)} ${checkinTime} (standard: ${reservation.check_in_date} ${standardTime}) - no charge applied`
     });
     setEarlyWarning(false);
     showToast('Continued without charge (logged)','info');
@@ -304,8 +311,9 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
 
   const completeCheckin = async () => {
     setCompleting(true);
+    const localDate = todayInTimezone(branchTimezone);
     const { error } = await supabase.from('reservations').update({
-      status:'checked_in', actual_check_in:`${todayISO()}T${checkinTime}:00`, check_in_time:checkinTime
+      status:'checked_in', actual_check_in:`${localDate}T${checkinTime}:00`, check_in_time:checkinTime
     }).eq('id',reservation.id);
     if (error) { showToast(error.message,'error'); return setCompleting(false); }
 
@@ -358,8 +366,8 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
             <div className="flex items-center gap-2 text-amber-700 font-medium"><AlertCircle size={18}/>{t('checkin.early_warning')}</div>
             <div className="text-sm text-slate-600">
               <div>{t('checkin.standard_time')}: <span className="font-medium">{formatDate(reservation.check_in_date)} {standardTime}</span></div>
-              <div>{t('checkin.actual_time')}: <span className="font-medium">{formatDate(todayISO())} {checkinTime}</span></div>
-              <div>{t('checkin.difference')}: <span className="font-medium">{formatHoursShort((new Date(`${todayISO()}T${checkinTime}:00`).getTime() - new Date(`${reservation.check_in_date}T${standardTime}:00`).getTime()) / 3600000)}</span></div>
+              <div>{t('checkin.actual_time')}: <span className="font-medium">{formatDate(todayInTimezone(branchTimezone))} {checkinTime}</span></div>
+              <div>{t('checkin.difference')}: <span className="font-medium">{formatHoursShort((new Date(`${todayInTimezone(branchTimezone)}T${checkinTime}:00`).getTime() - new Date(`${reservation.check_in_date}T${standardTime}:00`).getTime()) / 3600000)}</span></div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="warning" onClick={handleAddEarlyCharge}>{t('checkin.add_charge')}</Button>

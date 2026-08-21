@@ -44,6 +44,17 @@ export function todayISO(): string {
   return new Date().toISOString().split('T')[0];
 }
 
+export function todayInTimezone(timezone: string = 'Asia/Jakarta'): string {
+  const now = new Date();
+  const localStr = now.toLocaleString('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  return localStr; // en-CA gives YYYY-MM-DD
+}
+
+export function nowInTimezone(timezone: string = 'Asia/Jakarta'): string {
+  const now = new Date();
+  return now.toLocaleTimeString('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
 export function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
   d.setDate(d.getDate() + days);
