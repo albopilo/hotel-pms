@@ -17,11 +17,16 @@ import { folioService, paymentService, chargeService, FinancialError } from '@/s
 import { parseDbError } from '@/lib/error-handler';
 import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod } from '@/types/database';
 
+type FolioListRow = Folio & {
+  guest?: Pick<Guest, 'full_name'> | null;
+  reservation?: { room?: Pick<Room, 'room_number'> | null } | null;
+};
+
 export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string; reservationId?: string | null }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
-  const [folios, setFolios] = useState<Folio[]>([]);
+  const [folios, setFolios] = useState<FolioListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedFolio, setSelectedFolio] = useState<Folio | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
@@ -34,9 +39,9 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase.from('folios').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('folios').select('*, guest:guests(full_name), reservation:reservations(room:rooms(room_number))').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
     if (error) { setLoading(false); return; }
-    setFolios((data as Folio[]) || []);
+    setFolios((data as FolioListRow[]) || []);
     setLoading(false);
   }, [branchIds]);
 
@@ -71,15 +76,22 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500">
                   <th className="text-left py-3 px-4">{t('folio.folio_number')}</th>
+                  <th className="text-left py-3 px-4">{t('common.guest')}</th>
+                  <th className="text-left py-3 px-4">{t('common.room')}</th>
                   <th className="text-left py-3 px-4">{t('common.balance')}</th>
                   <th className="text-center py-3 px-4">{t('common.status')}</th>
                   <th className="text-right py-3 px-4">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {folios.filter((f) => !localSearch || f.folio_number.toLowerCase().includes(localSearch.toLowerCase())).map((f) => (
+                {folios.filter((f) => {
+                  const q = localSearch.toLowerCase();
+                  return !q || f.folio_number.toLowerCase().includes(q) || (f.guest?.full_name || '').toLowerCase().includes(q) || (f.reservation?.room?.room_number || '').toLowerCase().includes(q);
+                }).map((f) => (
                   <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedFolio(f)}>
                     <td className="py-3 px-4 font-medium text-blue-600">{f.folio_number}</td>
+                    <td className="py-3 px-4">{f.guest?.full_name || '-'}</td>
+                    <td className="py-3 px-4">{f.reservation?.room?.room_number || '-'}</td>
                     <td className="py-3 px-4">{formatIDR(f.balance)}</td>
                     <td className="text-center py-3 px-4"><Badge color={f.status === 'open' ? 'blue' : f.status === 'finalized' ? 'gray' : 'red'}>{f.status}</Badge></td>
                     <td className="text-right py-3 px-4"><button className="text-blue-600 text-xs font-medium">{t('common.view')}</button></td>

@@ -8,7 +8,7 @@ import {
   LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, FileText,
   Receipt, Wallet, FileSpreadsheet, Moon, Building2, DoorOpen,
   Settings, ScrollText, CreditCard, Tags, Globe, LogOut, Search,
-  ChevronDown, Hotel, KeyRound,
+  ChevronDown, Hotel, KeyRound, BookOpen,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { UserRole } from '@/types/database';
@@ -19,7 +19,7 @@ export type PageKey =
   | 'reports' | 'night_audit'
   | 'branches' | 'room_types' | 'users' | 'charge_categories'
   | 'payment_settings' | 'hotel_lock' | 'system_settings' | 'audit_logs'
-  | 'booking_sources';
+  | 'booking_sources' | 'guide';
 
 interface NavItem {
   key: PageKey;
@@ -49,6 +49,7 @@ const navItems: NavItem[] = [
   { key: 'hotel_lock', labelKey: 'nav.hotel_lock', icon: <KeyRound size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
   { key: 'system_settings', labelKey: 'nav.system_settings', icon: <Settings size={20} />, roles: ['super_admin'], group: 'admin' },
   { key: 'audit_logs', labelKey: 'nav.audit_logs', icon: <ScrollText size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
+  { key: 'guide', labelKey: 'nav.guide', icon: <BookOpen size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
 ];
 
 interface LayoutProps {

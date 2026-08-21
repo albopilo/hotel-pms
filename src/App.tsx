@@ -24,6 +24,7 @@ import { ChargeCategoriesPage } from '@/pages/ChargeCategoriesPage';
 import { PaymentSettingsPage } from '@/pages/PaymentSettingsPage';
 import { SystemSettingsPage } from '@/pages/SystemSettingsPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
+import { GuidePage } from '@/pages/GuidePage';
 
 function AuthenticatedApp() {
   const { user, branches } = useAuth();
@@ -90,6 +91,8 @@ function AuthenticatedApp() {
         return <SystemSettingsPage />;
       case 'audit_logs':
         return <AuditLogsPage />;
+      case 'guide':
+        return <GuidePage />;
       default:
         return <DashboardPage />;
     }

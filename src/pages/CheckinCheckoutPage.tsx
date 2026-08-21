@@ -11,7 +11,7 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input, Select } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Badge } from '@/components/ui/Badge';
-import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, addDays, nightsBetween, isEarlyCheckin, isLateCheckout, formatHoursShort } from '@/lib/format';
+import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, addDays, nightsBetween, isEarlyCheckin, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split } from 'lucide-react';
@@ -69,7 +69,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
   const roomMap = useMemo(() => new Map(rooms.map(r => [r.id, r])), [rooms]);
 
   const arrivals = reservations.filter(r => r.status === 'confirmed');
-  const departures = reservations.filter(r => r.status === 'checked_in');
+  const departuresToday = reservations.filter(r => r.status === 'checked_in' && r.check_out_date <= todayISO());
+  const departuresLater = reservations.filter(r => r.status === 'checked_in' && r.check_out_date > todayISO());
 
   const q = (searchQuery || '').toLowerCase().trim();
 
@@ -122,8 +123,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
         </Card>
 
         <Card title={`${t('dash.departures_today')} / ${t('res.checked_in')}`}>
-          {departures.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
-          <div className="space-y-2">{departures.filter(filterFn).map(r => {
+          {departuresToday.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
+          <div className="space-y-2">{departuresToday.filter(filterFn).map(r => {
             const g = guestMap.get(r.primary_guest_id || '');
             const rm = roomMap.get(r.room_id || '');
             return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50">
@@ -140,6 +141,25 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
           })}</div>}
         </Card>
       </div>
+
+      <Card title={t('dash.departures_later')}>
+        {departuresLater.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
+        <div className="space-y-2">{departuresLater.filter(filterFn).map(r => {
+          const g = guestMap.get(r.primary_guest_id || '');
+          const rm = roomMap.get(r.room_id || '');
+          return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50">
+            <div>
+              <p className="font-medium text-slate-800">{g?.full_name || '-'} {r.is_group && <Badge color="purple" size="sm">Group</Badge>}</p>
+              <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {formatDate(r.check_out_date)} {formatTime(r.check_out_time)}</p>
+            </div>
+            <div className="flex gap-1">
+              <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
+              {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
+              <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}><LogOut size={14}/>{t('action.check_out')}</Button>
+            </div>
+          </div>;
+        })}</div>}
+      </Card>
 
       <Card title={t('res.checked_out')}>
         {checkedOut.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
@@ -408,7 +428,11 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
     })();
   },[reservation]);
 
-  useEffect(()=>setLateWarning(isLateCheckout(standardTime,checkoutTime)),[standardTime,checkoutTime]);
+  useEffect(()=>{
+    const today = todayISO();
+    const isLate = reservation.check_out_date < today || (reservation.check_out_date === today && checkoutTime > standardTime);
+    setLateWarning(isLate);
+  },[standardTime,checkoutTime,reservation.check_out_date]);
 
   const charges=folioItems.filter(i=>i.item_type==='charge'&&i.amount>0);
   const payments=folioItems.filter(i=>i.item_type==='payment');
@@ -528,20 +552,25 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
           <input type="time" value={checkoutTime} onChange={e=>setCheckoutTime(e.target.value)} className="mt-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"/>
         </div>
 
-        {lateWarning && (
+        {lateWarning && (() => {
+          const today = todayISO();
+          const daysLate = Math.max(0, Math.round((new Date(today).getTime() - new Date(reservation.check_out_date).getTime()) / 86400000));
+          const timeLate = reservation.check_out_date === today ? timeDiff(standardTime, checkoutTime) : 0;
+          return (
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2 text-amber-700 font-medium"><AlertCircle size={18}/>{t('checkout.late_warning')}</div>
             <div className="text-sm text-slate-600">
-              <div>{t('checkout.standard_time')}: <span className="font-medium">{standardTime}</span></div>
-              <div>{t('checkout.requested_time')}: <span className="font-medium">{checkoutTime}</span></div>
-              <div>{t('checkin.difference')}: <span className="font-medium">{formatHoursShort(timeDiff(standardTime,checkoutTime))}</span></div>
+              <div>{t('checkout.standard_time')}: <span className="font-medium">{formatDate(reservation.check_out_date)} {standardTime}</span></div>
+              <div>{t('checkout.requested_time')}: <span className="font-medium">{formatDate(today)} {checkoutTime}</span></div>
+              <div>{t('checkin.difference')}: <span className="font-medium">{daysLate > 0 ? `+${daysLate} day(s)` : ''} {timeLate > 0 ? formatHoursShort(timeLate) : ''}</span></div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="warning" onClick={handleAddLateCharge}>{t('checkin.add_charge')}</Button>
               <Button size="sm" variant="outline" onClick={handleContinueNoCharge}>{t('checkin.continue_no_charge')}</Button>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         <div className="border border-slate-200 rounded-lg overflow-hidden">
           <table className="w-full text-sm">

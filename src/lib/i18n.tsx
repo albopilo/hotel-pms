@@ -23,6 +23,7 @@ const translations: Record<string, { en: string; id: string }> = {
   'nav.hotel_lock': { en: 'Hotel Lock Integration', id: 'Integrasi Kunci Hotel' },
   'nav.system_settings': { en: 'System Settings', id: 'Pengaturan Sistem' },
   'nav.audit_logs': { en: 'Audit Logs', id: 'Log Audit' },
+  'nav.guide': { en: 'User Guide', id: 'Panduan Pengguna' },
   'nav.booking_sources': { en: 'Booking Sources', id: 'Sumber Pemesanan' },
 
   // Common
@@ -155,6 +156,7 @@ const translations: Record<string, { en: string; id: string }> = {
   'dash.out_of_order_rooms': { en: 'Out of Order', id: 'Rusak' },
   'dash.arrivals_today': { en: 'Arrivals Today', id: 'Kedatangan Hari Ini' },
   'dash.departures_today': { en: 'Departures Today', id: 'Keberangkatan Hari Ini' },
+  'dash.departures_later': { en: 'Departures Later', id: 'Keberangkatan Nanti' },
   'dash.in_house_guests': { en: 'In-House Guests', id: 'Tamu Menginap' },
   'dash.room_revenue': { en: "Today's Room Revenue", id: 'Pendapatan Kamar Hari Ini' },
   'dash.additional_revenue': { en: "Today's Additional Revenue", id: 'Pendapatan Tambahan Hari Ini' },
