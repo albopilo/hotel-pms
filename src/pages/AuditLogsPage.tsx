@@ -8,7 +8,7 @@ import { Input, Select } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatDateTime, todayISO, addDays, formatIDR } from '@/lib/format';
-import { ScrollText, ChevronDown, ChevronUp } from 'lucide-react';
+import { ScrollText, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import type { AuditLog } from '@/types/database';
 
 type ActionColor = 'green' | 'red' | 'blue' | 'amber' | 'gray' | 'teal' | 'orange';
@@ -91,6 +91,7 @@ export function AuditLogsPage() {
   const [dateFrom, setDateFrom] = useState(addDays(todayISO(), -30));
   const [dateTo, setDateTo] = useState(addDays(todayISO(), 1));
   const [actionFilter, setActionFilter] = useState('all');
+  const [searchText, setSearchText] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -110,6 +111,21 @@ export function AuditLogsPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  const filteredLogs = logs.filter((log) => {
+    if (!searchText.trim()) return true;
+    const q = searchText.toLowerCase().trim();
+    const userName = profiles[log.user_id || ''] || '';
+    if (userName.toLowerCase().includes(q)) return true;
+    const detailStr = [
+      log.reason || '',
+      log.new_value ? JSON.stringify(log.new_value).toLowerCase() : '',
+      log.previous_value ? JSON.stringify(log.previous_value).toLowerCase() : '',
+      log.object_id || '',
+      formatActionLabel(log.action).toLowerCase(),
+    ].join(' ');
+    return detailStr.toLowerCase().includes(q);
+  });
+
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
   return (
@@ -123,6 +139,19 @@ export function AuditLogsPage() {
         <div className="flex gap-3 flex-wrap items-end">
           <Input label={t('common.from')} type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
           <Input label={t('common.to')} type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">{t('common.search')}</label>
+            <div className="relative">
+              <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Guest, RES-, FOL-, INV-..."
+                className="rounded-lg border border-slate-300 pl-10 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
           <Select label={t('audit.action')} value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
             <option value="all">{t('common.all')}</option>
             <option value="reservation_created">Reservation Created</option>
@@ -145,7 +174,7 @@ export function AuditLogsPage() {
         </div>
       </Card>
 
-      {logs.length === 0 ? (
+      {filteredLogs.length === 0 ? (
         <EmptyState icon={<ScrollText size={48} />} title={t('audit.no_logs')} />
       ) : (
         <Card noPadding>
@@ -162,7 +191,7 @@ export function AuditLogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {logs.slice(0, 200).map((log) => {
+                {filteredLogs.slice(0, 200).map((log) => {
                   const prevValues = formatValueObj(log.previous_value);
                   const newValues = formatValueObj(log.new_value);
                   const hasDetails = prevValues.length > 0 || newValues.length > 0 || !!log.reason;
@@ -231,7 +260,7 @@ export function AuditLogsPage() {
               </tbody>
             </table>
           </div>
-          {logs.length > 200 && <p className="text-xs text-slate-400 p-3">Showing 200 of {logs.length} entries</p>}
+          {filteredLogs.length > 200 && <p className="text-xs text-slate-400 p-3">Showing 200 of {filteredLogs.length} entries</p>}
         </Card>
       )}
     </div>
