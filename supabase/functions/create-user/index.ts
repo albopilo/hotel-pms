@@ -26,12 +26,18 @@ serve(async (req) => {
       { global: { headers: { Authorization: authHeader } } }
     );
 
+    // Extract the JWT to get the caller's user ID reliably
+    const token = authHeader.replace("Bearer ", "");
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const callerId = payload.sub;
+
     const { data: caller, error: callerError } = await supabaseUser
       .from("profiles")
       .select("role,organization_id")
-      .single();
+      .eq("id", callerId)
+      .maybeSingle();
 
-    if (callerError || caller?.role !== "super_admin") {
+    if (callerError || !caller || caller.role !== "super_admin") {
       throw new Error("Unauthorized");
     }
 
@@ -50,7 +56,7 @@ serve(async (req) => {
       throw new Error("Missing required fields");
     }
 
-    const { data: created, error:createError } =
+    const { data: created, error: createError } =
       await supabaseAdmin.auth.admin.createUser({
         email,
         password,
@@ -61,10 +67,10 @@ serve(async (req) => {
 
     const userId = created.user.id;
 
-    const { error:profileError } =
+    const { error: profileError } =
       await supabaseAdmin.from("profiles").insert({
-        id:userId,
-        organization_id:caller.organization_id,
+        id: userId,
+        organization_id: caller.organization_id,
         full_name,
         email,
         role,
@@ -73,46 +79,43 @@ serve(async (req) => {
 
     if (profileError) throw profileError;
 
-
     if (role !== "super_admin" && branchIds.length) {
-      const rows = branchIds.map((branch_id:string)=>({
-        user_id:userId,
+      const rows = branchIds.map((branch_id: string) => ({
+        user_id: userId,
         branch_id,
       }));
 
-      const { error:accessError } =
+      const { error: accessError } =
         await supabaseAdmin
           .from("user_branch_access")
           .insert(rows);
 
-      if(accessError) throw accessError;
+      if (accessError) throw accessError;
     }
-
 
     return new Response(
       JSON.stringify({
-        success:true,
-        user_id:userId,
+        success: true,
+        user_id: userId,
       }),
       {
-        headers:{
+        headers: {
           ...cors,
-          "Content-Type":"application/json",
+          "Content-Type": "application/json",
         },
       }
     );
 
-  } catch(err) {
-
+  } catch (err) {
     return new Response(
       JSON.stringify({
-        error:err.message,
+        error: err.message,
       }),
       {
-        status:400,
-        headers:{
+        status: 400,
+        headers: {
           ...cors,
-          "Content-Type":"application/json",
+          "Content-Type": "application/json",
         },
       }
     );
