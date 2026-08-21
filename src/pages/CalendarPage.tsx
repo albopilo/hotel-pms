@@ -39,7 +39,7 @@ export function CalendarPage({onSelectReservation}:{onSelectReservation?: (id:st
 
     const [{data:r},{data:res},{data:g}]=await Promise.all([
       supabase.from('rooms').select('*').in('branch_id',branchIds).eq('is_active',true).order('room_number'),
-      supabase.from('reservations').select('*').in('branch_id',branchIds).in('status',['confirmed','checked_in','tentative']).lt('check_in_date',endDate).gt('check_out_date',startDate),
+      supabase.from('reservations').select('*').in('branch_id',branchIds).in('status',['confirmed','checked_in','checked_out','tentative']).lt('check_in_date',endDate).gt('check_out_date',startDate),
       supabase.from('guests').select('*').in('branch_id',branchIds)
     ]);
 
@@ -156,6 +156,8 @@ export function CalendarPage({onSelectReservation}:{onSelectReservation?: (id:st
                         ?'bg-emerald-500'
                         :res.status==='confirmed'
                         ?'bg-blue-500'
+                        :res.status==='checked_out'
+                        ?'bg-slate-400'
                         :'bg-amber-400';
 
                       return (
