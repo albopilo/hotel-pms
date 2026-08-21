@@ -186,46 +186,35 @@ function HousekeepingModal({ open, onClose, rooms, userId, onSaved }: {
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
-  const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
   const [newStatus, setNewStatus] = useState<RoomStatus>('available');
   const [reason, setReason] = useState('');
   const [revertNights, setRevertNights] = useState('1');
   const [saving, setSaving] = useState(false);
 
-  const selectedRoom = rooms.find((r) => r.id === selectedRoomId) || null;
-
+  const selectedRooms = rooms.filter((r) => selectedRoomIds.includes(r.id));
+  const hasOccupied = selectedRooms.some((r) => r.status === 'occupied');
   const isOutOfService = newStatus === 'out_of_order' || newStatus === 'out_of_service';
-  const isOccupied = selectedRoom?.status === 'occupied';
 
   useEffect(() => {
     if (open) {
-      setSelectedRoomId('');
+      setSelectedRoomIds([]);
       setNewStatus('available');
       setReason('');
       setRevertNights('1');
     }
   }, [open]);
 
-  useEffect(() => {
-    if (selectedRoom) {
-      if (selectedRoom.status === 'occupied') {
-        setNewStatus(selectedRoom.status);
-      } else if (selectedRoom.status === 'dirty') {
-        setNewStatus('available');
-      } else {
-        setNewStatus(selectedRoom.status);
-      }
-    }
-  }, [selectedRoomId]);
+  const toggleRoom = (roomId: string) => {
+    setSelectedRoomIds((prev) =>
+      prev.includes(roomId) ? prev.filter((id) => id !== roomId) : [...prev, roomId]
+    );
+  };
 
   const handleSubmit = async () => {
-    if (!selectedRoom) { showToast('Select a room', 'error'); return; }
-    if (selectedRoom.status === 'occupied') {
+    if (selectedRoomIds.length === 0) { showToast('Select at least one room', 'error'); return; }
+    if (hasOccupied) {
       showToast(t('rooms.cannot_change_occupied'), 'error');
-      return;
-    }
-    if (newStatus === selectedRoom.status && !isOutOfService) {
-      showToast('Status is already set', 'error');
       return;
     }
     if (isOutOfService && !reason.trim()) {
@@ -244,24 +233,26 @@ function HousekeepingModal({ open, onClose, rooms, userId, onSaved }: {
       update.out_of_service_until = null;
     }
 
-    const { error } = await supabase.from('rooms').update(update).eq('id', selectedRoom.id);
-    if (error) {
-      showToast(error.message, 'error');
-      setSaving(false);
-      return;
+    for (const room of selectedRooms) {
+      const { error } = await supabase.from('rooms').update(update).eq('id', room.id);
+      if (error) {
+        showToast(error.message, 'error');
+        setSaving(false);
+        return;
+      }
+
+      await supabase.from('room_status_history').insert({
+        room_id: room.id,
+        previous_status: room.status,
+        new_status: newStatus,
+        changed_by: userId,
+        reason: isOutOfService ? reason.trim() : null,
+        revert_after_nights: isOutOfService ? parseInt(revertNights) || 1 : null,
+        revert_to: isOutOfService ? 'dirty' : null,
+      });
     }
 
-    await supabase.from('room_status_history').insert({
-      room_id: selectedRoom.id,
-      previous_status: selectedRoom.status,
-      new_status: newStatus,
-      changed_by: userId,
-      reason: isOutOfService ? reason.trim() : null,
-      revert_after_nights: isOutOfService ? parseInt(revertNights) || 1 : null,
-      revert_to: isOutOfService ? 'dirty' : null,
-    });
-
-    showToast(`${t('common.status')}: ${t(`room.${newStatus}`)}`, 'success');
+    showToast(`${selectedRoomIds.length} room(s): ${t(`room.${newStatus}`)}`, 'success');
     setSaving(false);
     onSaved();
   };
@@ -271,53 +262,56 @@ function HousekeepingModal({ open, onClose, rooms, userId, onSaved }: {
       open={open}
       onClose={onClose}
       title={t('rooms.housekeeping')}
-      size="md"
+      size="lg"
       footer={
         <>
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button loading={saving} onClick={handleSubmit} disabled={isOccupied}>
-            {t('common.save')}
+          <Button loading={saving} onClick={handleSubmit} disabled={hasOccupied}>
+            {t('common.save')} {selectedRoomIds.length > 0 && `(${selectedRoomIds.length})`}
           </Button>
         </>
       }
     >
       <div className="space-y-4">
-        {/* Room selection */}
-        <Select
-          label={t('common.room')}
-          value={selectedRoomId}
-          onChange={(e) => setSelectedRoomId(e.target.value)}
-        >
-          <option value="">--</option>
-          {rooms.map((r) => (
-            <option key={r.id} value={r.id}>
-              {r.room_number} — {t(`room.${r.status}`)}
-            </option>
-          ))}
-        </Select>
+        <p className="text-sm text-slate-500">Select one or more rooms to update. Click rooms to toggle selection.</p>
 
-        {/* Current status info */}
-        {selectedRoom && (
-          <div className="rounded-lg bg-slate-50 border border-slate-200 p-3 text-sm space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">{t('rooms.current_status')}</span>
-              <RoomStatusBadge status={selectedRoom.status} label={t(`room.${selectedRoom.status}`)} />
-            </div>
-            {selectedRoom.out_of_service_reason && (
-              <div className="text-xs text-slate-500">
-                <span className="font-medium">{t('rooms.reason')}:</span> {selectedRoom.out_of_service_reason}
-              </div>
-            )}
-            {selectedRoom.out_of_service_until && (
-              <div className="text-xs text-slate-500">
-                <span className="font-medium">{t('rooms.revert_until')}:</span> {selectedRoom.out_of_service_until}
-              </div>
-            )}
+        {/* Room grid with multi-select */}
+        <div className="max-h-64 overflow-y-auto border border-slate-200 rounded-lg p-3">
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+            {rooms.map((r) => {
+              const isSelected = selectedRoomIds.includes(r.id);
+              const isOcc = r.status === 'occupied';
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  disabled={isOcc}
+                  onClick={() => toggleRoom(r.id)}
+                  className={`flex flex-col items-center gap-1 p-2 rounded-lg border-2 transition-colors ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50'
+                      : isOcc
+                        ? 'border-slate-200 bg-slate-100 opacity-50 cursor-not-allowed'
+                        : 'border-slate-200 hover:border-blue-400'
+                  }`}
+                >
+                  <span className="font-bold text-sm text-slate-800">{r.room_number}</span>
+                  <RoomStatusBadge status={r.status} label={t(`room.${r.status}`)} />
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {selectedRooms.length > 0 && (
+          <div className="text-sm text-slate-600">
+            <span className="font-medium">{selectedRooms.length} room(s) selected:</span>{' '}
+            {selectedRooms.map((r) => r.room_number).join(', ')}
           </div>
         )}
 
         {/* Occupied warning */}
-        {isOccupied && (
+        {hasOccupied && (
           <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-700">
             {t('rooms.cannot_change_occupied')}
           </div>
@@ -331,7 +325,7 @@ function HousekeepingModal({ open, onClose, rooms, userId, onSaved }: {
               <button
                 key={s}
                 type="button"
-                disabled={isOccupied}
+                disabled={hasOccupied}
                 onClick={() => setNewStatus(s)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                   s === newStatus

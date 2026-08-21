@@ -221,7 +221,9 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
     return rooms.filter(r =>
       r.branch_id === form.branch_id &&
       (!roomRows[rowIdx].room_type_id || r.room_type_id === roomRows[rowIdx].room_type_id) &&
-      !usedRoomIds.includes(r.id)
+      !usedRoomIds.includes(r.id) &&
+      r.status !== 'out_of_order' &&
+      r.status !== 'out_of_service'
     );
   };
 
@@ -291,6 +293,11 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
     return room && room.status === 'dirty' ? room : null;
   };
 
+  const checkOutOfService = (roomId: string) => {
+    const room = rooms.find(r => r.id === roomId);
+    return room && (room.status === 'out_of_order' || room.status === 'out_of_service') ? room : null;
+  };
+
   const save = async (force = false) => {
     if (!validate()) return;
 
@@ -299,6 +306,15 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
       const conflict = await checkConflict(row.room_id, reservation?.id);
       if (conflict.length) {
         showToast(`Room ${rooms.find(r => r.id === row.room_id)?.room_number} is already reserved for the selected dates.`, 'error');
+        return;
+      }
+    }
+
+    // Check out-of-order / out-of-service for all rooms (hard block)
+    for (const row of roomRows) {
+      const oos = checkOutOfService(row.room_id);
+      if (oos) {
+        showToast(`Room ${oos.room_number} is ${t(`room.${oos.status}`)} and cannot be reserved.`, 'error');
         return;
       }
     }
