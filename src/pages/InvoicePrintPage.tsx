@@ -93,7 +93,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           <div>
             <h2 className="font-bold">Bill To</h2>
             <p>{guest?.full_name || '-'}</p>
-            <p>Room: {reservation?.rooms?.room_number || reservation?.room_number || reservation?.room_id || '-'}</p>
+            <p>Room: {reservation?.rooms?.room_number || '-'}</p>
           </div>
           <div className="text-right">
             <p>Invoice: <b>{invoice.invoice_number}</b></p>

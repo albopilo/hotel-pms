@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { invoiceService } from '@/services/invoiceService';
 import { useAuth } from '@/lib/auth';
@@ -11,9 +11,8 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, formatTime, todayISO, isEarlyCheckin, isLateCheckout, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
-import { LogIn, LogOut, KeyRound, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2 } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio } from '@/types/database';
-
 
 export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { initialReservationId?: string | null; searchQuery?: string }) {
   const { branches } = useAuth();
@@ -26,6 +25,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Reservation | null>(null);
   const [mode, setMode] = useState<'checkin' | 'checkout' | null>(null);
+  const processedInitialId = useRef<string | null>(null);
 
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
 
@@ -49,8 +49,10 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
 
   useEffect(() => {
     if (!initialReservationId) return;
+    if (processedInitialId.current === initialReservationId) return;
     const r = reservations.find(x => x.id === initialReservationId);
     if (r) {
+      processedInitialId.current = initialReservationId;
       setSelected(r);
       setMode(r.status === 'checked_in' ? 'checkout' : 'checkin');
     }
@@ -69,6 +71,12 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
     const g = guestMap.get(r.primary_guest_id || '');
     const rm = roomMap.get(r.room_id || '');
     return r.reservation_number.toLowerCase().includes(q) || (g?.full_name || '').toLowerCase().includes(q) || (rm?.room_number || '').includes(q);
+  };
+
+  const handleCloseModal = () => {
+    setSelected(null);
+    setMode(null);
+    load();
   };
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
@@ -108,11 +116,12 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
         </Card>
       </div>
 
-      {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={() => { setSelected(null); setMode(null); load(); }} />}
-      {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={() => { setSelected(null); setMode(null); load(); }} />}
+      {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} />}
+      {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} />}
     </div>
   );
 }
+
 function CheckinModal({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
   const { user, branches } = useAuth();
   const { t } = useI18n();
@@ -293,6 +302,22 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
 
     if (room) await supabase.from('rooms').update({status:'occupied'}).eq('id',room.id);
 
+    if (folio) {
+      try {
+        await invoiceService.ensureInvoice({
+          folioId: folio.id,
+          branchId: reservation.branch_id,
+          organizationId: user!.organization_id,
+          reservationId: reservation.id,
+          guestId: reservation.primary_guest_id,
+          userId: user!.id,
+        });
+      } catch (err: any) {
+        console.error('Invoice creation at check-in failed:', err);
+        showToast(`Invoice creation failed: ${err.message || err}`, 'error');
+      }
+    }
+
     await supabase.from('audit_logs').insert({
       organization_id:user!.organization_id,
       branch_id:reservation.branch_id,
@@ -307,6 +332,7 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
     setCompleting(false);
     onClose();
   };
+
   if (loading) return <Modal open onClose={onClose} title={t('checkin.title')}><LoadingPage /></Modal>;
 
   return (
@@ -428,7 +454,8 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
   const balance=totalCharges+totalTax-totalDiscounts-totalPayments;
   const hasUnpaid=balance>0;
   const canOverride=user?.role==='super_admin'||user?.role==='manager';
-    const handleAddLateCharge = async () => {
+
+  const handleAddLateCharge = async () => {
     if (!folio) return;
 
     const { data } = await supabase.from('system_settings').select('value').eq('key','late_checkout_charge').maybeSingle();
@@ -474,271 +501,107 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
     showToast('Continued without charge (logged)','info');
   };
 
-const completeCheckout = async () => {
-
-  if(hasUnpaid && !overrideUnpaid){
-    setShowOverrideConfirm(true);
-    return;
-  }
-
-  setCompleting(true);
-
-  try {
-
-    if(!folio){
-      throw new Error('Folio not found');
+  const completeCheckout = async () => {
+    if(hasUnpaid && !overrideUnpaid){
+      setShowOverrideConfirm(true);
+      return;
     }
 
+    setCompleting(true);
 
-    // refresh folio items
-    const { data: latestItems, error: itemsError } =
-      await supabase
+    try {
+      if(!folio){
+        throw new Error('Folio not found');
+      }
+
+      const { data: latestItems, error: itemsError } = await supabase
         .from('folio_items')
         .select('*')
         .eq('folio_id', folio.id)
         .eq('voided', false);
 
-
-    if(itemsError){
-      throw itemsError;
-    }
-
-
-    const items = latestItems || [];
-
-
-    /*
-      Accounting:
-
-      Charges:
-      room
-      deposit
-      amenities
-      etc
-
-      Payments:
-      money received
-    */
-
-
-    const totalCharges =
-      items
-      .filter(i => 
-        i.item_type === 'charge'
-      )
-      .reduce(
-        (sum,i)=>sum + Number(i.amount || 0),
-        0
-      );
-
-
-    const totalPayments =
-      items
-      .filter(i =>
-        i.item_type === 'payment'
-      )
-      .reduce(
-        (sum,i)=>sum + Math.abs(Number(i.amount || 0)),
-        0
-      );
-
-
-    const outstanding =
-      totalCharges - totalPayments;
-
-
-    if(outstanding > 0 && !overrideUnpaid){
-
-      setShowOverrideConfirm(true);
-      setCompleting(false);
-      return;
-
-    }
-
-
-
-    // 1. Mark room dirty
-
-    if(room){
-
-      const {error:roomError} =
-        await supabase
-        .from('rooms')
-        .update({
-          status:'dirty'
-        })
-        .eq('id',room.id);
-
-
-      if(roomError)
-        throw roomError;
-
-    }
-
-
-
-    // 2. Finalize folio
-
-    const {error:folioError} =
-      await supabase
-      .from('folios')
-      .update({ status:'finalized', finalized_at: new Date().toISOString(), finalized_by: user!.id})
-      .eq('id',folio.id);
-
-    if(folioError)
-      throw folioError;
-
-    // 2.5 Create invoice
-
-try {
-  const invoiceResult = await invoiceService.createInvoice({
-    folioId: folio.id,
-    branchId: reservation.branch_id,
-    organizationId: user!.organization_id,
-    reservationId: reservation.id,
-    guestId: reservation.primary_guest_id,
-    userId: user!.id
-  });
-
-  console.log("INVOICE CREATED:", invoiceResult);
-
-} catch(err:any) {
-
-  console.error("INVOICE CREATION FAILED:", err);
-
-  throw new Error(
-    `Invoice creation failed: ${err.message || JSON.stringify(err)}`
-  );
-
-}
-
-    // 3. Checkout reservation
-
-
-    const {error:reservationError} =
-      await supabase
-      .from('reservations')
-      .update({
-
-        status:'checked_out',
-
-        actual_check_out:
-          `${todayISO()}T${checkoutTime}:00`,
-
-        check_out_time:
-          checkoutTime
-
-      })
-      .eq(
-        'id',
-        reservation.id
-      );
-
-
-    if(reservationError)
-      throw reservationError;
-
-
-
-
-    // 4. Disable card
-
-    try{
-
-      await getLockProvider()
-      .invalidateGuestCard({
-        cardId:reservation.id
-      });
-
-    }
-    catch(e){
-
-      console.warn(
-        'Card invalidation failed',
-        e
-      );
-
-    }
-
-
-
-
-    // 5. Audit
-
-    await supabase
-    .from('audit_logs')
-    .insert({
-
-      organization_id:
-        user!.organization_id,
-
-      branch_id:
-        reservation.branch_id,
-
-      user_id:
-        user!.id,
-
-      action:
-        'check_out',
-
-      object_type:
-        'reservation',
-
-      object_id:
-        reservation.id,
-
-
-      new_value:{
-
-        checkout_time:
-          checkoutTime,
-
-        total_charges:
-          totalCharges,
-
-        total_payments:
-          totalPayments,
-
-        balance:
-          outstanding
-
+      if(itemsError){
+        throw itemsError;
       }
 
-    });
+      const items = latestItems || [];
 
+      const totalCharges = items.filter(i => i.item_type === 'charge').reduce((sum,i)=>sum + Number(i.amount || 0), 0);
+      const totalPayments = items.filter(i => i.item_type === 'payment').reduce((sum,i)=>sum + Math.abs(Number(i.amount || 0)), 0);
+      const outstanding = totalCharges - totalPayments;
 
+      if(outstanding > 0 && !overrideUnpaid){
+        setShowOverrideConfirm(true);
+        setCompleting(false);
+        return;
+      }
 
-    showToast(
-      t('checkout.complete'),
-      'success'
-    );
+      if(room){
+        const {error:roomError} = await supabase.from('rooms').update({ status:'dirty' }).eq('id',room.id);
+        if(roomError) throw roomError;
+      }
 
+      const {error:folioError} = await supabase.from('folios').update({
+        status:'finalized',
+        finalized_at: new Date().toISOString(),
+        finalized_by: user!.id
+      }).eq('id',folio.id);
 
-    setCompleting(false);
+      if(folioError) throw folioError;
 
-    onClose();
+      try {
+        await invoiceService.ensureInvoice({
+          folioId: folio.id,
+          branchId: reservation.branch_id,
+          organizationId: user!.organization_id,
+          reservationId: reservation.id,
+          guestId: reservation.primary_guest_id,
+          userId: user!.id,
+        });
+      } catch(err:any) {
+        console.error('Invoice sync at checkout failed:', err);
+        showToast(`Invoice update failed: ${err.message || err}`, 'error');
+      }
 
+      const {error:reservationError} = await supabase.from('reservations').update({
+        status:'checked_out',
+        actual_check_out: `${todayISO()}T${checkoutTime}:00`,
+        check_out_time: checkoutTime
+      }).eq('id', reservation.id);
 
-  }
-  catch(err:any){
+      if(reservationError) throw reservationError;
 
-    console.error(
-      'CHECKOUT ERROR',
-      err
-    );
+      try {
+        await getLockProvider().invalidateGuestCard({ cardId:reservation.id });
+      } catch(e) {
+        console.warn('Card invalidation failed', e);
+      }
 
+      await supabase.from('audit_logs').insert({
+        organization_id: user!.organization_id,
+        branch_id: reservation.branch_id,
+        user_id: user!.id,
+        action: 'check_out',
+        object_type: 'reservation',
+        object_id: reservation.id,
+        new_value: {
+          checkout_time: checkoutTime,
+          total_charges: totalCharges,
+          total_payments: totalPayments,
+          balance: outstanding
+        }
+      });
 
-    showToast(
-      err.message || 'Checkout failed',
-      'error'
-    );
-
-
-    setCompleting(false);
-
-  }
-
-};
+      showToast(t('checkout.complete'), 'success');
+      setCompleting(false);
+      onClose();
+    }
+    catch(err:any) {
+      console.error('CHECKOUT ERROR', err);
+      showToast(err.message || 'Checkout failed', 'error');
+      setCompleting(false);
+    }
+  };
 
   if(loading) return <Modal open onClose={onClose} title={t('checkout.title')}><LoadingPage/></Modal>;
 
@@ -811,10 +674,10 @@ try {
                 <td className="text-right py-2 px-3 font-medium">{formatIDR(totalTax)}</td>
               </tr>
 
-<tr className="border-b border-slate-100">
-  <td className="py-2 px-3 text-slate-500"> {t('common.deposit')} </td>
-  <td className="text-right py-2 px-3 font-medium text-emerald-600">{formatIDR(charges .filter(i=>i.category==='deposit') .reduce((s,i)=>s+i.amount,0))}</td>
-</tr>
+              <tr className="border-b border-slate-100">
+                <td className="py-2 px-3 text-slate-500"> {t('common.deposit')} </td>
+                <td className="text-right py-2 px-3 font-medium text-emerald-600">{formatIDR(charges.filter(i=>i.category==='deposit').reduce((s,i)=>s+i.amount,0))}</td>
+              </tr>
 
               <tr className="border-b border-slate-100">
                 <td className="py-2 px-3 text-slate-500">{t('checkout.amount_paid')}</td>
@@ -829,7 +692,7 @@ try {
           </table>
         </div>
 
-                {hasUnpaid && !overrideUnpaid && (
+        {hasUnpaid && !overrideUnpaid && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2 text-red-700">
             <AlertCircle size={18}/>
             <span className="text-sm">{t('checkout.unpaid_balance_warning')}</span>
