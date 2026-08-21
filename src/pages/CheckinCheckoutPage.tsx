@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { invoiceService } from '@/services/invoiceService';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
@@ -12,6 +13,7 @@ import { formatIDR, formatDate, formatTime, todayISO, isEarlyCheckin, isLateChec
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { LogIn, LogOut, KeyRound, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio } from '@/types/database';
+
 
 export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { initialReservationId?: string | null; searchQuery?: string }) {
   const { branches } = useAuth();
@@ -580,24 +582,22 @@ const completeCheckout = async () => {
     const {error:folioError} =
       await supabase
       .from('folios')
-      .update({
-
-        status:'finalized',
-
-        finalized_at:
-          new Date().toISOString(),
-
-        finalized_by:
-          user!.id
-
-      })
+      .update({ status:'finalized', finalized_at: new Date().toISOString(), finalized_by: user!.id})
       .eq('id',folio.id);
-
 
     if(folioError)
       throw folioError;
 
+    // 2.5 Create invoice
 
+await invoiceService.createInvoice({
+  folioId: folio.id,
+  branchId: reservation.branch_id,
+  organizationId: user!.organization_id,
+  reservationId: reservation.id,
+  guestId: reservation.primary_guest_id,
+  userId: user!.id
+});
 
     // 3. Checkout reservation
 
