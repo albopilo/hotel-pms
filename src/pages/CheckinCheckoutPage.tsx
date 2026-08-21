@@ -11,7 +11,7 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input, Select } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Badge } from '@/components/ui/Badge';
-import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, addDays, nightsBetween, isEarlyCheckin, formatHoursShort } from '@/lib/format';
+import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split } from 'lucide-react';
@@ -218,8 +218,12 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
   }, [reservation]);
 
   useEffect(() => {
-    setEarlyWarning(isEarlyCheckin(standardTime, checkinTime));
-  }, [standardTime, checkinTime]);
+    // Compare full datetimes: scheduled check-in (date + standard time) vs actual (today + actual time).
+    // This correctly handles cases like 22 Aug 00:01 vs 21 Aug 14:00 standard (not early).
+    const scheduledDateTime = new Date(`${reservation.check_in_date}T${standardTime}:00`);
+    const actualDateTime = new Date(`${todayISO()}T${checkinTime}:00`);
+    setEarlyWarning(actualDateTime < scheduledDateTime);
+  }, [standardTime, checkinTime, reservation.check_in_date]);
 
   const handleAddEarlyCharge = async () => {
     if (!folio) return;
@@ -353,9 +357,9 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 space-y-3">
             <div className="flex items-center gap-2 text-amber-700 font-medium"><AlertCircle size={18}/>{t('checkin.early_warning')}</div>
             <div className="text-sm text-slate-600">
-              <div>{t('checkin.standard_time')}: <span className="font-medium">{standardTime}</span></div>
-              <div>{t('checkin.actual_time')}: <span className="font-medium">{checkinTime}</span></div>
-              <div>{t('checkin.difference')}: <span className="font-medium">{formatHoursShort(timeDiff(standardTime,checkinTime))}</span></div>
+              <div>{t('checkin.standard_time')}: <span className="font-medium">{formatDate(reservation.check_in_date)} {standardTime}</span></div>
+              <div>{t('checkin.actual_time')}: <span className="font-medium">{formatDate(todayISO())} {checkinTime}</span></div>
+              <div>{t('checkin.difference')}: <span className="font-medium">{formatHoursShort((new Date(`${todayISO()}T${checkinTime}:00`).getTime() - new Date(`${reservation.check_in_date}T${standardTime}:00`).getTime()) / 3600000)}</span></div>
             </div>
             <div className="flex gap-2">
               <Button size="sm" variant="warning" onClick={handleAddEarlyCharge}>{t('checkin.add_charge')}</Button>
