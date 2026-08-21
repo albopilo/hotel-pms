@@ -1,134 +1,81 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
-import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
-import { Button } from '@/components/ui/Button';
-import { ConfirmModal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, formatDate, todayISO } from '@/lib/format';
-import { Moon, AlertCircle, CheckCircle2, Lock } from 'lucide-react';
-import type { Reservation, Folio, HotelBusinessDate, NightAudit, Branch } from '@/types/database';
+import { formatIDR, formatDate } from '@/lib/format';
+import { Moon, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Clock, History } from 'lucide-react';
+import type { NightAudit, HotelBusinessDate } from '@/types/database';
+
+interface AuditRow extends NightAudit {
+  closed_by_name?: string;
+}
 
 export function NightAuditPage() {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
-  const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
   const [businessDate, setBusinessDate] = useState<HotelBusinessDate | null>(null);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [folios, setFolios] = useState<Folio[]>([]);
-  const [folioItems, setFolioItems] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  const [rooms, setRooms] = useState<any[]>([]);
-  const [exceptions, setExceptions] = useState<string[]>([]);
-  const [closing, setClosing] = useState(false);
-  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [latestAudit, setLatestAudit] = useState<AuditRow | null>(null);
+  const [history, setHistory] = useState<AuditRow[]>([]);
 
-  const branchId = selectedBranchId || branches[0]?.id;
+  const branchIds = useMemo(
+    () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
+    [selectedBranchId, branches]
+  );
 
   const load = useCallback(async () => {
-    if (!branchId) { setLoading(false); return; }
+    if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const today = todayISO();
 
-    // Get current business date
-    const { data: bd } = await supabase.from('hotel_business_dates').select('*').eq('branch_id', branchId).order('business_date', { ascending: false }).limit(1).maybeSingle();
-    const currentBD = bd as HotelBusinessDate | null;
-    setBusinessDate(currentBD);
-    const auditDate = currentBD?.business_date || today;
-
-    const [{ data: res }, { data: fol }, { data: fi }, { data: pays }, { data: rms }] = await Promise.all([
-      supabase.from('reservations').select('*').eq('branch_id', branchId),
-      supabase.from('folios').select('*').eq('branch_id', branchId),
-      supabase.from('folio_items').select('*').eq('branch_id', branchId).eq('voided', false).eq('business_date', auditDate),
-      supabase.from('payments').select('*').eq('branch_id', branchId).eq('voided', false).eq('business_date', auditDate),
-      supabase.from('rooms').select('*').eq('branch_id', branchId).eq('is_active', true),
-    ]);
-    setReservations((res as Reservation[]) || []);
-    setFolios((fol as Folio[]) || []);
-    setFolioItems(fi || []);
-    setPayments(pays || []);
-    setRooms(rms || []);
-
-    // Detect exceptions
-    const exc: string[] = [];
-    const unpaidFolios = (fol as Folio[] || []).filter((f) => f.status === 'open' && f.balance > 0);
-    if (unpaidFolios.length > 0) exc.push(`${unpaidFolios.length} ${t('night_audit.unpaid_folios')}`);
-    const occupiedPastCheckout = (res as Reservation[] || []).filter((r) => r.status === 'checked_in' && r.check_out_date < today);
-    if (occupiedPastCheckout.length > 0) exc.push(`${occupiedPastCheckout.length} ${t('night_audit.room_occupied_past_checkout')}`);
-    const dirtyRooms = (rms || []).filter((r) => r.status === 'dirty').length;
-    if (dirtyRooms > 5) exc.push(`${dirtyRooms} dirty rooms need cleaning`);
-    setExceptions(exc);
-    setLoading(false);
-  }, [branchId, t]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const arrivals = reservations.filter((r) => r.check_in_date === (businessDate?.business_date || todayISO()) && r.status === 'confirmed');
-  const departures = reservations.filter((r) => r.check_out_date === (businessDate?.business_date || todayISO()) && r.status === 'checked_in');
-  const inHouse = reservations.filter((r) => r.status === 'checked_in');
-  const checkedInToday = reservations.filter((r) => r.actual_check_in && r.actual_check_in.startsWith(businessDate?.business_date || todayISO()));
-  const checkedOutToday = reservations.filter((r) => r.actual_check_out && r.actual_check_out.startsWith(businessDate?.business_date || todayISO()));
-  const noShows = reservations.filter((r) => r.status === 'no_show');
-  const cancellations = reservations.filter((r) => r.status === 'cancelled');
-  const openFolios = folios.filter((f) => f.status === 'open');
-  const unpaidFolios = folios.filter((f) => f.status === 'open' && f.balance > 0);
-
-  const roomCharges = folioItems.filter((i) => i.category === 'room' && i.amount > 0).reduce((s, i) => s + i.amount, 0);
-  const additionalCharges = folioItems.filter((i) => i.item_type === 'charge' && i.category !== 'room' && i.amount > 0).reduce((s, i) => s + i.amount, 0);
-  const cashPayments = payments.filter((p) => p.payment_method_code === 'cash').reduce((s, p) => s + p.amount, 0);
-  const edcPayments = payments.filter((p) => p.payment_method_code === 'edc').reduce((s, p) => s + p.amount, 0);
-  const otaPayments = payments.filter((p) => p.is_ota).reduce((s, p) => s + p.amount, 0);
-  const totalPayments = payments.reduce((s, p) => s + p.amount, 0);
-  const discounts = folioItems.filter((i) => i.item_type === 'discount').reduce((s, i) => s + Math.abs(i.amount), 0);
-  const outstanding = unpaidFolios.reduce((s, f) => s + f.balance, 0);
-
-  const handleClose = async () => {
-    setClosing(true);
-    const bd = businessDate?.business_date || todayISO();
-    const summary = { roomCharges, additionalCharges, totalPayments, cashPayments, edcPayments, otaPayments, discounts, outstanding };
-
-    // Insert night audit record
-    const { error } = await supabase.from('night_audits').insert({
-      branch_id: branchId!, business_date: bd, summary, exceptions,
-      arrivals: arrivals.length, departures: departures.length, in_house: inHouse.length,
-      checked_in: checkedInToday.length, checked_out: checkedOutToday.length,
-      no_shows: noShows.length, cancellations: cancellations.length,
-      room_charges: roomCharges, additional_charges: additionalCharges, payments: totalPayments,
-      cash: cashPayments, edc: edcPayments, ota: otaPayments, discounts, outstanding,
-      closed_by: user!.id, closed_at: new Date().toISOString(),
-    });
-    if (error) { showToast(error.message, 'error'); setClosing(false); return; }
-
-    // Close current business date
-    if (businessDate) {
-      await supabase.from('hotel_business_dates').update({ status: 'closed', closed_at: new Date().toISOString(), closed_by: user!.id }).eq('id', businessDate.id);
+    // Trigger the automatic night audit as a fallback (in case pg_cron is not running)
+    try {
+      await supabase.rpc('auto_night_audit');
+    } catch {
+      // ignore — still show whatever data exists
     }
 
-    // Open next business date
-    const nextDate = new Date(bd);
-    nextDate.setDate(nextDate.getDate() + 1);
-    await supabase.from('hotel_business_dates').insert({
-      branch_id: branchId!, business_date: nextDate.toISOString().split('T')[0], status: 'open',
-    });
+    // Current open business date across selected branches
+    const { data: bd } = await supabase
+      .from('hotel_business_dates')
+      .select('*')
+      .in('branch_id', branchIds)
+      .order('business_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    setBusinessDate(bd as HotelBusinessDate | null);
 
-    // Audit log
-    await supabase.from('audit_logs').insert({
-      organization_id: user!.organization_id, branch_id: branchId, user_id: user!.id,
-      action: 'business_day_closed', object_type: 'night_audit',
-      new_value: { business_date: bd, summary },
-    });
+    // Latest completed night audit for the selection
+    const { data: audits } = await supabase
+      .from('night_audits')
+      .select('*')
+      .in('branch_id', branchIds)
+      .order('business_date', { ascending: false })
+      .limit(30);
+    const rows = (audits as AuditRow[]) || [];
 
-    showToast('Business day closed successfully', 'success');
-    setClosing(false);
-    setShowCloseConfirm(false);
-    load();
-  };
+    // Resolve closed_by names
+    const userIds = Array.from(new Set(rows.map((r) => r.closed_by).filter(Boolean))) as string[];
+    if (userIds.length) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', userIds);
+      const nameMap: Record<string, string> = {};
+      (profiles || []).forEach((p: any) => { nameMap[p.id] = p.full_name; });
+      rows.forEach((r) => { r.closed_by_name = nameMap[r.closed_by] || '-'; });
+    }
+
+    setLatestAudit(rows[0] || null);
+    setHistory(rows.slice(1));
+    setLoading(false);
+  }, [branchIds]);
+
+  useEffect(() => { load(); }, [load]);
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -136,17 +83,86 @@ export function NightAuditPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{t('night_audit.title')}</h1>
-        <Button variant="danger" onClick={() => setShowCloseConfirm(true)} disabled={closing}><Lock size={16} /> {t('night_audit.close_business_day')}</Button>
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-1.5">
+          <Clock size={14} /> Auto-generated
+        </span>
       </div>
 
       <Card title={t('night_audit.business_date')}>
-        <div className="flex items-center gap-4">
-          <div className="text-3xl font-bold text-slate-900">{formatDate(businessDate?.business_date || todayISO())}</div>
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="text-3xl font-bold text-slate-900">{formatDate(businessDate?.business_date || new Date().toISOString().split('T')[0])}</div>
           <Badge color={businessDate?.status === 'open' ? 'green' : 'gray'}>{businessDate?.status || 'open'}</Badge>
         </div>
       </Card>
 
-      {exceptions.length > 0 && (
+      {!latestAudit ? (
+        <EmptyState
+          icon={<Moon size={48} />}
+          title={t('common.no_data')}
+          message="The night audit runs automatically. Results will appear here once the business day closes."
+        />
+      ) : (
+        <AuditResult audit={latestAudit} t={t} />
+      )}
+
+      {history.length > 0 && (
+        <Card title="Recent Night Audits">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="text-left py-2 px-3">{t('night_audit.business_date')}</th>
+                  <th className="text-center py-2 px-3">{t('dash.arrivals_today')}</th>
+                  <th className="text-center py-2 px-3">{t('dash.departures_today')}</th>
+                  <th className="text-center py-2 px-3">{t('dash.in_house_guests')}</th>
+                  <th className="text-right py-2 px-3">{t('dash.total_income')}</th>
+                  <th className="text-right py-2 px-3">{t('common.outstanding')}</th>
+                  <th className="text-left py-2 px-3">{t('night_audit.closed_at')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((a) => {
+                  const income = (a.room_charges || 0) + (a.additional_charges || 0);
+                  return (
+                    <tr key={a.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-2 px-3 font-medium text-slate-700">{formatDate(a.business_date)}</td>
+                      <td className="text-center py-2 px-3">{a.arrivals}</td>
+                      <td className="text-center py-2 px-3">{a.departures}</td>
+                      <td className="text-center py-2 px-3">{a.in_house}</td>
+                      <td className="text-right py-2 px-3 font-medium">{formatIDR(income)}</td>
+                      <td className={`text-right py-2 px-3 ${a.outstanding > 0 ? 'text-red-600' : 'text-slate-400'}`}>{a.outstanding > 0 ? formatIDR(a.outstanding) : '-'}</td>
+                      <td className="py-2 px-3 text-xs text-slate-400">{formatDate(a.closed_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function AuditResult({ audit, t }: { audit: AuditRow; t: (k: string) => string }) {
+  const exceptions: string[] = Array.isArray(audit.exceptions)
+    ? (audit.exceptions as unknown[]).map((e) => (typeof e === 'string' ? e : String(e)))
+    : [];
+
+  const income = (audit.room_charges || 0) + (audit.additional_charges || 0);
+
+  return (
+    <>
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        <History size={16} />
+        <span>{t('night_audit.business_date')}: <b className="text-slate-700">{formatDate(audit.business_date)}</b></span>
+        <span className="mx-1">·</span>
+        <span>{t('night_audit.closed_by')}: <b className="text-slate-700">{audit.closed_by_name || '-'}</b></span>
+        <span className="mx-1">·</span>
+        <span>{t('night_audit.closed_at')}: <b className="text-slate-700">{formatDate(audit.closed_at)}</b></span>
+      </div>
+
+      {exceptions.length > 0 ? (
         <Card title={t('night_audit.exceptions')}>
           <div className="space-y-2">
             {exceptions.map((exc, i) => (
@@ -156,47 +172,29 @@ export function NightAuditPage() {
             ))}
           </div>
         </Card>
-      )}
-      {exceptions.length === 0 && (
+      ) : (
         <Card><div className="flex items-center gap-2 text-emerald-600"><CheckCircle2 size={18} /> <span className="font-medium">{t('night_audit.no_exceptions')}</span></div></Card>
       )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><div className="text-center"><p className="text-sm text-slate-500">{t('dash.arrivals_today')}</p><p className="text-2xl font-bold text-blue-600">{arrivals.length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-sm text-slate-500">{t('dash.departures_today')}</p><p className="text-2xl font-bold text-amber-600">{departures.length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-sm text-slate-500">{t('dash.in_house_guests')}</p><p className="text-2xl font-bold text-emerald-600">{inHouse.length}</p></div></Card>
-        <Card><div className="text-center"><p className="text-sm text-slate-500">No Shows</p><p className="text-2xl font-bold text-red-600">{noShows.length}</p></div></Card>
+        <Card><div className="text-center"><p className="text-sm text-slate-500">{t('dash.arrivals_today')}</p><p className="text-2xl font-bold text-blue-600">{audit.arrivals}</p></div></Card>
+        <Card><div className="text-center"><p className="text-sm text-slate-500">{t('dash.departures_today')}</p><p className="text-2xl font-bold text-amber-600">{audit.departures}</p></div></Card>
+        <Card><div className="text-center"><p className="text-sm text-slate-500">{t('dash.in_house_guests')}</p><p className="text-2xl font-bold text-emerald-600">{audit.in_house}</p></div></Card>
+        <Card><div className="text-center"><p className="text-sm text-slate-500">No Shows</p><p className="text-2xl font-bold text-red-600">{audit.no_shows}</p></div></Card>
       </div>
 
       <Card title="Financial Summary">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('checkout.room_charges')}</p><p className="font-bold">{formatIDR(roomCharges)}</p></div>
-          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('checkout.additional_charges')}</p><p className="font-bold">{formatIDR(additionalCharges)}</p></div>
-          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('common.discount')}</p><p className="font-bold text-red-600">{formatIDR(discounts)}</p></div>
-          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('common.outstanding')}</p><p className="font-bold text-red-600">{formatIDR(outstanding)}</p></div>
-          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">{t('payment.cash')}</p><p className="font-bold text-emerald-700">{formatIDR(cashPayments)}</p></div>
-          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">EDC</p><p className="font-bold text-emerald-700">{formatIDR(edcPayments)}</p></div>
-          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">OTA</p><p className="font-bold text-emerald-700">{formatIDR(otaPayments)}</p></div>
-          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">{t('common.total')}</p><p className="font-bold text-emerald-700">{formatIDR(totalPayments)}</p></div>
+          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('checkout.room_charges')}</p><p className="font-bold">{formatIDR(audit.room_charges)}</p></div>
+          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('checkout.additional_charges')}</p><p className="font-bold">{formatIDR(audit.additional_charges)}</p></div>
+          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('common.discount')}</p><p className="font-bold text-red-600">{formatIDR(audit.discounts)}</p></div>
+          <div className="bg-slate-50 rounded-lg p-3"><p className="text-slate-500">{t('common.outstanding')}</p><p className="font-bold text-red-600">{formatIDR(audit.outstanding)}</p></div>
+          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">{t('payment.cash')}</p><p className="font-bold text-emerald-700">{formatIDR(audit.cash)}</p></div>
+          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">EDC</p><p className="font-bold text-emerald-700">{formatIDR(audit.edc)}</p></div>
+          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">OTA</p><p className="font-bold text-emerald-700">{formatIDR(audit.ota)}</p></div>
+          <div className="bg-emerald-50 rounded-lg p-3"><p className="text-slate-500">{t('dash.total_income')}</p><p className="font-bold text-emerald-700">{formatIDR(income)}</p></div>
         </div>
       </Card>
-
-      <Card title="Folios">
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="bg-blue-50 rounded-lg p-3"><p className="text-slate-500">Open Folios</p><p className="font-bold text-blue-700">{openFolios.length}</p></div>
-          <div className="bg-red-50 rounded-lg p-3"><p className="text-slate-500">Unpaid Folios</p><p className="font-bold text-red-700">{unpaidFolios.length}</p></div>
-        </div>
-      </Card>
-
-      <ConfirmModal
-        open={showCloseConfirm}
-        onClose={() => setShowCloseConfirm(false)}
-        onConfirm={handleClose}
-        title={t('night_audit.close_business_day')}
-        message={t('night_audit.close_confirm')}
-        confirmLabel={t('night_audit.close_business_day')}
-        variant="danger"
-      />
-    </div>
+    </>
   );
 }
