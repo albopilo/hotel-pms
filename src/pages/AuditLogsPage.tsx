@@ -127,6 +127,9 @@ export function AuditLogsPage() {
       ]);
 
       const roomIds = new Set<string>();
+      let folioRes: any[] | null = null;
+      let invRes: any[] | null = null;
+
       (reservations || []).forEach((r: any) => {
         if (r.room_id) roomIds.add(r.room_id);
         refInfoMap[r.id] = {
@@ -139,7 +142,8 @@ export function AuditLogsPage() {
       // Collect folio reservation room_ids
       const folioResIds = (folios || []).map((f: any) => f.reservation_id).filter(Boolean);
       if (folioResIds.length > 0) {
-        const { data: folioRes } = await supabase.from('reservations').select('id, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', folioResIds);
+        const { data } = await supabase.from('reservations').select('id, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', folioResIds);
+        folioRes = data;
         const folioResMap: Record<string, any> = {};
         (folioRes || []).forEach((r: any) => { folioResMap[r.id] = r; if (r.room_id) roomIds.add(r.room_id); });
 
@@ -156,7 +160,8 @@ export function AuditLogsPage() {
       // Collect invoice reservation/folio room_ids
       const invResIds = (invoices || []).filter((i: any) => i.reservation_id).map((i: any) => i.reservation_id);
       if (invResIds.length > 0) {
-        const { data: invRes } = await supabase.from('reservations').select('id, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', invResIds);
+        const { data } = await supabase.from('reservations').select('id, room_id, primary_guest_id, primary_guest:guests(full_name)').in('id', invResIds);
+        invRes = data;
         const invResMap: Record<string, any> = {};
         (invRes || []).forEach((r: any) => { invResMap[r.id] = r; if (r.room_id) roomIds.add(r.room_id); });
 
