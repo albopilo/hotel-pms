@@ -13,7 +13,7 @@ import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDateTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle } from 'lucide-react';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
-import { folioService, paymentService, chargeService, FinancialError, calculateFolioTotals } from '@/services/financial';
+import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
 import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod } from '@/types/database';
 
@@ -144,12 +144,14 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
   }, [folio]);
 
   const charges = items.filter((i) => i.item_type === 'charge' && !i.voided && i.amount > 0);
-  const totals = calculateFolioTotals(items);
-  const totalCharges = totals.totalCharges;
-  const totalPayments = totals.totalPayments;
-  const totalDiscounts = totals.totalDiscounts;
-  const totalTax = totals.totalTax;
-  const netBalance = totals.netBalance;
+  const payments = items.filter((i) => i.item_type === 'payment' && !i.voided);
+  const discounts = items.filter((i) => i.item_type === 'discount' && !i.voided);
+  const taxes = items.filter((i) => i.item_type === 'tax' && !i.voided);
+  const totalCharges = charges.reduce((s, i) => s + i.amount, 0);
+  const totalPayments = payments.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalDiscounts = discounts.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalTax = taxes.reduce((s, i) => s + i.amount, 0);
+  const netBalance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   const voidItem = async (item: FolioItem) => {
     try {
