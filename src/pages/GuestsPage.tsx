@@ -10,7 +10,7 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, Edit, Users, Phone, Mail } from 'lucide-react';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 
 const ID_TYPES = ['KTP', 'Passport', 'SIM', 'Other'];
@@ -200,10 +200,22 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
     }
   }, [guest, open]);
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!form.full_name.trim()) e.full_name = `${t('guest.full_name')} ${t('common.required').toLowerCase()}`;
+    if (!form.id_type) e.id_type = `${t('common.id_type')} ${t('common.required').toLowerCase()}`;
+    if (!form.id_number.trim()) e.id_number = `${t('common.id_number')} ${t('common.required').toLowerCase()}`;
+    if (!form.phone.trim()) e.phone = `${t('common.phone')} ${t('common.required').toLowerCase()}`;
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
   const handleSubmit = async () => {
-    if (!form.full_name) { showToast('Name is required', 'error'); return; }
+    if (!validate()) { showToast('Please fill in all required fields', 'error'); return; }
     setSaving(true);
-    const payload = { ...form, organization_id: orgId, date_of_birth: form.date_of_birth || null, id_type: form.id_type || null, id_number: form.id_number || null };
+    const payload = { ...form, organization_id: orgId, date_of_birth: form.date_of_birth || null };
     const { error } = guest
       ? await supabase.from('guests').update(payload).eq('id', guest.id)
       : await supabase.from('guests').insert(payload);
@@ -216,13 +228,13 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
     <Modal open={open} onClose={onClose} title={guest ? t('common.edit') : t('guest.new_guest')} size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
-        <Input label={t('guest.full_name')} value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} required />
+        <Input label={t('guest.full_name')} value={form.full_name} onChange={(e) => { setForm({ ...form, full_name: e.target.value }); if (errors.full_name) setErrors({ ...errors, full_name: '' }); }} required error={errors.full_name} />
         <div className="grid grid-cols-2 gap-4">
-          <Select label={t('common.id_type')} value={form.id_type} onChange={(e) => setForm({ ...form, id_type: e.target.value })}>
+          <Select label={t('common.id_type')} value={form.id_type} onChange={(e) => { setForm({ ...form, id_type: e.target.value }); if (errors.id_type) setErrors({ ...errors, id_type: '' }); }} required error={errors.id_type}>
             <option value="">--</option>
             {ID_TYPES.map((id) => <option key={id} value={id}>{id}</option>)}
           </Select>
-          <Input label={t('common.id_number')} value={form.id_number} onChange={(e) => setForm({ ...form, id_number: e.target.value })} />
+          <Input label={t('common.id_number')} value={form.id_number} onChange={(e) => { setForm({ ...form, id_number: e.target.value }); if (errors.id_number) setErrors({ ...errors, id_number: '' }); }} required error={errors.id_number} />
           <Input label={t('common.nationality')} value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} />
           <Select label={t('common.gender')} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
             <option value="">--</option>
@@ -230,7 +242,7 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
             <option value="female">Female</option>
           </Select>
           <Input label={t('common.date_of_birth')} type="date" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
-          <Input label={t('common.phone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <Input label={t('common.phone')} value={form.phone} onChange={(e) => { setForm({ ...form, phone: e.target.value }); if (errors.phone) setErrors({ ...errors, phone: '' }); }} required error={errors.phone} />
           <Input label={t('common.email')} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <Input label={t('common.company')} value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} />
         </div>

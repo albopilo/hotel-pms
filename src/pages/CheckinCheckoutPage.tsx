@@ -9,7 +9,8 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, formatDate, formatTime, todayISO, isEarlyCheckin, isLateCheckout, formatHoursShort } from '@/lib/format';
+import { Badge } from '@/components/ui/Badge';
+import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, isEarlyCheckin, isLateCheckout, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2 } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio } from '@/types/database';
@@ -20,6 +21,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
   const { t } = useI18n();
 
   const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [checkedOut, setCheckedOut] = useState<Reservation[]>([]);
   const [guests, setGuests] = useState<Guest[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,13 +35,15 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
     if (!branchIds.length) return setLoading(false);
     setLoading(true);
 
-    const [{ data: res }, { data: g }, { data: r }] = await Promise.all([
+    const [{ data: res }, { data: co }, { data: g }, { data: r }] = await Promise.all([
       supabase.from('reservations').select('*').in('branch_id', branchIds).in('status', ['confirmed', 'checked_in']).order('check_in_date'),
+      supabase.from('reservations').select('*').in('branch_id', branchIds).eq('status', 'checked_out').order('actual_check_out', { ascending: false }).limit(20),
       supabase.from('guests').select('*'),
       supabase.from('rooms').select('*').in('branch_id', branchIds)
     ]);
 
     setReservations((res as Reservation[]) || []);
+    setCheckedOut((co as Reservation[]) || []);
     setGuests((g as Guest[]) || []);
     setRooms((r as Room[]) || []);
     setLoading(false);
@@ -115,6 +119,21 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
           })}</div>}
         </Card>
       </div>
+
+      <Card title={t('res.checked_out')}>
+        {checkedOut.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
+        <div className="space-y-2">{checkedOut.filter(filterFn).map(r => {
+          const g = guestMap.get(r.primary_guest_id || '');
+          const rm = roomMap.get(r.room_id || '');
+          return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2">
+            <div>
+              <p className="font-medium text-slate-800">{g?.full_name || '-'}</p>
+              <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {r.actual_check_out ? formatDateTime(r.actual_check_out) : `${formatDate(r.check_out_date)} ${formatTime(r.check_out_time)}`}</p>
+            </div>
+            <Badge color="gray">{t('res.checked_out')}</Badge>
+          </div>;
+        })}</div>}
+      </Card>
 
       {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} />}
       {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} />}
