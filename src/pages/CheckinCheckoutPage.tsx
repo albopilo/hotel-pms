@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
 import { invoiceService } from '@/services/invoiceService';
 import { useAuth } from '@/lib/auth';
@@ -11,7 +11,7 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, formatTime, todayISO, isEarlyCheckin, isLateCheckout, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
-import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2 } from 'lucide-react';
+import { LogIn, LogOut, KeyRound, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio } from '@/types/database';
 
 
@@ -26,7 +26,6 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Reservation | null>(null);
   const [mode, setMode] = useState<'checkin' | 'checkout' | null>(null);
-  const consumedInitialId = useRef<string | null>(null);
 
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
 
@@ -50,10 +49,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
 
   useEffect(() => {
     if (!initialReservationId) return;
-    if (consumedInitialId.current === initialReservationId) return;
     const r = reservations.find(x => x.id === initialReservationId);
     if (r) {
-      consumedInitialId.current = initialReservationId;
       setSelected(r);
       setMode(r.status === 'checked_in' ? 'checkout' : 'checkin');
     }

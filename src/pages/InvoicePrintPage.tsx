@@ -77,6 +77,18 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           <p>{branch?.address || ''}</p>
         </div>
 
+        {reservation?.status === 'checked_in' && (
+          <div className="mb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-blue-700">CHECK IN INVOICE</h2>
+          </div>
+        )}
+
+        {reservation?.status === 'checked_out' && (
+          <div className="mb-4">
+            <h2 className="text-xl font-bold uppercase tracking-wide text-emerald-700">FINAL CHECK OUT INVOICE</h2>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 mb-8">
           <div>
             <h2 className="font-bold">Bill To</h2>

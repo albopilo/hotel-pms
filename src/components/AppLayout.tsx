@@ -36,7 +36,6 @@ const navItems: NavItem[] = [
   { key: 'rooms', labelKey: 'nav.rooms', icon: <BedDouble size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'guests', labelKey: 'nav.guests', icon: <Users size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'checkin_checkout', labelKey: 'nav.checkin_checkout', icon: <LogIn size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
-  { key: 'folio', labelKey: 'nav.folio', icon: <FileText size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'payments', labelKey: 'nav.payments', icon: <Wallet size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'invoices', labelKey: 'nav.invoices', icon: <Receipt size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'reports', labelKey: 'nav.reports', icon: <FileSpreadsheet size={20} />, roles: ['super_admin', 'manager'], group: 'main' },

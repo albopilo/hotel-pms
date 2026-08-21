@@ -55,7 +55,7 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">{t('folio.title')}</h1>
+      <h1 className="text-2xl font-bold text-slate-900">{t('nav.payments')}</h1>
 
       <div className="relative max-w-md">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />

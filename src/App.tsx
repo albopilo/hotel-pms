@@ -64,7 +64,7 @@ function AuthenticatedApp() {
         return <GuestsPage searchQuery={searchQuery} />;
       case 'checkin_checkout':
         return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} />;
-      case 'folio':
+      case 'payments':
         return <FolioPage searchQuery={searchQuery} reservationId={selectedReservationId} />;
       case 'invoices':
         return <InvoicesPage searchQuery={searchQuery} />;
