@@ -85,7 +85,7 @@ setInvoices(data || []);
                     {inv.invoice_number}
                   </td>
 
-                  <td className="py-3 px-4">-</td>
+                  <td className="py-3 px-4">{inv.guests?.full_name || '-'}</td>
 
                   <td className="text-right py-3 px-4">
                     {formatIDR(inv.total)}
@@ -172,7 +172,7 @@ function InvoiceDetailModal({invoice,onClose}:{invoice:Invoice;onClose:()=>void}
 
         <div>
           <b>{guest?.full_name||'-'}</b>
-          <p>Room: {reservation?.room_id||'-'}</p>
+          <p>Room: {reservation?.rooms?.room_number || '-'}</p>
         </div>
 
         <table className="w-full text-sm">
@@ -195,8 +195,8 @@ function InvoiceDetailModal({invoice,onClose}:{invoice:Invoice;onClose:()=>void}
           Issued by {user?.full_name}<br/>
           {invoice.issued_at&&formatDateTime(invoice.issued_at)}
         </div>
-
-        <Button variant="outline" onClick={()=>window.print()}>
+        
+        <Button variant="outline" onClick={()=>{ window.open(`/?invoice_print=${invoice.id}`,'_blank');}}>
           <Printer size={16}/> {t('common.print')}
         </Button>
       </div>

@@ -121,55 +121,22 @@ export const invoiceService = {
       await supabase
         .from('invoices')
         .insert({
-
-          branch_id:
-            input.branchId,
-
-          organization_id:
-            input.organizationId,
-
-          reservation_id:
-            input.reservationId,
-
-          guest_id:
-            input.guestId,
-
-          folio_id:
-            input.folioId,
-
-
-          invoice_number:
-            invoiceNumber,
-
-
+          branch_id: input.branchId,
+          reservation_id: input.reservationId,
+          guest_id: input.guestId,
+          folio_id: input.folioId,
+          invoice_number: invoiceNumber,
           subtotal,
-
-          tax_amount:
-            tax,
-
-          discount_amount:
-            discount,
-
-          total_amount:
-            total,
-
-
-          status:
-            'issued',
-
-          business_date:
-            getBusinessDate(
-              input.branchId
-            ),
-
-          created_by:
-            input.userId
-
+          tax: tax,
+          discount: discount,
+          total: total,
+          amount_paid: 0,
+          balance: total,
+          status:'issued',
+          issued_by: input.userId
         })
         .select('id')
         .single();
-
-
 
     if(error || !invoice){
       throw new InvoiceError(
@@ -182,30 +149,19 @@ export const invoiceService = {
 
     // copy folio items into invoice items
 
-    const invoiceItems =
-      (items || []).map(
-        (item:any)=>({
-
-          invoice_id:
-            invoice.id,
-
-          folio_item_id:
-            item.id,
-
-          description:
-            item.description,
-
-          quantity:
-            item.quantity,
-
-          unit_amount:
-            item.unit_amount,
-
-          amount:
-            item.amount
-
-        })
-      );
+const invoiceItems =
+(items || []).map(
+(item:any,index)=>({
+    invoice_id: invoice.id,
+    folio_item_id: item.id,
+    description: item.description,
+    category: item.category,
+    quantity: item.quantity,
+    unit_amount: item.unit_amount,
+    amount: item.amount,
+    sort_order: index
+})
+);
 
 
 
@@ -275,7 +231,7 @@ export const invoiceService = {
 
  const {data,error}=await supabase
  .from('invoices')
- .select('*')
+ .select(`*, guests(id,full_name,phone,email),branches(id,name,address),reservations(id,reservation_number,room_id,rooms(id,room_number)),invoice_items(id,description,category,quantity,unit_amount,amount)`)
  .in('branch_id',branchIds)
  .order('created_at',{ascending:false})
  .limit(100);

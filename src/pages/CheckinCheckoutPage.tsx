@@ -590,14 +590,27 @@ const completeCheckout = async () => {
 
     // 2.5 Create invoice
 
-await invoiceService.createInvoice({
-  folioId: folio.id,
-  branchId: reservation.branch_id,
-  organizationId: user!.organization_id,
-  reservationId: reservation.id,
-  guestId: reservation.primary_guest_id,
-  userId: user!.id
-});
+try {
+  const invoiceResult = await invoiceService.createInvoice({
+    folioId: folio.id,
+    branchId: reservation.branch_id,
+    organizationId: user!.organization_id,
+    reservationId: reservation.id,
+    guestId: reservation.primary_guest_id,
+    userId: user!.id
+  });
+
+  console.log("INVOICE CREATED:", invoiceResult);
+
+} catch(err:any) {
+
+  console.error("INVOICE CREATION FAILED:", err);
+
+  throw new Error(
+    `Invoice creation failed: ${err.message || JSON.stringify(err)}`
+  );
+
+}
 
     // 3. Checkout reservation
 
