@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
-import type { Folio, FolioItem, PaymentMethod, ChargeCategory } from '@/types/database';
-import { getBusinessDate } from '@/services/businessDateService';
+import type { Folio, FolioItem, PaymentMethod, ChargeCategory, Reservation } from '@/types/database';
+import { todayISO } from '@/lib/format';
 
 export interface FolioTotals {
   totalCharges: number;
@@ -8,6 +8,22 @@ export interface FolioTotals {
   totalDiscounts: number;
   totalTax: number;
   netBalance: number;
+}
+
+export function calculateFolioTotals(items: FolioItem[]): FolioTotals {
+  const active = items.filter((i) => !i.voided);
+  const charges = active.filter((i) => i.item_type === 'charge' && i.amount > 0);
+  const payments = active.filter((i) => i.item_type === 'payment');
+  const discounts = active.filter((i) => i.item_type === 'discount');
+  const taxes = active.filter((i) => i.item_type === 'tax');
+
+  const totalCharges = charges.reduce((s, i) => s + i.amount, 0);
+  const totalPayments = payments.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalDiscounts = discounts.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalTax = taxes.reduce((s, i) => s + i.amount, 0);
+  const netBalance = totalCharges + totalTax - totalDiscounts - totalPayments;
+
+  return { totalCharges, totalPayments, totalDiscounts, totalTax, netBalance };
 }
 
 export interface PaymentInput {
@@ -58,24 +74,10 @@ export const folioService = {
   async getTotals(folioId: string): Promise<FolioTotals> {
     const { data, error } = await supabase
       .from('folio_items')
-      .select('item_type, amount, voided')
+      .select('*')
       .eq('folio_id', folioId);
     if (error) throw new FinancialError(error.message, 'db_error');
-
-    const items = (data || []) as FolioItem[];
-    const active = items.filter((i) => !i.voided);
-    const charges = active.filter((i) => i.item_type === 'charge' && i.amount > 0);
-    const payments = active.filter((i) => i.item_type === 'payment');
-    const discounts = active.filter((i) => i.item_type === 'discount');
-    const taxes = active.filter((i) => i.item_type === 'tax');
-
-    const totalCharges = charges.reduce((s, i) => s + i.amount, 0);
-    const totalPayments = payments.reduce((s, i) => s + Math.abs(i.amount), 0);
-    const totalDiscounts = discounts.reduce((s, i) => s + Math.abs(i.amount), 0);
-    const totalTax = taxes.reduce((s, i) => s + i.amount, 0);
-    const netBalance = totalCharges + totalTax - totalDiscounts - totalPayments;
-
-    return { totalCharges, totalPayments, totalDiscounts, totalTax, netBalance };
+    return calculateFolioTotals((data || []) as FolioItem[]);
   },
 
   async getFolioWithItems(folioId: string): Promise<{ folio: Folio; items: FolioItem[] } | null> {
@@ -142,6 +144,106 @@ export const folioService = {
       throw new FinancialError(error.message, 'db_error');
     }
   },
+
+  async syncReservationChargesToFolio(
+    folioId: string,
+    reservation: Reservation,
+    userId: string,
+  ): Promise<void> {
+    const { data: existing } = await supabase
+      .from('folio_items')
+      .select('id, category')
+      .eq('folio_id', folioId)
+      .in('category', ['room', 'room_discount', 'room_tax', 'deposit'])
+      .eq('voided', false);
+
+    const existingCats = new Set((existing || []).map((i) => i.category));
+
+    const nights = reservation.num_nights || 1;
+    const roomCharge = reservation.rate * nights;
+    const discount = reservation.discount || 0;
+    const tax = reservation.tax || 0;
+    const deposit = reservation.deposit || 0;
+
+    const itemsToInsert: Array<Record<string, unknown>> = [];
+
+    if (!existingCats.has('room') && roomCharge > 0) {
+      itemsToInsert.push({
+        folio_id: folioId,
+        branch_id: reservation.branch_id,
+        reservation_id: reservation.id,
+        guest_id: reservation.primary_guest_id,
+        room_id: reservation.room_id || null,
+        item_type: 'charge',
+        category: 'room',
+        description: `Room charge (${nights} night${nights > 1 ? 's' : ''} × ${reservation.rate})`,
+        quantity: nights,
+        unit_amount: reservation.rate,
+        amount: roomCharge,
+        business_date: todayISO(),
+        created_by: userId,
+      });
+    }
+
+    if (!existingCats.has('room_discount') && discount > 0) {
+      itemsToInsert.push({
+        folio_id: folioId,
+        branch_id: reservation.branch_id,
+        reservation_id: reservation.id,
+        guest_id: reservation.primary_guest_id,
+        room_id: reservation.room_id || null,
+        item_type: 'discount',
+        category: 'room_discount',
+        description: 'Room discount',
+        quantity: 1,
+        unit_amount: -discount,
+        amount: -discount,
+        business_date: todayISO(),
+        created_by: userId,
+      });
+    }
+
+    if (!existingCats.has('room_tax') && tax > 0) {
+      itemsToInsert.push({
+        folio_id: folioId,
+        branch_id: reservation.branch_id,
+        reservation_id: reservation.id,
+        guest_id: reservation.primary_guest_id,
+        room_id: reservation.room_id || null,
+        item_type: 'tax',
+        category: 'room_tax',
+        description: 'Room tax',
+        quantity: 1,
+        unit_amount: tax,
+        amount: tax,
+        business_date: todayISO(),
+        created_by: userId,
+      });
+    }
+
+    if (!existingCats.has('deposit') && deposit > 0) {
+      itemsToInsert.push({
+        folio_id: folioId,
+        branch_id: reservation.branch_id,
+        reservation_id: reservation.id,
+        guest_id: reservation.primary_guest_id,
+        room_id: reservation.room_id || null,
+        item_type: 'payment',
+        category: 'deposit',
+        description: 'Deposit',
+        quantity: 1,
+        unit_amount: -deposit,
+        amount: -deposit,
+        business_date: todayISO(),
+        created_by: userId,
+      });
+    }
+
+    if (itemsToInsert.length > 0) {
+      const { error } = await supabase.from('folio_items').insert(itemsToInsert);
+      if (error) throw new FinancialError(error.message, 'db_error');
+    }
+  },
 };
 
 export const paymentService = {
@@ -155,7 +257,7 @@ export const paymentService = {
     const method = methods.find((m) => m.id === input.methodId);
     if (!method) throw new FinancialError('Invalid payment method', 'invalid_method');
 
-    const payNum = `PAY-${new Date().getFullYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
+    const payNum = `PAY-${Date.now().toString().slice(-8)}`;
 
     const { error: payErr } = await supabase.from('payments').insert({
       branch_id: input.branchId,
@@ -171,7 +273,7 @@ export const paymentService = {
       reference_number: input.referenceNumber || null,
       approval_code: input.approvalCode || null,
       is_ota: method.is_ota,
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
       notes: input.notes || null,
     });
@@ -193,7 +295,7 @@ export const paymentService = {
       quantity: 1,
       unit_amount: -input.amount,
       amount: -input.amount,
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
       notes: input.notes || null,
     });
@@ -211,7 +313,7 @@ export const paymentService = {
       debit_credit: 'credit',
       payment_method_code: method.code,
       reference_number: input.referenceNumber || null,
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
     });
     if (txnErr) throw new FinancialError(txnErr.message, 'db_error');
@@ -251,7 +353,7 @@ export const chargeService = {
       quantity: input.quantity || 1,
       unit_amount: input.amount,
       amount,
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
       notes: input.notes || null,
       approved_by: needsApproval ? null : input.userId,
@@ -273,7 +375,7 @@ export const chargeService = {
       description: input.description,
       amount,
       debit_credit: 'debit',
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
     });
     if (txnErr) throw new FinancialError(txnErr.message, 'db_error');
@@ -309,7 +411,7 @@ export const chargeService = {
       quantity: 1,
       unit_amount: input.amount,
       amount: input.amount,
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       is_post_stay: true,
       created_by: input.userId,
       notes: input.notes || null,
@@ -334,7 +436,7 @@ export const chargeService = {
       quantity: 1,
       is_post_stay: true,
       status: 'posted',
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
       notes: input.notes || null,
     });
@@ -350,7 +452,7 @@ export const chargeService = {
       description: `Post-stay: ${input.description}`,
       amount: input.amount,
       debit_credit: 'debit',
-      business_date: await getBusinessDate(input.branchId),
+      business_date: todayISO(),
       created_by: input.userId,
     });
     if (txnErr) throw new FinancialError(txnErr.message, 'db_error');
