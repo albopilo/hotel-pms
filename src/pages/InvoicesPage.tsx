@@ -13,6 +13,7 @@ import { formatIDR,formatDate,formatDateTime } from '@/lib/format';
 import { Receipt,Search,Printer } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
+import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
 
 export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
   const {branches}=useAuth();
@@ -22,6 +23,7 @@ export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
   const [invoices,setInvoices]=useState<Invoice[]>([]);
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState<Invoice|null>(null);
+  const [printInvoiceId,setPrintInvoiceId]=useState<string|null>(null);
   const [localSearch,setLocalSearch]=useState(searchQuery||'');
 
   const branchIds=useMemo(()=>selectedBranchId?[selectedBranchId]:branches.map(b=>b.id),[selectedBranchId,branches]);
@@ -113,6 +115,14 @@ setInvoices(data || []);
           setSelected(null);
           load();
         }}
+        onPrint={() => setPrintInvoiceId(selected.id)}
+      />
+    )}
+
+    {printInvoiceId && (
+      <InvoicePrintPage
+        invoiceId={printInvoiceId}
+        onClose={() => setPrintInvoiceId(null)}
       />
     )}
   </div>
@@ -139,7 +149,7 @@ export async function finalizeCheckoutInvoice(invoiceId:string){
   }).eq('id',invoiceId);
 }
 
-function InvoiceDetailModal({invoice,onClose}:{invoice:Invoice;onClose:()=>void}) {
+function InvoiceDetailModal({invoice,onClose,onPrint}:{invoice:Invoice;onClose:()=>void;onPrint:()=>void}) {
   const {user}=useAuth();
   const {t}=useI18n();
   const [items,setItems]=useState<InvoiceItem[]>([]);
@@ -196,7 +206,7 @@ function InvoiceDetailModal({invoice,onClose}:{invoice:Invoice;onClose:()=>void}
           {invoice.issued_at&&formatDateTime(invoice.issued_at)}
         </div>
         
-        <Button variant="outline" onClick={()=>{ window.open(`/?invoice_print=${invoice.id}`,'_blank');}}>
+        <Button variant="outline" onClick={onPrint}>
           <Printer size={16}/> {t('common.print')}
         </Button>
       </div>
