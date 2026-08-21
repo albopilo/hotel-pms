@@ -130,16 +130,6 @@ export const reservationService = {
       status: 'open',
     });
 
-    const { data: folio } = await supabase
-      .from('folios')
-      .select('id')
-      .eq('reservation_id', newRes.id)
-      .maybeSingle();
-
-    if (folio) {
-      await folioService.syncReservationChargesToFolio(folio.id, newRes as Reservation, input.created_by);
-    }
-
     if (input.room_id) {
       const roomStatus = input.status === 'checked_in' ? 'occupied' : 'reserved';
       await supabase.from('rooms').update({ status: roomStatus }).eq('id', input.room_id);
