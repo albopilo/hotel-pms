@@ -22,8 +22,6 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
   const [folios, setFolios] = useState<Folio[]>([]);
-  const [guestMap, setGuestMap] = useState<Map<string, Guest>>(new Map());
-  const [roomMap, setRoomMap] = useState<Map<string, Room>>(new Map());
   const [loading, setLoading] = useState(true);
   const [selectedFolio, setSelectedFolio] = useState<Folio | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
@@ -36,18 +34,9 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase.from('folios').select('*,reservation:reservations(*),guest:guests(*),reservation.room:rooms(*)').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('folios').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
     if (error) { setLoading(false); return; }
-    const list = (data as any[]) || [];
-    setFolios(list as unknown as Folio[]);
-    const gMap = new Map<string, Guest>();
-    const rMap = new Map<string, Room>();
-    list.forEach((f: any) => {
-      if (f.guest) gMap.set(f.guest.id, f.guest as Guest);
-      if (f.reservation?.room) rMap.set(f.reservation.room.id, f.reservation.room as Room);
-    });
-    setGuestMap(gMap);
-    setRoomMap(rMap);
+    setFolios((data as Folio[]) || []);
     setLoading(false);
   }, [branchIds]);
 
@@ -82,19 +71,15 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
               <thead>
                 <tr className="border-b border-slate-200 text-slate-500">
                   <th className="text-left py-3 px-4">{t('folio.folio_number')}</th>
-                  <th className="text-left py-3 px-4">{t('common.guest')}</th>
-                  <th className="text-left py-3 px-4">{t('common.room')}</th>
                   <th className="text-left py-3 px-4">{t('common.balance')}</th>
                   <th className="text-center py-3 px-4">{t('common.status')}</th>
                   <th className="text-right py-3 px-4">{t('common.actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {folios.filter((f) => !localSearch || f.folio_number.toLowerCase().includes(localSearch.toLowerCase()) || (guestMap.get(f.guest_id||'')?.full_name||'').toLowerCase().includes(localSearch.toLowerCase())).map((f) => (
+                {folios.filter((f) => !localSearch || f.folio_number.toLowerCase().includes(localSearch.toLowerCase())).map((f) => (
                   <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedFolio(f)}>
                     <td className="py-3 px-4 font-medium text-blue-600">{f.folio_number}</td>
-                    <td className="py-3 px-4">{guestMap.get(f.guest_id||'')?.full_name || '-'}</td>
-                    <td className="py-3 px-4">{roomMap.get(f.reservation_id||'')?.room_number || '-'}</td>
                     <td className="py-3 px-4">{formatIDR(f.balance)}</td>
                     <td className="text-center py-3 px-4"><Badge color={f.status === 'open' ? 'blue' : f.status === 'finalized' ? 'gray' : 'red'}>{f.status}</Badge></td>
                     <td className="text-right py-3 px-4"><button className="text-blue-600 text-xs font-medium">{t('common.view')}</button></td>

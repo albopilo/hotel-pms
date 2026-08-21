@@ -205,6 +205,12 @@ const translations: Record<string, { en: string; id: string }> = {
   'res.split_room_confirm': { en: 'This room will be moved to a new reservation with its own folio.', id: 'Kamar ini akan dipindahkan ke reservasi baru dengan folio tersendiri.' },
   'res.no_group_rooms': { en: 'No rooms found in this group reservation', id: 'Tidak ada kamar dalam reservasi grup ini' },
   'res.prev_checkout': { en: 'Previous Check-out', id: 'Check-out Sebelumnya' },
+  'res.new_checkout': { en: 'New Check-out', id: 'Check-out Baru' },
+  'res.new_checkout_date': { en: 'New Check-out Date', id: 'Tanggal Check-out Baru' },
+  'res.room_rate_per_night': { en: 'Room Rate per Night', id: 'Tarif Kamar per Malam' },
+  'res.extra_nights': { en: 'Extra Nights', id: 'Malam Tambahan' },
+  'res.additional_charge': { en: 'Additional Charge', id: 'Biaya Tambahan' },
+  'res.no_extra_nights': { en: 'No extra nights — new check-out date must be after the current check-out date.', id: 'Tidak ada malam tambahan — tanggal check-out baru harus setelah tanggal check-out saat ini.' },
 
   // Check-in/out
   'checkin.title': { en: 'Check-in', id: 'Check-in' },
