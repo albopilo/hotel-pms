@@ -423,7 +423,7 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
   const totalDiscounts=discounts.reduce((s,i)=>s+Math.abs(i.amount),0);
   const totalTax=taxes.reduce((s,i)=>s+i.amount,0);
 
-  const balance=totalCharges+totalTax-totalDiscounts-totalPayments-(reservation.deposit||0);
+  const balance=totalCharges+totalTax-totalDiscounts-totalPayments;
   const hasUnpaid=balance>0;
   const canOverride=user?.role==='super_admin'||user?.role==='manager';
     const handleAddLateCharge = async () => {
@@ -472,81 +472,260 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
     showToast('Continued without charge (logged)','info');
   };
 
-  const completeCheckout = async () => {
-    if(hasUnpaid && !overrideUnpaid){
+const completeCheckout = async () => {
+
+  if(hasUnpaid && !overrideUnpaid){
+    setShowOverrideConfirm(true);
+    return;
+  }
+
+  setCompleting(true);
+
+  try {
+
+    if(!folio){
+      throw new Error('Folio not found');
+    }
+
+
+    // refresh folio items
+    const { data: latestItems, error: itemsError } =
+      await supabase
+        .from('folio_items')
+        .select('*')
+        .eq('folio_id', folio.id)
+        .eq('voided', false);
+
+
+    if(itemsError){
+      throw itemsError;
+    }
+
+
+    const items = latestItems || [];
+
+
+    /*
+      Accounting:
+
+      Charges:
+      room
+      deposit
+      amenities
+      etc
+
+      Payments:
+      money received
+    */
+
+
+    const totalCharges =
+      items
+      .filter(i => 
+        i.item_type === 'charge'
+      )
+      .reduce(
+        (sum,i)=>sum + Number(i.amount || 0),
+        0
+      );
+
+
+    const totalPayments =
+      items
+      .filter(i =>
+        i.item_type === 'payment'
+      )
+      .reduce(
+        (sum,i)=>sum + Math.abs(Number(i.amount || 0)),
+        0
+      );
+
+
+    const outstanding =
+      totalCharges - totalPayments;
+
+
+    if(outstanding > 0 && !overrideUnpaid){
+
       setShowOverrideConfirm(true);
+      setCompleting(false);
       return;
+
     }
 
-    setCompleting(true);
 
-    if(error){
-      showToast(error.message,'error');
-      return setCompleting(false);
+
+    // 1. Mark room dirty
+
+    if(room){
+
+      const {error:roomError} =
+        await supabase
+        .from('rooms')
+        .update({
+          status:'dirty'
+        })
+        .eq('id',room.id);
+
+
+      if(roomError)
+        throw roomError;
+
     }
 
-    if(room) await supabase.from('rooms').update({status:'dirty'}).eq('id',room.id);
-
-// 1. Calculate balance first
-
-const totals = await folioService.getTotals(folio.id);
-
-if(totals.netBalance > 0){
-  throw new FinancialError(
-    'Cannot finalize folio with outstanding balance',
-    'balance_due'
-  );
-}
 
 
-// 2. Create invoice
+    // 2. Finalize folio
 
-const invoiceId =
- await invoiceService.createInvoice({
-   folioId:folio.id,
-   branchId:reservation.branch_id,
-   organizationId:user!.organization_id,
-   reservationId:reservation.id,
-   guestId:reservation.guest_id,
-   userId:user!.id
- });
+    const {error:folioError} =
+      await supabase
+      .from('folios')
+      .update({
 
+        status:'finalized',
 
-// 3. Finalize folio
+        finalized_at:
+          new Date().toISOString(),
 
-await supabase.from('folios').update({
- status:'finalized',
- finalized_at:new Date().toISOString(),
- finalized_by:user!.id
-})
-.eq('id',folio.id);
+        finalized_by:
+          user!.id
+
+      })
+      .eq('id',folio.id);
 
 
-// 4. Checkout reservation
+    if(folioError)
+      throw folioError;
 
-await supabase.from('reservations').update({
- status:'checked_out',
- actual_check_out:`${todayISO()}T${checkoutTime}:00`,
- check_out_time:checkoutTime
-})
-.eq('id',reservation.id); 
 
-    await getLockProvider().invalidateGuestCard({cardId:reservation.id});
 
-    await supabase.from('audit_logs').insert({
-      organization_id:user!.organization_id,
-      branch_id:reservation.branch_id,
-      user_id:user!.id,
-      action:'check_out',
-      object_type:'reservation',
-      object_id:reservation.id,
-      new_value:{checkout_time:checkoutTime,balance}
+    // 3. Checkout reservation
+
+
+    const {error:reservationError} =
+      await supabase
+      .from('reservations')
+      .update({
+
+        status:'checked_out',
+
+        actual_check_out:
+          `${todayISO()}T${checkoutTime}:00`,
+
+        check_out_time:
+          checkoutTime
+
+      })
+      .eq(
+        'id',
+        reservation.id
+      );
+
+
+    if(reservationError)
+      throw reservationError;
+
+
+
+
+    // 4. Disable card
+
+    try{
+
+      await getLockProvider()
+      .invalidateGuestCard({
+        cardId:reservation.id
+      });
+
+    }
+    catch(e){
+
+      console.warn(
+        'Card invalidation failed',
+        e
+      );
+
+    }
+
+
+
+
+    // 5. Audit
+
+    await supabase
+    .from('audit_logs')
+    .insert({
+
+      organization_id:
+        user!.organization_id,
+
+      branch_id:
+        reservation.branch_id,
+
+      user_id:
+        user!.id,
+
+      action:
+        'check_out',
+
+      object_type:
+        'reservation',
+
+      object_id:
+        reservation.id,
+
+
+      new_value:{
+
+        checkout_time:
+          checkoutTime,
+
+        total_charges:
+          totalCharges,
+
+        total_payments:
+          totalPayments,
+
+        balance:
+          outstanding
+
+      }
+
     });
 
-    showToast(t('checkout.complete'),'success');
+
+
+    showToast(
+      t('checkout.complete'),
+      'success'
+    );
+
+
     setCompleting(false);
+
     onClose();
-  };
+
+
+  }
+  catch(err:any){
+
+    console.error(
+      'CHECKOUT ERROR',
+      err
+    );
+
+
+    showToast(
+      err.message || 'Checkout failed',
+      'error'
+    );
+
+
+    setCompleting(false);
+
+  }
+
+};
 
   if(loading) return <Modal open onClose={onClose} title={t('checkout.title')}><LoadingPage/></Modal>;
 
@@ -596,7 +775,7 @@ await supabase.from('reservations').update({
 
               <tr className="border-b border-slate-100">
                 <td className="py-2 px-3 text-slate-500">{t('checkout.additional_charges')}</td>
-                <td className="text-right py-2 px-3 font-medium">{formatIDR(charges.filter(i=>!['room','amenity','early_checkin','late_checkout','damage'].includes(i.category)).reduce((s,i)=>s+i.amount,0))}</td>
+                <td className="text-right py-2 px-3 font-medium">{formatIDR(charges.filter(i=>!['room','amenity','early_checkin','deposit','late_checkout','damage'].includes(i.category)).reduce((s,i)=>s+i.amount,0))}</td>
               </tr>
 
               <tr className="border-b border-slate-100">
@@ -619,10 +798,10 @@ await supabase.from('reservations').update({
                 <td className="text-right py-2 px-3 font-medium">{formatIDR(totalTax)}</td>
               </tr>
 
-              <tr className="border-b border-slate-100">
-                <td className="py-2 px-3 text-slate-500">{t('common.deposit')}</td>
-                <td className="text-right py-2 px-3 font-medium text-emerald-600">{formatIDR(reservation.deposit)}</td>
-              </tr>
+<tr className="border-b border-slate-100">
+  <td className="py-2 px-3 text-slate-500"> {t('common.deposit')} </td>
+  <td className="text-right py-2 px-3 font-medium text-emerald-600">{formatIDR(charges .filter(i=>i.category==='deposit') .reduce((s,i)=>s+i.amount,0))}</td>
+</tr>
 
               <tr className="border-b border-slate-100">
                 <td className="py-2 px-3 text-slate-500">{t('checkout.amount_paid')}</td>

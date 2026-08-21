@@ -245,12 +245,12 @@ items.push({
   branch_id:form.branch_id,
   reservation_id:data.id,
   guest_id:form.guest_id,
-  item_type:'payment',
-  category:'payment',
-  description:'Deposit',
+  item_type:'charge',
+  category:'deposit',
+  description:'Security deposit',
   quantity:1,
-  unit_amount:-Number(form.deposit),
-  amount:-Number(form.deposit),
+  unit_amount:Number(form.deposit),
+  amount:Number(form.deposit),
   created_by:userId
 });
 }
