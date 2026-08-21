@@ -13,6 +13,7 @@ import { LoadingPage,EmptyState } from '@/components/ui/States';
 import { formatIDR,formatDate,todayISO,addDays,nightsBetween } from '@/lib/format';
 import { Plus,CalendarDays,Search } from 'lucide-react';
 import type { Reservation,Guest,Room,RoomType,BookingSource,Branch } from '@/types/database';
+import { generateDocumentNumber } from '@/lib/documentNumber';
 
 export function ReservationsPage({searchQuery='',onSelectReservation}:{searchQuery?:string;onSelectReservation?:(id:string)=>void}){
 const {user,branches}=useAuth();const {selectedBranchId}=useBranch();const {t}=useI18n();const {showToast}=useToast();
@@ -144,7 +145,7 @@ setSaving(true);
 const payload={
 branch_id:form.branch_id,
 organization_id:orgId,
-reservation_number:reservation?.reservation_number||`RES-${Date.now().toString().slice(-8)}`,
+reservation_number:reservation?.reservation_number ||await generateDocumentNumber('RES'),
 primary_guest_id:form.guest_id,
 room_type_id:form.room_type_id,
 room_id:form.room_id,
@@ -180,7 +181,7 @@ const {data:folio,error:folioError}=await supabase
   branch_id:form.branch_id,
   reservation_id:data.id,
   guest_id:form.guest_id,
-  folio_number:`FOL-${Date.now().toString().slice(-8)}`,
+  folio_number:`FOL-${data.reservation_number.replace('RES-','')}`,
   status:'open'
 })
 .select()

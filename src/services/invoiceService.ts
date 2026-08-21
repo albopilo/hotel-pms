@@ -27,91 +27,20 @@ export class InvoiceError extends Error {
 export const invoiceService = {
 
 
-  async createInvoice(
-    input: InvoiceCreateInput
-  ): Promise<string> {
-
-
+  async createInvoice(input: InvoiceCreateInput): Promise<string> {
     // Get folio
-    const { data: folio, error: folioError } =
-      await supabase
-        .from('folios')
-        .select('*')
-        .eq('id', input.folioId)
-        .single();
-
-
-    if (folioError || !folio) {
-      throw new InvoiceError(
-        'Folio not found'
-      );
-    }
-
-
-
+    const { data: folio, error: folioError } =await supabase .from('folios').select('*').eq('id', input.folioId).single();
+    if (folioError || !folio) {throw new InvoiceError('Folio not found');}
     // Get folio items
-    const { data: items, error: itemsError } =
-      await supabase
-        .from('folio_items')
-        .select('*')
-        .eq('folio_id', input.folioId)
-        .eq('voided', false);
-
-
-    if (itemsError) {
-      throw new InvoiceError(
-        itemsError.message
-      );
-    }
-
-
-
-    const invoiceNumber =
-      `INV-${new Date().getFullYear()}-${crypto.randomUUID()
-        .slice(0,8)
-        .toUpperCase()}`;
-
-
-
-    const subtotal =
-      (items || [])
-        .filter(
-          (i: FolioItem)=>
-            i.item_type === 'charge'
-        )
-        .reduce(
-          (sum,i)=>sum + i.amount,
-          0
-        );
-
-
-    const tax =
-      (items || [])
-        .filter(
-          (i: FolioItem)=>
-            i.item_type === 'tax'
-        )
-        .reduce(
-          (sum,i)=>sum+i.amount,
-          0
-        );
-
-
-    const discount =
-      (items || [])
-        .filter(
-          (i: FolioItem)=>
-            i.item_type === 'discount'
-        )
-        .reduce(
-          (sum,i)=>sum+i.amount,
-          0
-        );
-
-
-
-    const total =
-      subtotal + tax - Math.abs(discount);
+    const { data: items, error: itemsError } =await supabase.from('folio_items').select('*').eq('folio_id', input.folioId).eq('voided', false);
+    if (itemsError) {throw new InvoiceError(itemsError.message);}
+    const { data: reservation, error: reservationError } =await supabase.from('reservations').select('reservation_number').eq('id', input.reservationId).single();
+    if(reservationError || !reservation){throw new InvoiceError('Reservation not found');}
+    const invoiceNumber =`INV-${reservation.reservation_number.replace('RES-','')}`;
+    const subtotal =(items || []).filter((i: FolioItem)=>i.item_type === 'charge').reduce((sum,i)=>sum + i.amount,0);
+    const tax =(items || []).filter((i: FolioItem)=>i.item_type === 'tax').reduce((sum,i)=>sum+i.amount,0);
+    const discount =(items || []).filter((i: FolioItem)=>i.item_type === 'discount').reduce((sum,i)=>sum+i.amount,0);
+    const total =subtotal + tax - Math.abs(discount);
 
 
 

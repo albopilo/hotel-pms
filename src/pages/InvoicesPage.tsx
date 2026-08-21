@@ -172,7 +172,7 @@ function InvoiceDetailModal({invoice,onClose}:{invoice:Invoice;onClose:()=>void}
 
         <div>
           <b>{guest?.full_name||'-'}</b>
-          <p>Room: {reservation?.rooms?.room_number || '-'}</p>
+          <p>Room: {invoice.reservation?.rooms?.room_number || '-'}</p>
         </div>
 
         <table className="w-full text-sm">
