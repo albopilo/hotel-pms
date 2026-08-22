@@ -395,6 +395,24 @@ const translations: Record<string, { en: string; id: string }> = {
   'rooms.dirty_warning': { en: 'The selected room is currently Dirty. Please verify it has been cleaned before assigning it to a guest.', id: 'Kamar yang dipilih saat ini Kotor. Mohon verifikasi kamar sudah dibersihkan sebelum ditetapkan ke tamu.' },
   'rooms.dirty_warning_continue': { en: 'Continue anyway', id: 'Tetap lanjutkan' },
 
+  // Room types rates
+  'room_types.weekday_rate': { en: 'Weekday Rate (Mon–Thu)', id: 'Tarif Hari Kerja (Sen–Kam)' },
+  'room_types.weekend_rate': { en: 'Weekend Rate (Fri–Sun)', id: 'Tarif Akhir Pekan (Jum–Min)' },
+  'room_types.base_rate_fallback': { en: 'Base Rate (fallback)', id: 'Tarif Dasar (cadangan)' },
+  'room_types.rate_hint': { en: 'If weekday or weekend rate is 0, the base rate is used as fallback.', id: 'Jika tarif hari kerja atau akhir peekan 0, tarif dasar digunakan sebagai cadangan.' },
+  'room_types.rate_preview': { en: 'Rate Preview', id: 'Pratinjau Tarif' },
+  'room_types.holiday_rate_note': { en: 'Weekend rate also applies on national holidays and the day before a holiday (H-1).', id: 'Tarif akhir pekan juga berlaku pada hari libur nasional dan H-1.' },
+
+  // Holidays
+  'holiday.title': { en: 'Indonesian National Holidays', id: 'Hari Libur Nasional Indonesia' },
+  'holiday.manage': { en: 'Manage Holidays', id: 'Kelola Hari Libur' },
+  'holiday.add': { en: 'Add Holiday', id: 'Tambah Hari Libur' },
+  'holiday.date': { en: 'Holiday Date', id: 'Tanggal Libur' },
+  'holiday.name': { en: 'Holiday Name', id: 'Nama Hari Libur' },
+  'holiday.no_holidays': { en: 'No holidays configured', id: 'Tidak ada hari libur' },
+  'holiday.delete_confirm': { en: 'Remove this holiday?', id: 'Hapus hari libur ini?' },
+  'holiday.sync_note': { en: 'Holidays marked here are used for weekend rate logic. H-1 (day before holiday) is automatically treated as a weekend-rate day.', id: 'Hari libur yang ditandai di sini digunakan untuk logika tarif akhir pekan. H-1 (sehari sebelum libur) otomatis diperlakukan sebagai hari tarif akhir pekan.' },
+
   // Common actions
   'action.new_reservation': { en: 'New Reservation', id: 'Reservasi Baru' },
   'action.check_in': { en: 'Check In', id: 'Check In' },

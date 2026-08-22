@@ -11,9 +11,10 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { ResStatusBadge, Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, todayISO, addDays, nightsBetween } from '@/lib/format';
-import { Plus, CalendarDays, Search, Trash2, Users, Receipt } from 'lucide-react';
-import type { Reservation, Guest, Room, RoomType, BookingSource, Branch } from '@/types/database';
+import { Plus, CalendarDays, Search, Trash2, Users, Receipt, CircleAlert as AlertCircle } from 'lucide-react';
+import type { Reservation, Guest, Room, RoomType, BookingSource, Branch, IndonesianHoliday } from '@/types/database';
 import { generateDocumentNumber } from '@/lib/documentNumber';
+import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 
 interface RoomRow {
   room_type_id: string;
@@ -74,6 +75,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [bookingSources, setBookingSources] = useState<BookingSource[]>([]);
+  const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
@@ -84,20 +86,22 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
   const load = useCallback(async () => {
     if (!branchIds.length) { setLoading(false); return; }
     setLoading(true);
-    const [r, g, ro, rt, bs] = await Promise.all([
+    const [r, g, ro, rt, bs, hol] = await Promise.all([
       supabase.from('reservations').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }),
       supabase.from('guests').select('*').limit(500),
       supabase.from('rooms').select('*').in('branch_id', branchIds),
       supabase.from('room_types').select('*').in('branch_id', branchIds),
-      supabase.from('booking_sources').select('*').order('sort_order')
+      supabase.from('booking_sources').select('*').order('sort_order'),
+      supabase.from('indonesian_holidays').select('*').eq('organization_id', user!.organization_id).order('holiday_date')
     ]);
     setReservations((r.data || []).map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status })));
     setGuests(g.data || []);
     setRooms(ro.data || []);
     setRoomTypes(rt.data || []);
     setBookingSources(bs.data || []);
+    setHolidays((hol.data as IndonesianHoliday[]) || []);
     setLoading(false);
-  }, [branchIds]);
+  }, [branchIds, user]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (searchQuery !== localSearch) setLocalSearch(searchQuery); }, [searchQuery]);
@@ -204,6 +208,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
         roomTypes={roomTypes}
         guests={guests}
         bookingSources={bookingSources}
+        holidays={holidays}
         userId={user!.id}
         orgId={user!.organization_id}
         defaultBranchId={selectedBranchId || branches[0]?.id || ''}
@@ -215,7 +220,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
   );
 }
 
-export function ReservationFormModal({ open, onClose, onCancel, branches, rooms, roomTypes, guests, bookingSources, userId, orgId, defaultBranchId, reservation, preselectGuestId, onSaved }: {
+export function ReservationFormModal({ open, onClose, onCancel, branches, rooms, roomTypes, guests, bookingSources, holidays, userId, orgId, defaultBranchId, reservation, preselectGuestId, onSaved }: {
   open: boolean;
   onClose: () => void;
   onCancel: () => void;
@@ -224,6 +229,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   roomTypes: RoomType[];
   guests: Guest[];
   bookingSources: BookingSource[];
+  holidays: IndonesianHoliday[];
   userId: string;
   orgId: string;
   defaultBranchId: string;
@@ -303,10 +309,31 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     );
   };
 
+  const autoCalcRate = useCallback((row: RoomRow): string => {
+    const roomType = roomTypes.find(rt => rt.id === row.room_type_id);
+    if (!roomType || !form.check_in_date || !form.check_out_date) return '';
+    const { total } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
+    const perNight = nights > 0 ? Math.round(total / nights) : 0;
+    return String(perNight);
+  }, [roomTypes, form.check_in_date, form.check_out_date, holidays, nights]);
+
+  const roomTypeSelectionKey = roomRows.map((row) => row.room_type_id).join('|');
+
+  useEffect(() => {
+    if (!open || !form.check_in_date || !form.check_out_date || form.check_out_date <= form.check_in_date) return;
+    setRoomRows((currentRows) => currentRows.map((row) => {
+      if (!row.room_type_id) return row;
+      const calculatedRate = autoCalcRate(row);
+      return calculatedRate ? { ...row, rate: calculatedRate } : row;
+    }));
+  }, [open, form.check_in_date, form.check_out_date, holidays, roomTypes, roomTypeSelectionKey, autoCalcRate]);
+
   const updateRoomRow = (idx: number, field: keyof RoomRow, value: string) => {
     setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
     if (field === 'room_type_id') {
-      setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, room_id: '' } : r));
+      const newRoomType = roomTypes.find(rt => rt.id === value);
+      const autoRate = newRoomType ? autoCalcRate({ room_type_id: value, room_id: '', rate: '' }) : '';
+      setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, room_id: '', rate: autoRate } : r));
     }
     if (field === 'room_id') {
       const room = rooms.find(r => r.id === value);
@@ -584,6 +611,16 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   const totalRoomCharges = roomRows.reduce((sum, row) => sum + (Number(row.rate) || 0) * nights, 0);
   const grandTotal = totalRoomCharges - Number(form.discount || 0) + Number(form.tax || 0);
 
+  // Rate breakdown for the first room row
+  const rateBreakdown = useMemo(() => {
+    const firstRow = roomRows[0];
+    if (!firstRow?.room_type_id) return null;
+    const roomType = roomTypes.find(rt => rt.id === firstRow.room_type_id);
+    if (!roomType) return null;
+    const { breakdown, total } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
+    return { breakdown, total, roomType };
+  }, [roomRows, roomTypes, form.check_in_date, form.check_out_date, holidays]);
+
   return (
     <Modal open={open} onClose={onClose} title={reservation ? t('common.edit') : t('res.new_reservation')} size="xl"
       footer={<><Button variant="secondary" onClick={onCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={() => save(false)}>{t('common.save')}</Button></>}>
@@ -649,6 +686,27 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
             </div>
           ))}
         </div>
+
+        {rateBreakdown && rateBreakdown.breakdown.length > 0 && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')} · {rateBreakdown.roomType.name}</p>
+                <p className="text-xs text-blue-700">{formatIDR(rateBreakdown.total)} {t('common.total').toLowerCase()} / {nights} {t('common.nights').toLowerCase()}</p>
+              </div>
+              <span className="text-xs text-blue-700">{formatIDR(Math.round(rateBreakdown.total / nights))} / {t('common.nights').toLowerCase()}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {rateBreakdown.breakdown.map((day) => (
+                <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
+                  <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
+                  <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType, 'en')}</p>
+                  <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-3 gap-4">
           <Input label={t('common.discount')} type="number" value={form.discount} onChange={e => set('discount', e.target.value)} />
