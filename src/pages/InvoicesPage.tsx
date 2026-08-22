@@ -10,12 +10,12 @@ import { Modal } from '@/components/ui/Modal';
 import { InvoiceStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage,EmptyState } from '@/components/ui/States';
 import { formatIDR,formatDate,formatDateTime } from '@/lib/format';
-import { Receipt,Search,Printer,FileText } from 'lucide-react';
+import { Receipt,Search,Printer } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
 import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
 
-export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment}:{searchQuery?:string;reservationId?:string|null;onNavigateToPayment?:(id:string)=>void}) {
+export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
   const {branches}=useAuth();
   const {selectedBranchId}=useBranch();
   const {t}=useI18n();
@@ -41,15 +41,6 @@ setInvoices(data || []);
   },[branchIds]);
 
   useEffect(()=>{load()},[load]);
-
-  useEffect(()=>{
-    if(reservationId){
-      (async()=>{
-        const {data}=await supabase.from('invoices').select('*').eq('reservation_id',reservationId).maybeSingle();
-        if(data) setSelected(data as Invoice);
-      })();
-    }
-  },[reservationId]);
 
   if(loading)return <LoadingPage message={t('common.loading')}/>;
 
@@ -125,7 +116,6 @@ setInvoices(data || []);
           load();
         }}
         onPrint={() => setPrintInvoiceId(selected.id)}
-        onNavigateToPayment={onNavigateToPayment}
       />
     )}
 
@@ -159,7 +149,7 @@ export async function finalizeCheckoutInvoice(invoiceId:string){
   }).eq('id',invoiceId);
 }
 
-function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment}:{invoice:Invoice;onClose:()=>void;onPrint:()=>void;onNavigateToPayment?:(id:string)=>void}) {
+function InvoiceDetailModal({invoice,onClose,onPrint}:{invoice:Invoice;onClose:()=>void;onPrint:()=>void}) {
   const {user}=useAuth();
   const {t}=useI18n();
   const [items,setItems]=useState<InvoiceItem[]>([]);
@@ -216,16 +206,9 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment}:{invoi
           {invoice.issued_at&&formatDateTime(invoice.issued_at)}
         </div>
         
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onPrint}>
-            <Printer size={16}/> {t('common.print')}
-          </Button>
-          {reservation && onNavigateToPayment && (
-            <Button variant="outline" onClick={() => onNavigateToPayment(reservation.id)}>
-              <FileText size={16}/> {t('res.view_folio')}
-            </Button>
-          )}
-        </div>
+        <Button variant="outline" onClick={onPrint}>
+          <Printer size={16}/> {t('common.print')}
+        </Button>
       </div>
     </Modal>
   );

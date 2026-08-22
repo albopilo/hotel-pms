@@ -14,10 +14,10 @@ import { Badge } from '@/components/ui/Badge';
 import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, todayInTimezone, nowInTimezone, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
-import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split } from 'lucide-react';
+import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, ReservationRoom } from '@/types/database';
 
-export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { initialReservationId?: string | null; searchQuery?: string }) {
+export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavigateToPayment, onNavigateToInvoice }: { initialReservationId?: string | null; searchQuery?: string; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -117,7 +117,11 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
                 <p className="font-medium text-slate-800">{g?.full_name || '-'} {r.is_group && <Badge color="purple" size="sm">Group ({r.reservation_number})</Badge>}</p>
                 <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || 'Unassigned'} · {formatDate(r.check_in_date)} {formatTime(r.check_in_time)}</p>
               </div>
-              <Button size="sm" onClick={() => handleSelectReservation(r, 'checkin')}><LogIn size={14}/>{t('action.check_in')}</Button>
+            <div className="flex gap-1">
+                <Button size="sm" onClick={() => handleSelectReservation(r, 'checkin')}
+><LogIn size={14}/>{t('action.check_in')}</Button>
+                {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/></Button>}
+              </div>
             </div>;
           })}</div>}
         </Card>
@@ -132,10 +136,13 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
                 <p className="font-medium text-slate-800">{g?.full_name || '-'} {r.is_group && <Badge color="purple" size="sm">Group</Badge>}</p>
                 <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {formatDate(r.check_out_date)} {formatTime(r.check_out_time)}</p>
               </div>
-              <div className="flex gap-1">
-                <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
+            <div className="flex gap-1">
+                <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}
+><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
                 {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
-                <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}><LogOut size={14}/>{t('action.check_out')}</Button>
+                {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/></Button>}
+                <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}
+><LogOut size={14}/>{t('action.check_out')}</Button>
               </div>
             </div>;
           })}</div>}
@@ -176,15 +183,15 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery }: { ini
         })}</div>}
       </Card>
 
-      {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} />}
-      {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} />}
+      {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
+      {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
       {selected && mode === 'extend' && <ExtendStayModal reservation={selected} onClose={handleCloseModal} />}
       {selected && mode === 'split' && <SplitRoomModal reservation={selected} reservationRooms={reservationRooms} rooms={rooms} onClose={handleCloseModal} />}
     </div>
   );
 }
 
-function CheckinModal({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
+function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToInvoice }: { reservation: Reservation; onClose: () => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -394,6 +401,8 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
         </div>
 
         <div className="flex justify-end gap-2">
+          {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
+          {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
           <Button loading={completing} onClick={completeCheckin}><LogIn size={16}/>{t('checkin.complete')}</Button>
         </div>
@@ -402,7 +411,7 @@ function CheckinModal({ reservation, onClose }: { reservation: Reservation; onCl
   );
 }
 
-function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
+function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateToInvoice }: { reservation: Reservation; onClose: () => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -614,6 +623,8 @@ function CheckoutModal({ reservation, onClose }: { reservation: Reservation; onC
         )}
 
         <div className="flex justify-end gap-2">
+          {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
+          {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
           <Button loading={completing} variant={hasUnpaid?'danger':'success'} onClick={completeCheckout}><LogOut size={16}/>{t('checkout.complete')}</Button>
         </div>

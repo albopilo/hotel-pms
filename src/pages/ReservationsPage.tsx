@@ -11,7 +11,7 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { ResStatusBadge, Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, todayISO, addDays, nightsBetween } from '@/lib/format';
-import { Plus, CalendarDays, Search, Trash2, Users } from 'lucide-react';
+import { Plus, CalendarDays, Search, Trash2, Users, Receipt } from 'lucide-react';
 import type { Reservation, Guest, Room, RoomType, BookingSource, Branch } from '@/types/database';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 
@@ -64,7 +64,7 @@ function clearDraft() {
   }
 }
 
-export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavigateToPayment }: { searchQuery?: string; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void }) {
+export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavigateToPayment, onNavigateToInvoice }: { searchQuery?: string; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -174,6 +174,9 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavi
                       <td className="py-3 px-4"><div className="flex gap-2 justify-end">
                         <button onClick={e => { e.stopPropagation(); onSelectReservation?.(r.id); }} className="text-blue-600 text-xs font-medium">{t('common.view')}</button>
                         <button onClick={e => { e.stopPropagation(); onNavigateToPayment?.(r.id); }} className="text-emerald-600 text-xs font-medium">{t('res.view_folio')}</button>
+                        {r.status !== 'tentative' && onNavigateToInvoice && (
+                          <button onClick={e => { e.stopPropagation(); onNavigateToInvoice?.(r.id); }} className="text-slate-600 text-xs font-medium flex items-center gap-1"><Receipt size={12} />{t('res.view_invoice')}</button>
+                        )}
                       </div></td>
                     </tr>
                   );
