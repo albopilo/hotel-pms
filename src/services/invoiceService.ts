@@ -225,7 +225,7 @@ export const invoiceService = {
 
     const { data, error } = await supabase
       .from('invoices')
-      .select(`*, invoice_items(*), guests(*), branches(*), reservations(*, rooms(*))`)
+      .select(`*, invoice_items(*), guests(*), branches(*), reservations(*, rooms(*), room_types(*))`)
       .eq('id', invoiceId)
       .single();
     if (error) throw new InvoiceError(error.message);

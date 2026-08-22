@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { invoiceService } from '@/services/invoiceService';
 import type { Invoice, InvoiceItem, Guest, Branch } from '@/types/database';
-import { formatIDR, formatDateTime } from '@/lib/format';
+import { formatIDR, formatDateTime, formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { X } from 'lucide-react';
 
@@ -93,11 +93,22 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           <div>
             <h2 className="font-bold">Bill To</h2>
             <p>{guest?.full_name || '-'}</p>
-            <p>Room: {reservation?.rooms?.room_number || '-'}</p>
           </div>
           <div className="text-right">
             <p>Invoice: <b>{invoice.invoice_number}</b></p>
             <p>{invoice.issued_at ? formatDateTime(invoice.issued_at) : '-'}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4 mb-8 border border-slate-300 rounded-lg p-4 text-sm">
+          <div>
+            <p><span className="font-semibold">Check-in:</span> {reservation?.check_in_date ? formatDate(reservation.check_in_date) : '-'}</p>
+            <p><span className="font-semibold">Check-out:</span> {reservation?.check_out_date ? formatDate(reservation.check_out_date) : '-'}</p>
+          </div>
+          <div>
+            <p><span className="font-semibold">Room Number:</span> {reservation?.rooms?.room_number || '-'}</p>
+            <p><span className="font-semibold">Room Type:</span> {reservation?.room_types?.name || '-'}</p>
+            <p><span className="font-semibold">Nights:</span> {reservation?.num_nights || '-'}</p>
           </div>
         </div>
 
