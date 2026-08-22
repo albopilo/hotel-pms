@@ -11,7 +11,7 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDateTime } from '@/lib/format';
-import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt } from 'lucide-react';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
@@ -22,7 +22,7 @@ type FolioListRow = Folio & {
   reservation?: { room?: Pick<Room, 'room_number'> | null } | null;
 };
 
-export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string; reservationId?: string | null }) {
+export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice }: { searchQuery?: string; reservationId?: string | null; onNavigateToInvoice?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -103,12 +103,12 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
         </Card>
       )}
 
-      {selectedFolio && <FolioDetailModal folio={selectedFolio} onClose={() => { setSelectedFolio(null); load(); }} />}
+      {selectedFolio && <FolioDetailModal folio={selectedFolio} onClose={() => { setSelectedFolio(null); load(); }} onNavigateToInvoice={onNavigateToInvoice} />}
     </div>
   );
 }
 
-function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => void }) {
+function FolioDetailModal({ folio, onClose, onNavigateToInvoice }: { folio: Folio; onClose: () => void; onNavigateToInvoice?: (id: string) => void }) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -245,10 +245,14 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
             <Button size="sm" onClick={() => setShowAddCharge(true)}><Plus size={14} /> {t('folio.add_charge')}</Button>
             <Button size="sm" variant="success" onClick={() => setShowTakePayment(true)}><Plus size={14} /> {t('folio.take_payment')}</Button>
             <Button size="sm" variant="outline" onClick={() => setShowTransfer(true)}><ArrowRightLeft size={14} /> {t('res.transfer_room')}</Button>
+            {reservation && onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14} /> {t('res.view_invoice')}</Button>}
           </div>
         )}
         {isFinalized && (
-          <Button size="sm" variant="warning" onClick={() => setShowPostStay(true)}><Plus size={14} /> {t('folio.post_stay_charge')}</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" variant="warning" onClick={() => setShowPostStay(true)}><Plus size={14} /> {t('folio.post_stay_charge')}</Button>
+            {reservation && onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14} /> {t('res.view_invoice')}</Button>}
+          </div>
         )}
       </div>
 

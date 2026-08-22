@@ -10,12 +10,19 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, CreditCard as Edit, Users, Phone, Mail } from 'lucide-react';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, LogIn, LogOut, FileText, Receipt } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 
 const ID_TYPES = ['KTP', 'Passport', 'SIM', 'Other'];
 
-export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
+interface GuestsPageProps {
+  searchQuery?: string;
+  onNavigateToCheckin?: (id: string) => void;
+  onNavigateToPayment?: (id: string) => void;
+  onNavigateToInvoice?: (id: string) => void;
+}
+
+export function GuestsPage({ searchQuery = '', onNavigateToCheckin, onNavigateToPayment, onNavigateToInvoice }: GuestsPageProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -103,7 +110,7 @@ export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
 
       {/* Guest detail */}
       <Modal open={!!selectedGuest} onClose={() => setSelectedGuest(null)} title={selectedGuest?.full_name || ''} size="lg">
-        {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} />}
+        {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} onNavigateToCheckin={onNavigateToCheckin} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
       </Modal>
 
       <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
@@ -111,7 +118,15 @@ export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
   );
 }
 
-function GuestDetail({ guest, onEdit }: { guest: Guest; onEdit: () => void }) {
+interface GuestDetailProps {
+  guest: Guest;
+  onEdit: () => void;
+  onNavigateToCheckin?: (id: string) => void;
+  onNavigateToPayment?: (id: string) => void;
+  onNavigateToInvoice?: (id: string) => void;
+}
+
+function GuestDetail({ guest, onEdit, onNavigateToCheckin, onNavigateToPayment, onNavigateToInvoice }: GuestDetailProps) {
   const { t } = useI18n();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [stats, setStats] = useState({ totalStays: 0, totalSpending: 0, outstanding: 0 });
@@ -157,14 +172,28 @@ function GuestDetail({ guest, onEdit }: { guest: Guest; onEdit: () => void }) {
         {reservations.length === 0 ? (
           <p className="text-sm text-slate-400">{t('common.no_data')}</p>
         ) : (
-          <div className="space-y-2 max-h-48 overflow-y-auto">
+          <div className="space-y-2 max-h-64 overflow-y-auto">
             {reservations.map((r) => (
               <div key={r.id} className="flex items-center justify-between text-sm border border-slate-100 rounded-lg px-3 py-2">
-                <div>
+                <div className="min-w-0">
                   <span className="font-medium">{r.reservation_number}</span>
                   <span className="text-slate-400 ml-2">{formatDate(r.check_in_date)} → {formatDate(r.check_out_date)}</span>
                 </div>
-                <Badge color={r.status === 'checked_out' ? 'gray' : r.status === 'checked_in' ? 'green' : 'blue'}>{t(`res.${r.status}`)}</Badge>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {r.status === 'confirmed' && onNavigateToCheckin && (
+                    <button onClick={() => onNavigateToCheckin(r.id)} className="text-xs text-blue-600 font-medium hover:text-blue-700 flex items-center gap-1"><LogIn size={12} />{t('action.check_in')}</button>
+                  )}
+                  {r.status === 'checked_in' && onNavigateToCheckin && (
+                    <button onClick={() => onNavigateToCheckin(r.id)} className="text-xs text-amber-600 font-medium hover:text-amber-700 flex items-center gap-1"><LogOut size={12} />{t('action.check_out')}</button>
+                  )}
+                  {onNavigateToPayment && (
+                    <button onClick={() => onNavigateToPayment(r.id)} className="text-xs text-emerald-600 font-medium hover:text-emerald-700 flex items-center gap-1"><FileText size={12} />{t('res.view_folio')}</button>
+                  )}
+                  {r.status !== 'tentative' && onNavigateToInvoice && (
+                    <button onClick={() => onNavigateToInvoice(r.id)} className="text-xs text-slate-600 font-medium hover:text-slate-800 flex items-center gap-1"><Receipt size={12} />{t('res.view_invoice')}</button>
+                  )}
+                  <Badge color={r.status === 'checked_out' ? 'gray' : r.status === 'checked_in' ? 'green' : 'blue'}>{t(`res.${r.status}`)}</Badge>
+                </div>
               </div>
             ))}
           </div>

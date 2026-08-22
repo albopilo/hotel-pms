@@ -49,9 +49,14 @@ function AuthenticatedApp() {
     setCurrentPage('payments');
   };
 
+  const handleNavigateToInvoice = (id: string) => {
+    setSelectedReservationId(id);
+    setCurrentPage('invoices');
+  };
+
   const handleNavigate = (page: PageKey) => {
     setCurrentPage(page);
-    if (page !== 'checkin_checkout' && page !== 'payments') {
+    if (page !== 'checkin_checkout' && page !== 'payments' && page !== 'invoices') {
       setSelectedReservationId(null);
     }
   };
@@ -61,19 +66,19 @@ function AuthenticatedApp() {
       case 'dashboard':
         return <DashboardPage />;
       case 'reservations':
-        return <ReservationsPage searchQuery={searchQuery} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
+        return <ReservationsPage searchQuery={searchQuery} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'calendar':
         return <CalendarPage onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
       case 'rooms':
         return <RoomsPage />;
       case 'guests':
-        return <GuestsPage searchQuery={searchQuery} />;
+        return <GuestsPage searchQuery={searchQuery} onNavigateToCheckin={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'checkin_checkout':
-        return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} onNavigateToPayment={handleNavigateToPayment} />;
+        return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'payments':
-        return <FolioPage searchQuery={searchQuery} reservationId={selectedReservationId} />;
+        return <FolioPage searchQuery={searchQuery} reservationId={selectedReservationId} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'invoices':
-        return <InvoicesPage searchQuery={searchQuery} />;
+        return <InvoicesPage searchQuery={searchQuery} reservationId={selectedReservationId} onNavigateToPayment={handleNavigateToPayment} />;
       case 'reports':
         return <ReportsPage />;
       case 'night_audit':
