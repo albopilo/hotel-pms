@@ -463,6 +463,9 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   const [room,setRoom]=useState<Room|null>(null);
   const [folio,setFolio]=useState<Folio|null>(null);
   const [folioItems,setFolioItems]=useState<any[]>([]);
+  const [bookingSource,setBookingSource]=useState<BookingSource|null>(null);
+  const [roomType,setRoomType]=useState<RoomType|null>(null);
+  const [groupRooms,setGroupRooms]=useState<ReservationRoom[]>([]);
   const [loading,setLoading]=useState(true);
   const [lateWarning,setLateWarning]=useState(false);
   const [checkoutTime,setCheckoutTime]=useState(new Date().toTimeString().slice(0,5));
@@ -484,6 +487,24 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
       setGuest(g as Guest);
       setRoom(r as Room);
       setFolio(f as Folio);
+
+      if(reservation.booking_source_id){
+        const {data:bs}=await supabase.from('booking_sources').select('*').eq('id',reservation.booking_source_id).maybeSingle();
+        setBookingSource(bs as BookingSource|null);
+      }
+      if(reservation.room_type_id){
+        const {data:rt}=await supabase.from('room_types').select('*').eq('id',reservation.room_type_id).maybeSingle();
+        setRoomType(rt as RoomType|null);
+      } else if(r){
+        const {data:rt}=await supabase.from('room_types').select('*').eq('id',(r as Room).room_type_id).maybeSingle();
+        setRoomType(rt as RoomType|null);
+      }
+      if(reservation.is_group){
+        const {data:rrData}=await supabase.from('reservation_rooms')
+          .select('*,room:rooms(*)').eq('reservation_id',reservation.id).eq('status','active').order('created_at');
+        setGroupRooms((rrData as ReservationRoom[])||[]);
+      }
+
       if(f){
         const {data:items}=await supabase.from('folio_items').select('*').eq('folio_id',f.id).eq('voided',false).order('created_at');
         setFolioItems(items||[]);
@@ -606,10 +627,30 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   return (<>
     <Modal open onClose={onClose} title={t('checkout.title')} size="lg">
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div><span className="text-slate-500">{t('common.guest')}:</span> <span className="font-medium">{guest?.full_name||'-'}</span></div>
           <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{room?.room_number||'-'}</span></div>
+          {roomType && <div><span className="text-slate-500">{t('common.room_type')}:</span> <span className="font-medium">{roomType.name}</span></div>}
+          {bookingSource && <div><span className="text-slate-500">{t('common.booking_source')}:</span> <span className="font-medium">{bookingSource.name}</span></div>}
+          <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{formatDate(reservation.check_in_date)} {formatTime(reservation.check_in_time)}</span></div>
+          <div><span className="text-slate-500">{t('common.check_out')}:</span> <span className="font-medium">{formatDate(reservation.check_out_date)} {formatTime(reservation.check_out_time)}</span></div>
+          <div><span className="text-slate-500">{t('common.nights')}:</span> <span className="font-medium">{reservation.num_nights}</span></div>
+          <div><span className="text-slate-500">{t('common.adults')} / {t('common.children')}:</span> <span className="font-medium">{reservation.adults} / {reservation.children}</span></div>
+          <div><span className="text-slate-500">{t('common.deposit')}:</span> <span className="font-medium">{formatIDR(reservation.deposit)}</span></div>
         </div>
+
+        {groupRooms.length > 1 && (
+          <div className="border border-slate-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('res.group_rooms')} ({groupRooms.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {groupRooms.map(rr => (
+                <span key={rr.id} className="text-sm bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                  {(rr as any).room?.room_number || 'Unassigned'} · {formatIDR(rr.rate)}/{t('common.nights')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="text-sm font-medium text-slate-700">{t('checkout.requested_time')}</label>
@@ -693,6 +734,9 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   const [guest, setGuest] = useState<Guest | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
   const [folio, setFolio] = useState<Folio | null>(null);
+  const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
+  const [roomType, setRoomType] = useState<RoomType | null>(null);
+  const [groupRooms, setGroupRooms] = useState<ReservationRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -711,6 +755,24 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
       setGuest(g as Guest);
       setRoom(r as Room);
       setFolio(f as Folio);
+
+      if (reservation.booking_source_id) {
+        const { data: bs } = await supabase.from('booking_sources').select('*').eq('id', reservation.booking_source_id).maybeSingle();
+        setBookingSource(bs as BookingSource | null);
+      }
+      if (reservation.room_type_id) {
+        const { data: rt } = await supabase.from('room_types').select('*').eq('id', reservation.room_type_id).maybeSingle();
+        setRoomType(rt as RoomType | null);
+      } else if (r) {
+        const { data: rt } = await supabase.from('room_types').select('*').eq('id', (r as Room).room_type_id).maybeSingle();
+        setRoomType(rt as RoomType | null);
+      }
+      if (reservation.is_group) {
+        const { data: rrData } = await supabase.from('reservation_rooms')
+          .select('*,room:rooms(*)').eq('reservation_id', reservation.id).eq('status', 'active').order('created_at');
+        setGroupRooms((rrData as ReservationRoom[]) || []);
+      }
+
       setLoading(false);
     })();
   }, [reservation]);
@@ -839,18 +901,36 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
     <Modal open onClose={onClose} title={t('res.extend_stay')} size="md"
       footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleExtend}><CalendarPlus size={16} />{t('common.confirm')}</Button></>}>
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div><span className="text-slate-500">{t('common.guest')}:</span> <span className="font-medium">{guest?.full_name || '-'}</span></div>
           <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{room?.room_number || '-'}</span></div>
-          <div><span className="text-slate-500">{t('res.prev_checkout')}:</span> <span className="font-medium">{formatDate(previousCheckoutDate)}</span></div>
-          <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{formatDate(reservation.check_in_date)}</span></div>
+          {roomType && <div><span className="text-slate-500">{t('common.room_type')}:</span> <span className="font-medium">{roomType.name}</span></div>}
+          {bookingSource && <div><span className="text-slate-500">{t('common.booking_source')}:</span> <span className="font-medium">{bookingSource.name}</span></div>}
+          <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{formatDate(reservation.check_in_date)} {formatTime(reservation.check_in_time)}</span></div>
+          <div><span className="text-slate-500">{t('common.check_out')}:</span> <span className="font-medium">{formatDate(reservation.check_out_date)} {formatTime(reservation.check_out_time)}</span></div>
+          <div><span className="text-slate-500">{t('common.nights')}:</span> <span className="font-medium">{reservation.num_nights}</span></div>
+          <div><span className="text-slate-500">{t('common.adults')} / {t('common.children')}:</span> <span className="font-medium">{reservation.adults} / {reservation.children}</span></div>
+          <div><span className="text-slate-500">{t('common.deposit')}:</span> <span className="font-medium">{formatIDR(reservation.deposit)}</span></div>
         </div>
+
+        {groupRooms.length > 1 && (
+          <div className="border border-slate-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('res.group_rooms')} ({groupRooms.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {groupRooms.map(rr => (
+                <span key={rr.id} className="text-sm bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                  {(rr as any).room?.room_number || 'Unassigned'} · {formatIDR(rr.rate)}/{t('common.nights')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <Input label={t('res.new_checkout_date')} type="date" value={newCheckoutDate} onChange={e => setNewCheckoutDate(e.target.value)} required />
         <Input label={t('res.room_rate_per_night')} type="number" value={roomRate} onChange={e => setRoomRate(e.target.value)} required />
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2 text-sm">
-          <div className="flex justify-between"><span className="text-slate-600">{t('res.prev_checkout')}:</span> <span className="font-medium">{formatDate(previousCheckoutDate)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-600">{t('res.prev_checkout')}:</span> <span className="font-medium">{formatDate(previousCheckoutDate)} {formatTime(reservation.check_out_time)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('res.new_checkout')}:</span> <span className="font-medium">{formatDate(newCheckoutDate)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('res.extra_nights')}:</span> <span className="font-bold text-blue-700">{extraNights} {t('common.nights')}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('common.rate')}:</span> <span className="font-medium">{formatIDR(Number(roomRate) || 0)} / {t('common.nights')}</span></div>
