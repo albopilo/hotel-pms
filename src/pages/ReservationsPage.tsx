@@ -647,15 +647,18 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   const totalRoomCharges = roomRows.reduce((sum, row) => sum + (Number(row.rate) || 0) * nights, 0);
   const grandTotal = totalRoomCharges - Number(form.discount || 0) + Number(form.tax || 0);
 
-  // Rate breakdown for the first room row
-  const rateBreakdown = useMemo(() => {
-    const firstRow = roomRows[0];
-    if (!firstRow?.room_type_id) return null;
-    const roomType = roomTypes.find(rt => rt.id === firstRow.room_type_id);
-    if (!roomType) return null;
-    const { breakdown, total } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
-    return { breakdown, total, roomType };
-  }, [roomRows, roomTypes, form.check_in_date, form.check_out_date, holidays]);
+  // Rate breakdowns for ALL room rows (not just the first)
+  const rateBreakdowns = useMemo(() => {
+    return roomRows.map((row, idx) => {
+      if (!row.room_type_id) return null;
+      const rt = roomTypes.find(r => r.id === row.room_type_id);
+      if (!rt) return null;
+      const { breakdown, total } = calculateTotalRate(form.check_in_date, form.check_out_date, rt, holidays);
+      return { idx, breakdown, total, roomType: rt, roomNumber: rooms.find(r => r.id === row.room_id)?.room_number };
+    }).filter(Boolean);
+  }, [roomRows, roomTypes, rooms, form.check_in_date, form.check_out_date, holidays]);
+
+  const grandRateTotal = rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0);
 
   return (
     <Modal open={open} onClose={onClose} title={reservation ? t('common.edit') : t('res.new_reservation')} size="xl"
@@ -723,24 +726,42 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           ))}
         </div>
 
-        {rateBreakdown && rateBreakdown.breakdown.length > 0 && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')} · {rateBreakdown.roomType.name}</p>
-                <p className="text-xs text-blue-700">{formatIDR(rateBreakdown.total)} {t('common.total').toLowerCase()} / {nights} {t('common.nights').toLowerCase()}</p>
-              </div>
-              <span className="text-xs text-blue-700">{formatIDR(Math.round(rateBreakdown.total / nights))} / {t('common.nights').toLowerCase()}</span>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
-              {rateBreakdown.breakdown.map((day) => (
-                <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
-                  <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
-                  <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType, 'en')}</p>
-                  <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+        {rateBreakdowns.length > 0 && (
+          <div className="space-y-3">
+            {rateBreakdowns.map((rb) => {
+              if (!rb) return null;
+              const isTouched = rateTouched[rb.idx];
+              return (
+                <div key={rb.idx} className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">
+                        {t('room_types.rate_preview')} · {rb.roomType.name}
+                        {isGroup && rb.roomNumber ? ` (Room ${rb.roomNumber})` : isGroup ? ` (Room ${rb.idx + 1})` : ''}
+                      </p>
+                      <p className="text-xs text-blue-700">{formatIDR(rb.total)} {t('common.total').toLowerCase()} / {nights} {t('common.nights').toLowerCase()}</p>
+                    </div>
+                    <span className="text-xs text-blue-700">{formatIDR(Math.round(rb.total / nights))} / {t('common.nights').toLowerCase()}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+                    {rb.breakdown.map((day) => (
+                      <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
+                        <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
+                        <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType, 'en')}</p>
+                        <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
+            {isGroup && rateBreakdowns.length > 1 && (
+              <div className="flex justify-end">
+                <span className="text-sm font-semibold text-blue-900">
+                  {t('common.total')}: {formatIDR(grandRateTotal)}
+                </span>
+              </div>
+            )}
           </div>
         )}
 

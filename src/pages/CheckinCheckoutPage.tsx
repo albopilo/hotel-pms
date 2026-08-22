@@ -742,6 +742,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [rateTouched, setRateTouched] = useState(false);
 
   const previousCheckoutDate = reservation.check_out_date;
   const [newCheckoutDate, setNewCheckoutDate] = useState(addDays(previousCheckoutDate, 1));
@@ -793,7 +794,8 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
     return { breakdown, total };
   }, [roomType, previousCheckoutDate, newCheckoutDate, extraNights, holidays]);
 
-  const additionalCharge = rateBreakdown ? rateBreakdown.total : Number(roomRate) * extraNights;
+  const manualRate = rateTouched && Number(roomRate) > 0 ? Number(roomRate) : null;
+  const additionalCharge = manualRate ? manualRate * extraNights : (rateBreakdown ? rateBreakdown.total : Number(roomRate) * extraNights);
 
   const handleExtend = async () => {
     if (newCheckoutDate <= previousCheckoutDate) {
@@ -838,9 +840,9 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
 
       if (resError) throw resError;
 
-      // Add room charge for extra nights to folio — one item per night using rate breakdown
+      // Add room charge for extra nights to folio
       if (folio) {
-        if (rateBreakdown && rateBreakdown.breakdown.length > 0) {
+        if (!manualRate && rateBreakdown && rateBreakdown.breakdown.length > 0) {
           const items = rateBreakdown.breakdown.map((day) => ({
             folio_id: folio.id,
             branch_id: reservation.branch_id,
@@ -943,9 +945,21 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
 
         <Input label={t('res.new_checkout_date')} type="date" value={newCheckoutDate} onChange={e => setNewCheckoutDate(e.target.value)} required />
 
-        {rateBreakdown && rateBreakdown.breakdown.length > 0 ? (
+        <Input
+          label={t('res.room_rate_per_night')}
+          type="number"
+          value={roomRate}
+          onChange={e => { setRoomRate(e.target.value); setRateTouched(true); }}
+          hint={rateTouched ? 'Custom rate (auto-calc overridden)' : (rateBreakdown ? 'Auto-calculated from weekday/weekend rates — edit to override' : undefined)}
+          required
+        />
+
+        {rateBreakdown && rateBreakdown.breakdown.length > 0 && !manualRate && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3 text-sm">
-            <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')}{roomType ? ` · ${roomType.name}` : ''}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')}{roomType ? ` · ${roomType.name}` : ''}</p>
+              <span className="text-xs text-blue-700">{formatIDR(rateBreakdown.total)} total</span>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
               {rateBreakdown.breakdown.map((day) => (
                 <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
@@ -956,8 +970,12 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
               ))}
             </div>
           </div>
-        ) : (
-          <Input label={t('res.room_rate_per_night')} type="number" value={roomRate} onChange={e => setRoomRate(e.target.value)} required />
+        )}
+
+        {manualRate && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+            Custom rate active: {formatIDR(manualRate)} × {extraNights} {t('common.nights')} = {formatIDR(additionalCharge)}
+          </div>
         )}
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2 text-sm">
