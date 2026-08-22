@@ -64,7 +64,7 @@ function clearDraft() {
   }
 }
 
-export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavigateToPayment, onNavigateToInvoice }: { searchQuery?: string; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
+export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectReservation, onNavigateToPayment, onNavigateToInvoice }: { searchQuery?: string; initialGuestId?: string | null; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -76,6 +76,7 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavi
   const [bookingSources, setBookingSources] = useState<BookingSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
@@ -100,6 +101,12 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavi
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (searchQuery !== localSearch) setLocalSearch(searchQuery); }, [searchQuery]);
+
+  useEffect(() => {
+    if (initialGuestId && guests.length > 0) {
+      setShowForm(true);
+    }
+  }, [initialGuestId, guests]);
 
   const guestMap = new Map(guests.map(x => [x.id, x]));
   const roomMap = new Map(rooms.map(x => [x.id, x]));
@@ -173,6 +180,7 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavi
                       <td className="text-center"><ResStatusBadge status={r.status} label={t(`res.${r.status}`)} /></td>
                       <td className="py-3 px-4"><div className="flex gap-2 justify-end">
                         <button onClick={e => { e.stopPropagation(); onSelectReservation?.(r.id); }} className="text-blue-600 text-xs font-medium">{t('common.view')}</button>
+                        <button onClick={e => { e.stopPropagation(); setEditingReservation(r); setShowForm(true); }} className="text-slate-600 text-xs font-medium">{t('common.edit')}</button>
                         <button onClick={e => { e.stopPropagation(); onNavigateToPayment?.(r.id); }} className="text-emerald-600 text-xs font-medium">{t('res.view_folio')}</button>
                         {r.status !== 'tentative' && onNavigateToInvoice && (
                           <button onClick={e => { e.stopPropagation(); onNavigateToInvoice?.(r.id); }} className="text-slate-600 text-xs font-medium flex items-center gap-1"><Receipt size={12} />{t('res.view_invoice')}</button>
@@ -189,8 +197,8 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavi
 
       <ReservationFormModal
         open={showForm}
-        onClose={() => setShowForm(false)}
-        onCancel={() => { clearDraft(); setShowForm(false); }}
+        onClose={() => { setShowForm(false); setEditingReservation(null); }}
+        onCancel={() => { clearDraft(); setShowForm(false); setEditingReservation(null); }}
         branches={branches}
         rooms={rooms}
         roomTypes={roomTypes}
@@ -199,13 +207,15 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavi
         userId={user!.id}
         orgId={user!.organization_id}
         defaultBranchId={selectedBranchId || branches[0]?.id || ''}
-        onSaved={() => { clearDraft(); setShowForm(false); load(); }}
+        reservation={editingReservation}
+        preselectGuestId={initialGuestId || undefined}
+        onSaved={() => { clearDraft(); setShowForm(false); setEditingReservation(null); load(); }}
       />
     </div>
   );
 }
 
-export function ReservationFormModal({ open, onClose, onCancel, branches, rooms, roomTypes, guests, bookingSources, userId, orgId, defaultBranchId, reservation, onSaved }: {
+export function ReservationFormModal({ open, onClose, onCancel, branches, rooms, roomTypes, guests, bookingSources, userId, orgId, defaultBranchId, reservation, preselectGuestId, onSaved }: {
   open: boolean;
   onClose: () => void;
   onCancel: () => void;
@@ -218,6 +228,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   orgId: string;
   defaultBranchId: string;
   reservation?: Reservation | null;
+  preselectGuestId?: string;
   onSaved: () => void;
 }) {
   const { t } = useI18n();
@@ -260,14 +271,14 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     } else if (open) {
       const draft = loadDraft();
       if (draft) {
-        setForm({ ...initialForm, ...draft.form, branch_id: draft.form.branch_id || defaultBranchId });
+        setForm({ ...initialForm, ...draft.form, branch_id: draft.form.branch_id || defaultBranchId, guest_id: preselectGuestId || draft.form.guest_id });
         setRoomRows(draft.roomRows.length ? draft.roomRows : [{ room_type_id: '', room_id: '', rate: '' }]);
       } else {
-        setForm({ ...initialForm, branch_id: defaultBranchId });
+        setForm({ ...initialForm, branch_id: defaultBranchId, guest_id: preselectGuestId || '' });
         setRoomRows([{ room_type_id: '', room_id: '', rate: '' }]);
       }
     }
-  }, [reservation, open, defaultBranchId]);
+  }, [reservation, open, defaultBranchId, preselectGuestId]);
 
   // Auto-save draft whenever form or roomRows change (only for new reservations, not edits)
   useEffect(() => {

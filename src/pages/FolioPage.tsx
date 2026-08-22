@@ -11,7 +11,7 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDateTime } from '@/lib/format';
-import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle } from 'lucide-react';
+import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
@@ -22,7 +22,7 @@ type FolioListRow = Folio & {
   reservation?: { room?: Pick<Room, 'room_number'> | null } | null;
 };
 
-export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string; reservationId?: string | null }) {
+export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onSelectReservation, onNavigateToGuest }: { searchQuery?: string; reservationId?: string | null; onNavigateToInvoice?: (id: string) => void; onSelectReservation?: (id: string) => void; onNavigateToGuest?: (id: string) => void; }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -103,12 +103,12 @@ export function FolioPage({ searchQuery, reservationId }: { searchQuery?: string
         </Card>
       )}
 
-      {selectedFolio && <FolioDetailModal folio={selectedFolio} onClose={() => { setSelectedFolio(null); load(); }} />}
+      {selectedFolio && <FolioDetailModal folio={selectedFolio} onClose={() => { setSelectedFolio(null); load(); }} onNavigateToInvoice={onNavigateToInvoice} onSelectReservation={onSelectReservation} onNavigateToGuest={onNavigateToGuest} />}
     </div>
   );
 }
 
-function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => void }) {
+function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReservation, onNavigateToGuest }: { folio: Folio; onClose: () => void; onNavigateToInvoice?: (id: string) => void; onSelectReservation?: (id: string) => void; onNavigateToGuest?: (id: string) => void; }) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -182,9 +182,9 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
     <Modal open onClose={onClose} title={`${t('folio.title')} — ${folio.folio_number}`} size="xl">
       <div className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div><span className="text-slate-500">{t('common.guest')}:</span> <span className="font-medium">{guest?.full_name || '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.guest')}:</span> {onNavigateToGuest && folio.guest_id ? <button onClick={() => onNavigateToGuest(folio.guest_id!)} className="font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"><UserIcon size={12} />{guest?.full_name || '-'}</button> : <span className="font-medium">{guest?.full_name || '-'}</span>}</div>
           <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{room?.room_number || '-'}</span></div>
-          <div><span className="text-slate-500">{t('common.reservation')}:</span> <span className="font-medium">{reservation?.reservation_number || '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.reservation')}:</span> {onSelectReservation && folio.reservation_id ? <button onClick={() => onSelectReservation(folio.reservation_id)} className="font-medium text-blue-600 hover:text-blue-700">{reservation?.reservation_number || '-'}</button> : <span className="font-medium">{reservation?.reservation_number || '-'}</span>}</div>
           <div><span className="text-slate-500">{t('common.status')}:</span> <Badge color={folio.status === 'open' ? 'blue' : 'gray'}>{folio.status}</Badge></div>
         </div>
 
@@ -240,16 +240,24 @@ function FolioDetailModal({ folio, onClose }: { folio: Folio; onClose: () => voi
           </table>
         </div>
 
-        {!isFinalized && (
-          <div className="flex flex-wrap gap-2">
-            <Button size="sm" onClick={() => setShowAddCharge(true)}><Plus size={14} /> {t('folio.add_charge')}</Button>
-            <Button size="sm" variant="success" onClick={() => setShowTakePayment(true)}><Plus size={14} /> {t('folio.take_payment')}</Button>
-            <Button size="sm" variant="outline" onClick={() => setShowTransfer(true)}><ArrowRightLeft size={14} /> {t('res.transfer_room')}</Button>
-          </div>
-        )}
-        {isFinalized && (
-          <Button size="sm" variant="warning" onClick={() => setShowPostStay(true)}><Plus size={14} /> {t('folio.post_stay_charge')}</Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {!isFinalized && (
+            <>
+              <Button size="sm" onClick={() => setShowAddCharge(true)}><Plus size={14} /> {t('folio.add_charge')}</Button>
+              <Button size="sm" variant="success" onClick={() => setShowTakePayment(true)}><Plus size={14} /> {t('folio.take_payment')}</Button>
+              <Button size="sm" variant="outline" onClick={() => setShowTransfer(true)}><ArrowRightLeft size={14} /> {t('res.transfer_room')}</Button>
+            </>
+          )}
+          {isFinalized && (
+            <Button size="sm" variant="warning" onClick={() => setShowPostStay(true)}><Plus size={14} /> {t('folio.post_stay_charge')}</Button>
+          )}
+          {onNavigateToInvoice && folio.reservation_id && (
+            <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(folio.reservation_id)}><Receipt size={14} /> {t('res.view_invoice')}</Button>
+          )}
+          {onSelectReservation && folio.reservation_id && (
+            <Button size="sm" variant="outline" onClick={() => onSelectReservation(folio.reservation_id)}><FileText size={14} /> {t('nav.checkin_checkout')}</Button>
+          )}
+        </div>
       </div>
 
       {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); }} />}

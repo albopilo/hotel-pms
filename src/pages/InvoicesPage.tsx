@@ -10,12 +10,12 @@ import { Modal } from '@/components/ui/Modal';
 import { InvoiceStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage,EmptyState } from '@/components/ui/States';
 import { formatIDR,formatDate,formatDateTime } from '@/lib/format';
-import { Receipt,Search,Printer } from 'lucide-react';
+import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
 import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
 
-export function InvoicesPage({searchQuery}:{searchQuery?:string}) {
+export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNavigateToGuest}:{searchQuery?:string;reservationId?:string|null;onNavigateToPayment?:(id:string)=>void;onNavigateToGuest?:(id:string)=>void}) {
   const {branches}=useAuth();
   const {selectedBranchId}=useBranch();
   const {t}=useI18n();
@@ -41,6 +41,13 @@ setInvoices(data || []);
   },[branchIds]);
 
   useEffect(()=>{load()},[load]);
+
+  useEffect(()=>{
+    if(reservationId&&invoices.length>0){
+      const inv=invoices.find(i=>i.reservation_id===reservationId);
+      if(inv)setSelected(inv);
+    }
+  },[reservationId,invoices]);
 
   if(loading)return <LoadingPage message={t('common.loading')}/>;
 
@@ -116,6 +123,8 @@ setInvoices(data || []);
           load();
         }}
         onPrint={() => setPrintInvoiceId(selected.id)}
+        onNavigateToPayment={onNavigateToPayment}
+        onNavigateToGuest={onNavigateToGuest}
       />
     )}
 
@@ -149,7 +158,7 @@ export async function finalizeCheckoutInvoice(invoiceId:string){
   }).eq('id',invoiceId);
 }
 
-function InvoiceDetailModal({invoice,onClose,onPrint}:{invoice:Invoice;onClose:()=>void;onPrint:()=>void}) {
+function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavigateToGuest}:{invoice:Invoice;onClose:()=>void;onPrint:()=>void;onNavigateToPayment?:(id:string)=>void;onNavigateToGuest?:(id:string)=>void}) {
   const {user}=useAuth();
   const {t}=useI18n();
   const [items,setItems]=useState<InvoiceItem[]>([]);
@@ -206,9 +215,17 @@ function InvoiceDetailModal({invoice,onClose,onPrint}:{invoice:Invoice;onClose:(
           {invoice.issued_at&&formatDateTime(invoice.issued_at)}
         </div>
         
-        <Button variant="outline" onClick={onPrint}>
-          <Printer size={16}/> {t('common.print')}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={onPrint}>
+            <Printer size={16}/> {t('common.print')}
+          </Button>
+          {onNavigateToPayment&&invoice.folio_id&&(
+            <Button variant="outline" onClick={()=>onNavigateToPayment(invoice.reservation_id||'')}><FileText size={14}/> {t('res.view_folio')}</Button>
+          )}
+          {onNavigateToGuest&&invoice.guest_id&&(
+            <Button variant="outline" onClick={()=>onNavigateToGuest(invoice.guest_id!)}><UserIcon size={14}/> {t('nav.guests')}</Button>
+          )}
+        </div>
       </div>
     </Modal>
   );
