@@ -7,8 +7,37 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, todayISO, addDays } from '@/lib/format';
+import { formatIDR, todayISO } from '@/lib/format';
+import { getBusinessDate } from '@/services/businessDateService';
 import { FileSpreadsheet, Download } from 'lucide-react';
+
+const REPORT_DRAFT_KEY = 'reports_form_draft';
+
+interface ReportDraft {
+  reportKey: string | null;
+  dateFrom: string;
+  dateTo: string;
+}
+
+function loadReportDraft(): ReportDraft | null {
+  try {
+    const raw = localStorage.getItem(REPORT_DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as ReportDraft;
+    if (!parsed.dateFrom || !parsed.dateTo) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveReportDraft(draft: ReportDraft) {
+  try {
+    localStorage.setItem(REPORT_DRAFT_KEY, JSON.stringify(draft));
+  } catch {
+    // ignore quota errors
+  }
+}
 
 type ReportCategory = 'front_office' | 'financial' | 'management';
 
@@ -106,9 +135,37 @@ export function ReportsPage() {
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
 
+  const draft = useMemo(() => loadReportDraft(), []);
   const [activeReport, setActiveReport] = useState<ReportDef | null>(null);
-  const [dateFrom, setDateFrom] = useState(addDays(todayISO(), -30));
-  const [dateTo, setDateTo] = useState(todayISO());
+  const [dateFrom, setDateFrom] = useState(draft?.dateFrom || '');
+  const [dateTo, setDateTo] = useState(draft?.dateTo || '');
+  const [businessDateResolved, setBusinessDateResolved] = useState(false);
+
+  // Resolve the current business date on mount and use it as the default date range
+  useEffect(() => {
+    (async () => {
+      if (draft?.dateFrom && draft?.dateTo) {
+        setBusinessDateResolved(true);
+        return;
+      }
+      const branchId = selectedBranchId || branches[0]?.id;
+      let bd = todayISO();
+      if (branchId) {
+        try { bd = await getBusinessDate(branchId); } catch { /* fall back to today */ }
+      }
+      setDateFrom(bd);
+      setDateTo(bd);
+      setBusinessDateResolved(true);
+    })();
+  }, []); // run once on mount
+
+  // Restore the active report from draft after REPORTS is available
+  useEffect(() => {
+    if (draft?.reportKey && !activeReport) {
+      const found = REPORTS.find(r => r.key === draft.reportKey);
+      if (found) setActiveReport(found);
+    }
+  }, []); // run once on mount
   const [data, setData] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [dailyBlocks, setDailyBlocks] = useState<{ payments: PaymentBlockRow[]; charges: ChargeBlockRow[] } | null>(null);
@@ -246,8 +303,15 @@ export function ReportsPage() {
   }, [branchIds, dateFrom, dateTo]);
 
   useEffect(() => {
-    if (activeReport) runReport(activeReport);
-  }, [activeReport, runReport]);
+    if (activeReport && businessDateResolved) runReport(activeReport);
+  }, [activeReport, runReport, businessDateResolved]);
+
+  // Persist the current selection + date range so it survives navigation
+  useEffect(() => {
+    if (businessDateResolved && dateFrom && dateTo) {
+      saveReportDraft({ reportKey: activeReport?.key || null, dateFrom, dateTo });
+    }
+  }, [activeReport, dateFrom, dateTo, businessDateResolved]);
 
   const exportCSV = () => {
     if (!data.length && !summary && !dailyBlocks) return;
