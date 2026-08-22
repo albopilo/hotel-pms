@@ -10,12 +10,21 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, CreditCard as Edit, Users, Phone, Mail } from 'lucide-react';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 
 const ID_TYPES = ['KTP', 'Passport', 'SIM', 'Other'];
 
-export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
+interface GuestsPageProps {
+  searchQuery?: string;
+  selectedGuestId?: string | null;
+  onSelectReservation?: (id: string) => void;
+  onNavigateToPayment?: (id: string) => void;
+  onNavigateToInvoice?: (id: string) => void;
+  onNewReservationForGuest?: (guestId: string) => void;
+}
+
+export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservation, onNavigateToPayment, onNavigateToInvoice, onNewReservationForGuest }: GuestsPageProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -39,6 +48,13 @@ export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
   useEffect(() => {
     if (searchQuery !== localSearch) setLocalSearch(searchQuery);
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (selectedGuestId && guests.length > 0) {
+      const g = guests.find((x) => x.id === selectedGuestId);
+      if (g) setSelectedGuest(g);
+    }
+  }, [selectedGuestId, guests]);
 
   const filtered = guests.filter((g) => {
     const q = localSearch.toLowerCase().trim();
@@ -91,7 +107,12 @@ export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
                     <td className="py-3 px-4">{g.nationality || '-'}</td>
                     <td className="py-3 px-4">{g.company || '-'}</td>
                     <td className="py-3 px-4 text-right">
-                      <button onClick={(e) => { e.stopPropagation(); setEditing(g); setShowForm(true); }} className="text-slate-400 hover:text-blue-600"><Edit size={16} /></button>
+                      <div className="flex justify-end gap-1">
+                        {onNewReservationForGuest && (
+                          <button onClick={(e) => { e.stopPropagation(); onNewReservationForGuest(g.id); }} className="text-slate-400 hover:text-blue-600" title={t('action.new_reservation')}><CalendarPlus size={16} /></button>
+                        )}
+                        <button onClick={(e) => { e.stopPropagation(); setEditing(g); setShowForm(true); }} className="text-slate-400 hover:text-blue-600"><Edit size={16} /></button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -103,7 +124,7 @@ export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
 
       {/* Guest detail */}
       <Modal open={!!selectedGuest} onClose={() => setSelectedGuest(null)} title={selectedGuest?.full_name || ''} size="lg">
-        {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} />}
+        {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} onSelectReservation={onSelectReservation} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onNewReservationForGuest={onNewReservationForGuest} />}
       </Modal>
 
       <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
@@ -111,7 +132,16 @@ export function GuestsPage({ searchQuery = '' }: { searchQuery?: string }) {
   );
 }
 
-function GuestDetail({ guest, onEdit }: { guest: Guest; onEdit: () => void }) {
+interface GuestDetailProps {
+  guest: Guest;
+  onEdit: () => void;
+  onSelectReservation?: (id: string) => void;
+  onNavigateToPayment?: (id: string) => void;
+  onNavigateToInvoice?: (id: string) => void;
+  onNewReservationForGuest?: (guestId: string) => void;
+}
+
+function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, onNavigateToInvoice, onNewReservationForGuest }: GuestDetailProps) {
   const { t } = useI18n();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [stats, setStats] = useState({ totalStays: 0, totalSpending: 0, outstanding: 0 });
@@ -153,18 +183,34 @@ function GuestDetail({ guest, onEdit }: { guest: Guest; onEdit: () => void }) {
       </div>
 
       <div>
-        <h4 className="font-semibold text-slate-700 mb-2">{t('guest.previous_stays')}</h4>
+        <div className="flex items-center justify-between mb-2">
+          <h4 className="font-semibold text-slate-700">{t('guest.previous_stays')}</h4>
+          {onNewReservationForGuest && (
+            <Button size="sm" variant="outline" onClick={() => onNewReservationForGuest(guest.id)}><CalendarPlus size={14} /> {t('action.new_reservation')}</Button>
+          )}
+        </div>
         {reservations.length === 0 ? (
           <p className="text-sm text-slate-400">{t('common.no_data')}</p>
         ) : (
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {reservations.map((r) => (
-              <div key={r.id} className="flex items-center justify-between text-sm border border-slate-100 rounded-lg px-3 py-2">
-                <div>
+              <div key={r.id} className="flex items-center justify-between text-sm border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50">
+                <div className="flex items-center gap-2">
                   <span className="font-medium">{r.reservation_number}</span>
-                  <span className="text-slate-400 ml-2">{formatDate(r.check_in_date)} → {formatDate(r.check_out_date)}</span>
+                  <span className="text-slate-400">{formatDate(r.check_in_date)} → {formatDate(r.check_out_date)}</span>
                 </div>
-                <Badge color={r.status === 'checked_out' ? 'gray' : r.status === 'checked_in' ? 'green' : 'blue'}>{t(`res.${r.status}`)}</Badge>
+                <div className="flex items-center gap-2">
+                  {onSelectReservation && (
+                    <button onClick={() => onSelectReservation(r.id)} className="text-blue-600 text-xs font-medium hover:text-blue-700">{t('common.view')}</button>
+                  )}
+                  {onNavigateToPayment && (
+                    <button onClick={() => onNavigateToPayment(r.id)} className="text-emerald-600 text-xs font-medium hover:text-emerald-700 flex items-center gap-1"><FileText size={12} /> {t('res.view_folio')}</button>
+                  )}
+                  {onNavigateToInvoice && r.status !== 'tentative' && (
+                    <button onClick={() => onNavigateToInvoice(r.id)} className="text-slate-600 text-xs font-medium hover:text-slate-800 flex items-center gap-1"><Receipt size={12} /> {t('res.view_invoice')}</button>
+                  )}
+                  <Badge color={r.status === 'checked_out' ? 'gray' : r.status === 'checked_in' ? 'green' : 'blue'}>{t(`res.${r.status}`)}</Badge>
+                </div>
               </div>
             ))}
           </div>

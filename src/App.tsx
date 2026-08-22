@@ -32,6 +32,8 @@ function AuthenticatedApp() {
   const [currentPage, setCurrentPage] = useState<PageKey>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
+  const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
+  const [newReservationGuestId, setNewReservationGuestId] = useState<string | null>(null);
 
   useEffect(() => {
     if (branches.length > 0) {
@@ -49,10 +51,23 @@ function AuthenticatedApp() {
     setCurrentPage('payments');
   };
 
+  const handleNavigateToInvoice = (id: string) => {
+    setSelectedReservationId(id);
+    setCurrentPage('invoices');
+  };
+
+  const handleNavigateToGuest = (id: string) => {
+    setSelectedGuestId(id);
+    setCurrentPage('guests');
+  };
+
   const handleNavigate = (page: PageKey) => {
     setCurrentPage(page);
-    if (page !== 'checkin_checkout' && page !== 'payments') {
+    if (page !== 'checkin_checkout' && page !== 'payments' && page !== 'invoices') {
       setSelectedReservationId(null);
+    }
+    if (page !== 'guests') {
+      setSelectedGuestId(null);
     }
   };
 
@@ -61,19 +76,19 @@ function AuthenticatedApp() {
       case 'dashboard':
         return <DashboardPage />;
       case 'reservations':
-        return <ReservationsPage searchQuery={searchQuery} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
+        return <ReservationsPage searchQuery={searchQuery} initialGuestId={newReservationGuestId} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'calendar':
         return <CalendarPage onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
       case 'rooms':
         return <RoomsPage />;
       case 'guests':
-        return <GuestsPage searchQuery={searchQuery} />;
+        return <GuestsPage searchQuery={searchQuery} selectedGuestId={selectedGuestId} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} onNewReservationForGuest={(guestId) => { setNewReservationGuestId(guestId); setCurrentPage('reservations'); }} />;
       case 'checkin_checkout':
-        return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} onNavigateToPayment={handleNavigateToPayment} />;
+        return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'payments':
-        return <FolioPage searchQuery={searchQuery} reservationId={selectedReservationId} />;
+        return <FolioPage searchQuery={searchQuery} reservationId={selectedReservationId} onNavigateToInvoice={handleNavigateToInvoice} onSelectReservation={handleSelectReservation} onNavigateToGuest={handleNavigateToGuest} />;
       case 'invoices':
-        return <InvoicesPage searchQuery={searchQuery} />;
+        return <InvoicesPage searchQuery={searchQuery} reservationId={selectedReservationId} onNavigateToPayment={handleNavigateToPayment} onNavigateToGuest={handleNavigateToGuest} />;
       case 'reports':
         return <ReportsPage />;
       case 'night_audit':

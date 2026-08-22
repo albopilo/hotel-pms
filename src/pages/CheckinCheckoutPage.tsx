@@ -162,6 +162,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
             <div className="flex gap-1">
               <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
               {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
+              {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/></Button>}
               <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}><LogOut size={14}/>{t('action.check_out')}</Button>
             </div>
           </div>;
@@ -178,7 +179,11 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
               <p className="font-medium text-slate-800">{g?.full_name || '-'}</p>
               <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {r.actual_check_out ? formatDateTime(r.actual_check_out) : `${formatDate(r.check_out_date)} ${formatTime(r.check_out_time)}`}</p>
             </div>
-            <Badge color="gray">{t('res.checked_out')}</Badge>
+            <div className="flex items-center gap-1">
+              {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
+              {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(r.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
+              <Badge color="gray">{t('res.checked_out')}</Badge>
+            </div>
           </div>;
         })}</div>}
       </Card>
