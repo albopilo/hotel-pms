@@ -1,6 +1,8 @@
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import type { Branch } from '@/types/database';
 
+const BRANCH_STORAGE_KEY = 'selected_branch_id';
+
 interface BranchContextValue {
   selectedBranchId: string | null;
   selectedBranch: Branch | null;
@@ -10,12 +12,20 @@ interface BranchContextValue {
 const BranchContext = createContext<BranchContextValue | null>(null);
 
 export function BranchProvider({ children, branches }: { children: ReactNode; branches: Branch[] }) {
-  const [selectedBranchId, setSelectedBranchIdState] = useState<string | null>(
-    branches.length > 0 ? null : null
-  );
+  const [selectedBranchId, setSelectedBranchIdState] = useState<string | null>(() => {
+    try {
+      const stored = localStorage.getItem(BRANCH_STORAGE_KEY);
+      if (stored && branches.some((b) => b.id === stored)) return stored;
+    } catch { /* ignore */ }
+    return null;
+  });
 
   const setSelectedBranchId = useCallback((id: string | null) => {
     setSelectedBranchIdState(id);
+    try {
+      if (id) localStorage.setItem(BRANCH_STORAGE_KEY, id);
+      else localStorage.removeItem(BRANCH_STORAGE_KEY);
+    } catch { /* ignore */ }
   }, []);
 
   const selectedBranch = branches.find((b) => b.id === selectedBranchId) || null;

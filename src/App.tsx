@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { I18nProvider } from '@/lib/i18n';
 import { ToastProvider } from '@/lib/toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -35,12 +35,6 @@ function AuthenticatedApp() {
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [newReservationGuestId, setNewReservationGuestId] = useState<string | null>(null);
   const processedNavId = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (branches.length > 0) {
-      setSelectedBranchId(null);
-    }
-  }, [branches, setSelectedBranchId]);
 
   const handleSelectReservation = (id: string) => {
     setSelectedReservationId(id);
