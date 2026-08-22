@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { I18nProvider } from '@/lib/i18n';
 import { ToastProvider } from '@/lib/toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -34,6 +34,7 @@ function AuthenticatedApp() {
   const [selectedReservationId, setSelectedReservationId] = useState<string | null>(null);
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [newReservationGuestId, setNewReservationGuestId] = useState<string | null>(null);
+  const processedNavId = useRef<string | null>(null);
 
   useEffect(() => {
     if (branches.length > 0) {
@@ -43,16 +44,19 @@ function AuthenticatedApp() {
 
   const handleSelectReservation = (id: string) => {
     setSelectedReservationId(id);
+    processedNavId.current = id;
     setCurrentPage('checkin_checkout');
   };
 
   const handleNavigateToPayment = (id: string) => {
     setSelectedReservationId(id);
+    processedNavId.current = id;
     setCurrentPage('payments');
   };
 
   const handleNavigateToInvoice = (id: string) => {
     setSelectedReservationId(id);
+    processedNavId.current = id;
     setCurrentPage('invoices');
   };
 
@@ -63,9 +67,8 @@ function AuthenticatedApp() {
 
   const handleNavigate = (page: PageKey) => {
     setCurrentPage(page);
-    if (page !== 'checkin_checkout' && page !== 'payments' && page !== 'invoices') {
-      setSelectedReservationId(null);
-    }
+    setSelectedReservationId(null);
+    processedNavId.current = null;
     if (page !== 'guests') {
       setSelectedGuestId(null);
     }

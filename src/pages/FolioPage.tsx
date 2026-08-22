@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -10,12 +10,12 @@ import { Modal } from '@/components/ui/Modal';
 import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, formatDateTime } from '@/lib/format';
+import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
-import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod } from '@/types/database';
+import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType } from '@/types/database';
 
 type FolioListRow = Folio & {
   guest?: Pick<Guest, 'full_name'> | null;
@@ -30,6 +30,7 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
   const [loading, setLoading] = useState(true);
   const [selectedFolio, setSelectedFolio] = useState<Folio | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
+  const processedResId = useRef<string | null>(null);
 
   const branchIds = useMemo(
   () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
@@ -48,12 +49,13 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (reservationId) {
-      (async () => {
-        const { data } = await supabase.from('folios').select('*').eq('reservation_id', reservationId).maybeSingle();
-        if (data) setSelectedFolio(data as Folio);
-      })();
-    }
+    if (!reservationId) return;
+    if (processedResId.current === reservationId) return;
+    processedResId.current = reservationId;
+    (async () => {
+      const { data } = await supabase.from('folios').select('*').eq('reservation_id', reservationId).maybeSingle();
+      if (data) setSelectedFolio(data as Folio);
+    })();
   }, [reservationId]);
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
@@ -116,6 +118,9 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [guest, setGuest] = useState<Guest | null>(null);
   const [room, setRoom] = useState<Room | null>(null);
+  const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
+  const [roomType, setRoomType] = useState<RoomType | null>(null);
+  const [roomCount, setRoomCount] = useState<number>(1);
   const [chargeCats, setChargeCats] = useState<ChargeCategory[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -145,10 +150,35 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       const { data: r } = resRecord?.room_id
         ? await supabase.from('rooms').select('*').eq('id', resRecord.room_id).maybeSingle()
         : { data: null };
+
+      let bs: BookingSource | null = null;
+      if (resRecord?.booking_source_id) {
+        const { data: bsData } = await supabase.from('booking_sources').select('*').eq('id', resRecord.booking_source_id).maybeSingle();
+        bs = bsData as BookingSource | null;
+      }
+
+      let rt: RoomType | null = null;
+      if (resRecord?.room_type_id) {
+        const { data: rtData } = await supabase.from('room_types').select('*').eq('id', resRecord.room_type_id).maybeSingle();
+        rt = rtData as RoomType | null;
+      } else if (r) {
+        const { data: rtData } = await supabase.from('room_types').select('*').eq('id', (r as Room).room_type_id).maybeSingle();
+        rt = rtData as RoomType | null;
+      }
+
+      let count = 1;
+      if (resRecord?.is_group) {
+        const { count: groupCount } = await supabase.from('reservation_rooms').select('*', { count: 'exact', head: true }).eq('reservation_id', resRecord.id).eq('status', 'active');
+        count = groupCount || 1;
+      }
+
       setItems((fi as FolioItem[]) || []);
       setReservation(resRecord);
       setGuest(g as Guest);
       setRoom(r as Room);
+      setBookingSource(bs);
+      setRoomType(rt);
+      setRoomCount(count);
       setChargeCats((cc as ChargeCategory[]) || []);
       setPaymentMethods((pm as PaymentMethod[]) || []);
       setLoading(false);
@@ -186,6 +216,14 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
           <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{room?.room_number || '-'}</span></div>
           <div><span className="text-slate-500">{t('common.reservation')}:</span> {onSelectReservation && folio.reservation_id ? <button onClick={() => onSelectReservation(folio.reservation_id)} className="font-medium text-blue-600 hover:text-blue-700">{reservation?.reservation_number || '-'}</button> : <span className="font-medium">{reservation?.reservation_number || '-'}</span>}</div>
           <div><span className="text-slate-500">{t('common.status')}:</span> <Badge color={folio.status === 'open' ? 'blue' : 'gray'}>{folio.status}</Badge></div>
+          {roomType && <div><span className="text-slate-500">{t('common.room_type')}:</span> <span className="font-medium">{roomType.name}</span></div>}
+          <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{reservation ? `${formatDate(reservation.check_in_date)} ${formatTime(reservation.check_in_time)}` : '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.check_out')}:</span> <span className="font-medium">{reservation ? `${formatDate(reservation.check_out_date)} ${formatTime(reservation.check_out_time)}` : '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.nights')}:</span> <span className="font-medium">{reservation?.num_nights || '-'}</span></div>
+          <div><span className="text-slate-500">{t('res.adults_children')}:</span> <span className="font-medium">{reservation ? `${reservation.adults} ${t('common.adults')} / ${reservation.children} ${t('common.children')}` : '-'}</span></div>
+          {bookingSource && <div><span className="text-slate-500">{t('common.booking_source')}:</span> <span className="font-medium">{bookingSource.name}</span></div>}
+          <div><span className="text-slate-500">{t('res.group_rooms')}:</span> <span className="font-medium">{roomCount}</span></div>
+          <div><span className="text-slate-500">{t('common.deposit')}:</span> <span className="font-medium">{reservation ? formatIDR(reservation.deposit) : '-'}</span></div>
         </div>
 
         {isFinalized && (

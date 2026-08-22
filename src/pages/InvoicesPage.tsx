@@ -1,4 +1,4 @@
-import { useState,useEffect,useCallback,useMemo } from 'react';
+import { useState,useEffect,useCallback,useMemo,useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -9,9 +9,9 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { InvoiceStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage,EmptyState } from '@/components/ui/States';
-import { formatIDR,formatDate,formatDateTime } from '@/lib/format';
+import { formatIDR,formatDate,formatDateTime,formatTime } from '@/lib/format';
 import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
-import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation } from '@/types/database';
+import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
 import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
 
@@ -25,6 +25,7 @@ export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNa
   const [selected,setSelected]=useState<Invoice|null>(null);
   const [printInvoiceId,setPrintInvoiceId]=useState<string|null>(null);
   const [localSearch,setLocalSearch]=useState(searchQuery||'');
+  const processedResId=useRef<string|null>(null);
 
   const branchIds=useMemo(()=>selectedBranchId?[selectedBranchId]:branches.map(b=>b.id),[selectedBranchId,branches]);
 
@@ -43,9 +44,13 @@ setInvoices(data || []);
   useEffect(()=>{load()},[load]);
 
   useEffect(()=>{
-    if(reservationId&&invoices.length>0){
-      const inv=invoices.find(i=>i.reservation_id===reservationId);
-      if(inv)setSelected(inv);
+    if(!reservationId)return;
+    if(processedResId.current===reservationId)return;
+    if(invoices.length===0)return;
+    const inv=invoices.find(i=>i.reservation_id===reservationId);
+    if(inv){
+      processedResId.current=reservationId;
+      setSelected(inv);
     }
   },[reservationId,invoices]);
 
@@ -165,16 +170,34 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
   const [guest,setGuest]=useState<Guest|null>(null);
   const [branch,setBranch]=useState<Branch|null>(null);
   const [reservation,setReservation]=useState<Reservation|null>(null);
+  const [bookingSource,setBookingSource]=useState<BookingSource|null>(null);
+  const [roomType,setRoomType]=useState<RoomType|null>(null);
   const [loading,setLoading]=useState(true);
 
   useEffect(()=>{
     (async()=>{
       const detail = await invoiceService.getInvoiceDetail(invoice.id);
 
+      const res = detail.reservations || null;
       setItems(detail.invoice_items || []);
       setGuest(detail.guests || null);
       setBranch(detail.branches || null);
-      setReservation(detail.reservations || null);
+      setReservation(res);
+
+      let bs: BookingSource|null = null;
+      if (res?.booking_source_id) {
+        const { data: bsData } = await supabase.from('booking_sources').select('*').eq('id', res.booking_source_id).maybeSingle();
+        bs = bsData as BookingSource|null;
+      }
+      setBookingSource(bs);
+
+      let rt: RoomType|null = null;
+      if (res?.room_type_id) {
+        const { data: rtData } = await supabase.from('room_types').select('*').eq('id', res.room_type_id).maybeSingle();
+        rt = rtData as RoomType|null;
+      }
+      setRoomType(rt);
+
       setLoading(false);
     })();
   },[invoice]);
@@ -189,9 +212,15 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
           <p>{branch?.address}</p>
         </div>
 
-        <div>
-          <b>{guest?.full_name||'-'}</b>
-          <p>Room: {reservation?.rooms?.room_number || '-'}</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div><b>{guest?.full_name||'-'}</b></div>
+          <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{reservation?.rooms?.room_number || '-'}</span></div>
+          {roomType && <div><span className="text-slate-500">{t('common.room_type')}:</span> <span className="font-medium">{roomType.name}</span></div>}
+          {bookingSource && <div><span className="text-slate-500">{t('common.booking_source')}:</span> <span className="font-medium">{bookingSource.name}</span></div>}
+          <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{reservation ? `${formatDate(reservation.check_in_date)} ${formatTime(reservation.check_in_time)}` : '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.check_out')}:</span> <span className="font-medium">{reservation ? `${formatDate(reservation.check_out_date)} ${formatTime(reservation.check_out_time)}` : '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.nights')}:</span> <span className="font-medium">{reservation?.num_nights ?? '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.adults')} / {t('common.children')}:</span> <span className="font-medium">{reservation ? `${reservation.adults} / ${reservation.children}` : '-'}</span></div>
         </div>
 
         <table className="w-full text-sm">
