@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase';
 import { invoiceService } from '@/services/invoiceService';
-import type { Invoice, InvoiceItem, Guest, Branch } from '@/types/database';
+import type { Invoice, InvoiceItem, Guest, Branch, BookingSource, RoomType, ReservationRoom } from '@/types/database';
 import { formatIDR, formatDateTime, formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { X } from 'lucide-react';
@@ -16,6 +17,9 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
   const [guest, setGuest] = useState<Guest | null>(null);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [reservation, setReservation] = useState<any>(null);
+  const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
+  const [roomType, setRoomType] = useState<RoomType | null>(null);
+  const [groupRooms, setGroupRooms] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,6 +33,22 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
         setGuest(detail.guests || null);
         setBranch(detail.branches || null);
         setReservation(detail.reservations || null);
+
+        const res = detail.reservations;
+        if (res?.booking_source_id) {
+          const { data: bsData } = await supabase.from('booking_sources').select('*').eq('id', res.booking_source_id).maybeSingle();
+          setBookingSource(bsData as BookingSource | null);
+        }
+        if (res?.room_type_id) {
+          const { data: rtData } = await supabase.from('room_types').select('*').eq('id', res.room_type_id).maybeSingle();
+          setRoomType(rtData as RoomType | null);
+        }
+        if (res?.is_group) {
+          const { data: rrData } = await supabase.from('reservation_rooms')
+            .select('*,room:rooms(*)').eq('reservation_id', res.id).eq('status','active').order('created_at');
+          setGroupRooms(rrData || []);
+        }
+
         setLoading(false);
       } catch {
         if (!cancelled) setLoading(false);
@@ -104,11 +124,14 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           <div>
             <p><span className="font-semibold">Check-in:</span> {reservation?.check_in_date ? formatDate(reservation.check_in_date) : '-'}</p>
             <p><span className="font-semibold">Check-out:</span> {reservation?.check_out_date ? formatDate(reservation.check_out_date) : '-'}</p>
+            <p><span className="font-semibold">Nights:</span> {reservation?.num_nights || '-'}</p>
+            <p><span className="font-semibold">Adults / Children:</span> {reservation ? `${reservation.adults} / ${reservation.children}` : '-'}</p>
           </div>
           <div>
-            <p><span className="font-semibold">Room Number:</span> {reservation?.rooms?.room_number || '-'}</p>
-            <p><span className="font-semibold">Room Type:</span> {reservation?.room_types?.name || '-'}</p>
-            <p><span className="font-semibold">Nights:</span> {reservation?.num_nights || '-'}</p>
+            <p><span className="font-semibold">Room Number:</span> {groupRooms.length > 1 ? groupRooms.map((rr:any) => rr.room?.room_number).filter(Boolean).join(', ') : (reservation?.rooms?.room_number || '-')}</p>
+            <p><span className="font-semibold">Room Type:</span> {roomType?.name || reservation?.room_types?.name || '-'}</p>
+            {bookingSource && <p><span className="font-semibold">Booking Source:</span> {bookingSource.name}</p>}
+            {reservation?.deposit > 0 && <p><span className="font-semibold">Deposit:</span> {formatIDR(reservation.deposit)}</p>}
           </div>
         </div>
 

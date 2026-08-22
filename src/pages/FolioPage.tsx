@@ -15,7 +15,7 @@ import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle,
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
-import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType } from '@/types/database';
+import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType, ReservationRoom } from '@/types/database';
 
 type FolioListRow = Folio & {
   guest?: Pick<Guest, 'full_name'> | null;
@@ -121,6 +121,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
   const [roomType, setRoomType] = useState<RoomType | null>(null);
   const [roomCount, setRoomCount] = useState<number>(1);
+  const [groupRooms, setGroupRooms] = useState<ReservationRoom[]>([]);
   const [chargeCats, setChargeCats] = useState<ChargeCategory[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -167,9 +168,12 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       }
 
       let count = 1;
+      let groupRoomList: ReservationRoom[] = [];
       if (resRecord?.is_group) {
-        const { count: groupCount } = await supabase.from('reservation_rooms').select('*', { count: 'exact', head: true }).eq('reservation_id', resRecord.id).eq('status', 'active');
-        count = groupCount || 1;
+        const { data: rrData } = await supabase.from('reservation_rooms')
+          .select('*,room:rooms(*)').eq('reservation_id', resRecord.id).eq('status', 'active').order('created_at');
+        groupRoomList = (rrData as ReservationRoom[]) || [];
+        count = groupRoomList.length || 1;
       }
 
       setItems((fi as FolioItem[]) || []);
@@ -179,6 +183,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       setBookingSource(bs);
       setRoomType(rt);
       setRoomCount(count);
+      setGroupRooms(groupRoomList);
       setChargeCats((cc as ChargeCategory[]) || []);
       setPaymentMethods((pm as PaymentMethod[]) || []);
       setLoading(false);
@@ -225,6 +230,19 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
           <div><span className="text-slate-500">{t('res.group_rooms')}:</span> <span className="font-medium">{roomCount}</span></div>
           <div><span className="text-slate-500">{t('common.deposit')}:</span> <span className="font-medium">{reservation ? formatIDR(reservation.deposit) : '-'}</span></div>
         </div>
+
+        {groupRooms.length > 1 && (
+          <div className="border border-slate-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('res.group_rooms')} ({groupRooms.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {groupRooms.map(rr => (
+                <span key={rr.id} className="text-sm bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                  {(rr as any).room?.room_number || 'Unassigned'} · {formatIDR(rr.rate)}/{t('common.nights')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isFinalized && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center gap-2 text-amber-700 text-sm">

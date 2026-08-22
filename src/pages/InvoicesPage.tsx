@@ -11,7 +11,7 @@ import { InvoiceStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage,EmptyState } from '@/components/ui/States';
 import { formatIDR,formatDate,formatDateTime,formatTime } from '@/lib/format';
 import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
-import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType } from '@/types/database';
+import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType,ReservationRoom } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
 import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
 
@@ -172,6 +172,7 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
   const [reservation,setReservation]=useState<Reservation|null>(null);
   const [bookingSource,setBookingSource]=useState<BookingSource|null>(null);
   const [roomType,setRoomType]=useState<RoomType|null>(null);
+  const [groupRooms,setGroupRooms]=useState<ReservationRoom[]>([]);
   const [loading,setLoading]=useState(true);
 
   useEffect(()=>{
@@ -198,6 +199,12 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
       }
       setRoomType(rt);
 
+      if (res?.is_group) {
+        const { data: rrData } = await supabase.from('reservation_rooms')
+          .select('*,room:rooms(*)').eq('reservation_id', res.id).eq('status','active').order('created_at');
+        setGroupRooms((rrData as (ReservationRoom & { room?: { room_number: string } })[]) || []);
+      }
+
       setLoading(false);
     })();
   },[invoice]);
@@ -221,7 +228,21 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
           <div><span className="text-slate-500">{t('common.check_out')}:</span> <span className="font-medium">{reservation ? `${formatDate(reservation.check_out_date)} ${formatTime(reservation.check_out_time)}` : '-'}</span></div>
           <div><span className="text-slate-500">{t('common.nights')}:</span> <span className="font-medium">{reservation?.num_nights ?? '-'}</span></div>
           <div><span className="text-slate-500">{t('common.adults')} / {t('common.children')}:</span> <span className="font-medium">{reservation ? `${reservation.adults} / ${reservation.children}` : '-'}</span></div>
+          {reservation && <div><span className="text-slate-500">{t('common.deposit')}:</span> <span className="font-medium">{formatIDR(reservation.deposit)}</span></div>}
         </div>
+
+        {groupRooms.length > 1 && (
+          <div className="border border-slate-200 rounded-lg p-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('res.group_rooms')} ({groupRooms.length})</p>
+            <div className="flex flex-wrap gap-2">
+              {groupRooms.map(rr => (
+                <span key={rr.id} className="text-sm bg-slate-50 border border-slate-200 rounded px-2 py-1">
+                  {(rr as any).room?.room_number || 'Unassigned'} · {formatIDR(rr.rate)}/{t('common.nights')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
 
         <table className="w-full text-sm">
           <tbody>
