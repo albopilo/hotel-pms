@@ -154,10 +154,15 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           </tbody>
         </table>
 
-        <div className="mt-8 text-right">
+        <div className="mt-8 text-right space-y-1">
           <p>Subtotal: {formatIDR(invoice.subtotal)}</p>
+          {invoice.discount > 0 && <p className="text-red-600">Discount: -{formatIDR(invoice.discount)}</p>}
           <p>Tax: {formatIDR(invoice.tax)}</p>
           <h2 className="text-xl font-bold mt-2">Total: {formatIDR(invoice.total)}</h2>
+          {invoice.amount_paid > 0 && <p className="text-emerald-600">Paid: {formatIDR(invoice.amount_paid)}</p>}
+          <p className={`font-bold ${invoice.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {invoice.balance > 0 ? `Balance Due: ${formatIDR(invoice.balance)}` : 'Fully Paid'}
+          </p>
         </div>
 
         <div className="mt-12 text-center text-xs">Thank you for staying with us.</div>

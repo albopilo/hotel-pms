@@ -109,7 +109,10 @@ export const invoiceService = {
 
     await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId);
 
-    const invoiceItems = folioItems.map((item, index) => ({
+    // Only show charge and tax items as invoice line items; payments are shown as paid amount
+    const lineItems = folioItems.filter((i) => i.item_type === 'charge' || i.item_type === 'tax' || i.item_type === 'discount');
+
+    const invoiceItems = lineItems.map((item, index) => ({
       invoice_id: invoiceId,
       folio_item_id: item.id,
       description: item.description,

@@ -55,6 +55,18 @@ function assertDefined(value: unknown, field: string): asserts value is string {
 }
 
 export const folioService = {
+  async syncFolioTotals(folioId: string): Promise<FolioTotals> {
+    const totals = await this.getTotals(folioId);
+    await supabase.from('folios').update({
+      total_charges: totals.totalCharges,
+      total_payments: totals.totalPayments,
+      total_discounts: totals.totalDiscounts,
+      total_tax: totals.totalTax,
+      balance: totals.netBalance,
+    }).eq('id', folioId);
+    return totals;
+  },
+
   async getTotals(folioId: string): Promise<FolioTotals> {
     const { data, error } = await supabase
       .from('folio_items')
@@ -118,6 +130,8 @@ export const folioService = {
       object_id: itemId,
       previous_value: { folio_id: folioId },
     });
+
+    await this.syncFolioTotals(folioId);
   },
 
   async finalize(folioId: string, userId: string): Promise<void> {
@@ -225,6 +239,8 @@ export const paymentService = {
       object_id: input.folioId,
       new_value: { amount: input.amount, method: method.code, subtype: input.subtype },
     });
+
+    await folioService.syncFolioTotals(input.folioId);
   },
 };
 
@@ -287,6 +303,8 @@ export const chargeService = {
       object_id: input.folioId,
       new_value: { description: input.description, amount, category: cat?.code },
     });
+
+    await folioService.syncFolioTotals(input.folioId);
   },
 
   async addPostStayCharge(input: ChargeInput, categories: ChargeCategory[]): Promise<void> {
@@ -364,5 +382,7 @@ export const chargeService = {
       object_id: input.folioId,
       new_value: { description: input.description, amount: input.amount },
     });
+
+    await folioService.syncFolioTotals(input.folioId);
   },
 };

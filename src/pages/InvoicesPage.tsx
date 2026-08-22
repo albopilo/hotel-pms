@@ -245,19 +245,35 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
         )}
 
         <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-slate-500">
+              <th className="text-left py-2">Description</th>
+              <th className="text-center py-2">Qty</th>
+              <th className="text-right py-2">Unit Amount</th>
+              <th className="text-right py-2">Amount</th>
+            </tr>
+          </thead>
           <tbody>
             {items.map(i=>
-              <tr key={i.id}>
-                <td>{i.description}</td>
-                <td>{i.quantity}</td>
-                <td>{formatIDR(i.amount)}</td>
+              <tr key={i.id} className="border-b border-slate-100">
+                <td className="py-2">{i.description}</td>
+                <td className="text-center py-2">{i.quantity}</td>
+                <td className="text-right py-2">{formatIDR(i.unit_amount)}</td>
+                <td className="text-right py-2">{formatIDR(i.amount)}</td>
               </tr>
             )}
           </tbody>
         </table>
 
-        <div className="text-right font-bold">
-          Total: {formatIDR(invoice.total)}
+        <div className="text-right space-y-1 text-sm">
+          <p>Subtotal: <b>{formatIDR(invoice.subtotal)}</b></p>
+          {invoice.discount > 0 && <p className="text-red-600">Discount: -{formatIDR(invoice.discount)}</p>}
+          <p>Tax: <b>{formatIDR(invoice.tax)}</b></p>
+          <p className="text-base font-bold">Total: {formatIDR(invoice.total)}</p>
+          {invoice.amount_paid > 0 && <p className="text-emerald-600">Paid: {formatIDR(invoice.amount_paid)}</p>}
+          <p className={`font-bold ${invoice.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+            {invoice.balance > 0 ? `Balance Due: ${formatIDR(invoice.balance)}` : 'Fully Paid'}
+          </p>
         </div>
 
         <div className="text-xs text-slate-400">
