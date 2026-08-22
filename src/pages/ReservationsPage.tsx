@@ -569,6 +569,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
               quantity: Number(nights) || 1,
               unit_amount: Number(row.rate),
               amount: Number(row.rate) * (Number(nights) || 1),
+              business_date: form.check_in_date,
               created_by: userId
             });
           }
@@ -578,7 +579,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           items.push({
             folio_id: folio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
             item_type: 'discount', category: 'discount', description: 'Discount',
-            quantity: 1, unit_amount: -Number(form.discount), amount: -Number(form.discount), created_by: userId
+            quantity: 1, unit_amount: -Number(form.discount), amount: -Number(form.discount), business_date: form.check_in_date, created_by: userId
           });
         }
 
@@ -586,7 +587,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           items.push({
             folio_id: folio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
             item_type: 'tax', category: 'tax', description: 'Tax',
-            quantity: 1, unit_amount: Number(form.tax), amount: Number(form.tax), created_by: userId
+            quantity: 1, unit_amount: Number(form.tax), amount: Number(form.tax), business_date: form.check_in_date, created_by: userId
           });
         }
 
@@ -594,7 +595,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           items.push({
             folio_id: folio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
             item_type: 'charge', category: 'deposit', description: 'Security deposit',
-            quantity: 1, unit_amount: Number(form.deposit), amount: Number(form.deposit), created_by: userId
+            quantity: 1, unit_amount: Number(form.deposit), amount: Number(form.deposit), business_date: form.check_in_date, created_by: userId
           });
         }
 
