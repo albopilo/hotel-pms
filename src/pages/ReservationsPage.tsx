@@ -243,6 +243,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [occupiedWarning, setOccupiedWarning] = useState<any>(null);
   const [dirtyWarning, setDirtyWarning] = useState<any>(null);
+  const [rateTouched, setRateTouched] = useState<Record<number, boolean>>({});
 
   const [form, setForm] = useState<typeof initialForm>(() => {
     const draft = loadDraft();
@@ -321,16 +322,21 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
 
   useEffect(() => {
     if (!open || !form.check_in_date || !form.check_out_date || form.check_out_date <= form.check_in_date) return;
-    setRoomRows((currentRows) => currentRows.map((row) => {
+    setRoomRows((currentRows) => currentRows.map((row, idx) => {
       if (!row.room_type_id) return row;
+      if (rateTouched[idx]) return row;
       const calculatedRate = autoCalcRate(row);
       return calculatedRate ? { ...row, rate: calculatedRate } : row;
     }));
-  }, [open, form.check_in_date, form.check_out_date, holidays, roomTypes, roomTypeSelectionKey, autoCalcRate]);
+  }, [open, form.check_in_date, form.check_out_date, holidays, roomTypes, roomTypeSelectionKey, autoCalcRate, rateTouched]);
 
   const updateRoomRow = (idx: number, field: keyof RoomRow, value: string) => {
+    if (field === 'rate') {
+      setRateTouched(prev => ({ ...prev, [idx]: true }));
+    }
     setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
     if (field === 'room_type_id') {
+      setRateTouched(prev => ({ ...prev, [idx]: false }));
       const newRoomType = roomTypes.find(rt => rt.id === value);
       const autoRate = newRoomType ? autoCalcRate({ room_type_id: value, room_id: '', rate: '' }) : '';
       setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, room_id: '', rate: autoRate } : r));
@@ -523,8 +529,9 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
         roomRows.forEach((row, idx) => {
           const room = rooms.find(r => r.id === row.room_id);
           const roomType = roomTypes.find(rt => rt.id === row.room_type_id);
+          const manualRate = rateTouched[idx] && Number(row.rate) > 0 ? Number(row.rate) : null;
           let perNightCharges: { date: string; rate: number; rateType: string }[] = [];
-          if (roomType) {
+          if (roomType && !manualRate) {
             const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
             perNightCharges = breakdown;
           }
@@ -703,7 +710,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
                 <option value="">--</option>
                 {availableRoomsForRow(idx).map(r => <option key={r.id} value={r.id}>{r.room_number} ({r.status})</option>)}
               </Select>
-              <Input label={t('common.rate')} type="number" value={row.rate} onChange={e => updateRoomRow(idx, 'rate', e.target.value)} />
+              <Input label={`${t('common.rate')} / ${t('common.nights')}`} type="number" value={row.rate} onChange={e => updateRoomRow(idx, 'rate', e.target.value)} hint={rateTouched[idx] ? 'Custom rate (auto-calc overridden)' : undefined} />
               {roomRows.length > 1 && (
                 <Button type="button" size="sm" variant="ghost" onClick={() => removeRoomRow(idx)} className="mb-1">
                   <Trash2 size={16} className="text-red-500" />

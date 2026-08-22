@@ -306,9 +306,16 @@ function HolidayManagementModal({ open, onClose, orgId, userId, onSaved }: {
 
   return (
     <>
-      <Modal open={open} onClose={onClose} title={t('holiday.title')} size="lg">
+      <Modal open={open} onClose={onClose} title={`${t('holiday.title')} (${holidays.length})`} size="lg">
         <div className="space-y-4">
           <p className="text-sm text-slate-500">{t('holiday.sync_note')}</p>
+
+          {holidays.length > 0 && (
+            <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+              <CalendarClock size={14} />
+              {holidays.length} holidays loaded — weekend rate logic is active.
+            </div>
+          )}
 
           {/* Add form */}
           <div className="rounded-lg border border-slate-200 p-4 bg-slate-50">
