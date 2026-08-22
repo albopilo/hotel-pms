@@ -14,8 +14,10 @@ import { Badge } from '@/components/ui/Badge';
 import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, todayInTimezone, nowInTimezone, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
+import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
+import { folioService } from '@/services/financial';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt } from 'lucide-react';
-import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom } from '@/types/database';
+import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
 
 export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavigateToPayment, onNavigateToInvoice }: { initialReservationId?: string | null; searchQuery?: string; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { branches } = useAuth();
@@ -737,6 +739,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
   const [roomType, setRoomType] = useState<RoomType | null>(null);
   const [groupRooms, setGroupRooms] = useState<ReservationRoom[]>([]);
+  const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -773,13 +776,24 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         setGroupRooms((rrData as ReservationRoom[]) || []);
       }
 
+      const { data: hol } = await supabase.from('indonesian_holidays').select('*').eq('organization_id', user!.organization_id).order('holiday_date');
+      setHolidays((hol as IndonesianHoliday[]) || []);
+
       setLoading(false);
     })();
-  }, [reservation]);
+  }, [reservation, user]);
 
   // Calculation: extra nights = new checkout date - previous checkout date
   const extraNights = Math.max(0, nightsBetween(previousCheckoutDate, newCheckoutDate));
-  const additionalCharge = Number(roomRate) * extraNights;
+
+  // Rate breakdown for the extra nights using weekday/weekend rates
+  const rateBreakdown = useMemo(() => {
+    if (!roomType || extraNights <= 0) return null;
+    const { breakdown, total } = calculateTotalRate(previousCheckoutDate, newCheckoutDate, roomType, holidays);
+    return { breakdown, total };
+  }, [roomType, previousCheckoutDate, newCheckoutDate, extraNights, holidays]);
+
+  const additionalCharge = rateBreakdown ? rateBreakdown.total : Number(roomRate) * extraNights;
 
   const handleExtend = async () => {
     if (newCheckoutDate <= previousCheckoutDate) {
@@ -824,45 +838,46 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
 
       if (resError) throw resError;
 
-      // Add room charge for extra nights to folio
+      // Add room charge for extra nights to folio — one item per night using rate breakdown
       if (folio) {
-        const { error: chargeError } = await supabase.from('folio_items').insert({
-          folio_id: folio.id,
-          branch_id: reservation.branch_id,
-          reservation_id: reservation.id,
-          guest_id: reservation.primary_guest_id,
-          room_id: reservation.room_id,
-          item_type: 'charge',
-          category: 'room',
-          description: `Extended stay - ${extraNights} extra night(s) at ${formatIDR(Number(roomRate))}/night`,
-          quantity: extraNights,
-          unit_amount: Number(roomRate),
-          amount: additionalCharge,
-          business_date: todayISO(),
-          created_by: user!.id,
-        });
+        if (rateBreakdown && rateBreakdown.breakdown.length > 0) {
+          const items = rateBreakdown.breakdown.map((day) => ({
+            folio_id: folio.id,
+            branch_id: reservation.branch_id,
+            reservation_id: reservation.id,
+            guest_id: reservation.primary_guest_id,
+            room_id: reservation.room_id,
+            item_type: 'charge' as const,
+            category: 'room',
+            description: `Extended stay - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`,
+            quantity: 1,
+            unit_amount: day.rate,
+            amount: day.rate,
+            business_date: day.date,
+            created_by: user!.id,
+          }));
+          const { error: chargeError } = await supabase.from('folio_items').insert(items);
+          if (chargeError) throw chargeError;
+        } else {
+          const { error: chargeError } = await supabase.from('folio_items').insert({
+            folio_id: folio.id,
+            branch_id: reservation.branch_id,
+            reservation_id: reservation.id,
+            guest_id: reservation.primary_guest_id,
+            room_id: reservation.room_id,
+            item_type: 'charge',
+            category: 'room',
+            description: `Extended stay - ${extraNights} extra night(s) at ${formatIDR(Number(roomRate))}/night`,
+            quantity: extraNights,
+            unit_amount: Number(roomRate),
+            amount: additionalCharge,
+            business_date: todayISO(),
+            created_by: user!.id,
+          });
+          if (chargeError) throw chargeError;
+        }
 
-        if (chargeError) throw chargeError;
-
-        // Update folio totals
-        const { data: allItems } = await supabase.from('folio_items').select('item_type,amount').eq('folio_id', folio.id).eq('voided', false);
-        const totals = { total_charges: 0, total_payments: 0, total_discounts: 0, total_tax: 0 };
-        (allItems || []).forEach((item: any) => {
-          switch (item.item_type) {
-            case 'charge': totals.total_charges += Number(item.amount); break;
-            case 'payment': totals.total_payments += Math.abs(Number(item.amount)); break;
-            case 'discount': totals.total_discounts += Math.abs(Number(item.amount)); break;
-            case 'tax': totals.total_tax += Number(item.amount); break;
-          }
-        });
-
-        await supabase.from('folios').update({
-          total_charges: totals.total_charges,
-          total_payments: totals.total_payments,
-          total_discounts: totals.total_discounts,
-          total_tax: totals.total_tax,
-          balance: totals.total_charges - totals.total_discounts + totals.total_tax - totals.total_payments,
-        }).eq('id', folio.id);
+        await folioService.syncFolioTotals(folio.id);
       }
 
       // Update reservation_rooms if group
@@ -927,13 +942,28 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         )}
 
         <Input label={t('res.new_checkout_date')} type="date" value={newCheckoutDate} onChange={e => setNewCheckoutDate(e.target.value)} required />
-        <Input label={t('res.room_rate_per_night')} type="number" value={roomRate} onChange={e => setRoomRate(e.target.value)} required />
+
+        {rateBreakdown && rateBreakdown.breakdown.length > 0 ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3 text-sm">
+            <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')}{roomType ? ` · ${roomType.name}` : ''}</p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {rateBreakdown.breakdown.map((day) => (
+                <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
+                  <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
+                  <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType, 'en')}</p>
+                  <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <Input label={t('res.room_rate_per_night')} type="number" value={roomRate} onChange={e => setRoomRate(e.target.value)} required />
+        )}
 
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2 text-sm">
           <div className="flex justify-between"><span className="text-slate-600">{t('res.prev_checkout')}:</span> <span className="font-medium">{formatDate(previousCheckoutDate)} {formatTime(reservation.check_out_time)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('res.new_checkout')}:</span> <span className="font-medium">{formatDate(newCheckoutDate)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('res.extra_nights')}:</span> <span className="font-bold text-blue-700">{extraNights} {t('common.nights')}</span></div>
-          <div className="flex justify-between"><span className="text-slate-600">{t('common.rate')}:</span> <span className="font-medium">{formatIDR(Number(roomRate) || 0)} / {t('common.nights')}</span></div>
           <div className="pt-2 border-t border-blue-200 flex justify-between"><span className="text-slate-700 font-medium">{t('res.additional_charge')}:</span> <span className="font-bold text-blue-700 text-lg">{formatIDR(additionalCharge)}</span></div>
         </div>
 
