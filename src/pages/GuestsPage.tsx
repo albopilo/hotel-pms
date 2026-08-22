@@ -12,6 +12,13 @@ import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate } from '@/lib/format';
 import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const GUEST_DRAFT_KEY = 'guest_form_draft';
+
+const initialForm = {
+  full_name: '', id_type: '', id_number: '', nationality: '', gender: '', date_of_birth: '', phone: '', email: '', address: '', company: '', notes: '',
+};
 
 const ID_TYPES = ['KTP', 'Passport', 'SIM', 'Other'];
 
@@ -230,8 +237,9 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    full_name: '', id_type: '', id_number: '', nationality: '', gender: '', date_of_birth: '', phone: '', email: '', address: '', company: '', notes: '',
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialForm>(GUEST_DRAFT_KEY);
+    return draft || { ...initialForm };
   });
 
   useEffect(() => {
@@ -242,9 +250,14 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
         address: guest.address || '', company: guest.company || '', notes: guest.notes || '',
       });
     } else {
-      setForm({ full_name: '', id_type: '', id_number: '', nationality: '', gender: '', date_of_birth: '', phone: '', email: '', address: '', company: '', notes: '' });
+      const draft = loadDraft<typeof initialForm>(GUEST_DRAFT_KEY);
+      setForm(draft || { ...initialForm });
     }
   }, [guest, open]);
+
+  useEffect(() => {
+    if (open && !guest) saveDraft(GUEST_DRAFT_KEY, form);
+  }, [form, open, guest]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -266,13 +279,15 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
       ? await supabase.from('guests').update(payload).eq('id', guest.id)
       : await supabase.from('guests').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(GUEST_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(GUEST_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={guest ? t('common.edit') : t('guest.new_guest')} size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={guest ? t('common.edit') : t('guest.new_guest')} size="lg"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Input label={t('guest.full_name')} value={form.full_name} onChange={(e) => { setForm({ ...form, full_name: e.target.value }); if (errors.full_name) setErrors({ ...errors, full_name: '' }); }} required error={errors.full_name} />
         <div className="grid grid-cols-2 gap-4">

@@ -9,9 +9,14 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { Plus, Edit, Tags, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as Edit, Tags, Trash2 } from 'lucide-react';
 import { formatIDR } from '@/lib/format';
 import type { ChargeCategory } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const CAT_DRAFT_KEY = 'charge_category_form_draft';
+
+const initialCatForm = { name: '', code: '', is_damage: false, requires_approval: false, approval_threshold: '0', is_active: true, sort_order: '0' };
 
 export function ChargeCategoriesPage() {
   const { user } = useAuth();
@@ -101,15 +106,23 @@ function CatFormModal({ open, onClose, cat, orgId, onSaved }: {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', is_damage: false, requires_approval: false, approval_threshold: '0', is_active: true, sort_order: '0' });
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialCatForm>(CAT_DRAFT_KEY);
+    return draft || { ...initialCatForm };
+  });
 
   useEffect(() => {
     if (cat) {
       setForm({ name: cat.name, code: cat.code, is_damage: cat.is_damage, requires_approval: cat.requires_approval, approval_threshold: String(cat.approval_threshold), is_active: cat.is_active, sort_order: String(cat.sort_order) });
     } else {
-      setForm({ name: '', code: '', is_damage: false, requires_approval: false, approval_threshold: '0', is_active: true, sort_order: '0' });
+      const draft = loadDraft<typeof initialCatForm>(CAT_DRAFT_KEY);
+      setForm(draft || { ...initialCatForm });
     }
   }, [cat, open]);
+
+  useEffect(() => {
+    if (open && !cat) saveDraft(CAT_DRAFT_KEY, form);
+  }, [form, open, cat]);
 
   const handleSubmit = async () => {
     if (!form.name || !form.code) { showToast('Name and code required', 'error'); return; }
@@ -124,13 +137,15 @@ function CatFormModal({ open, onClose, cat, orgId, onSaved }: {
       ? await supabase.from('charge_categories').update(payload).eq('id', cat.id)
       : await supabase.from('charge_categories').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(CAT_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(CAT_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={cat ? t('common.edit') : t('common.add')} size="sm"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={cat ? t('common.edit') : t('common.add')} size="sm"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Input label={t('common.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />

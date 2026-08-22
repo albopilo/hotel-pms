@@ -13,6 +13,21 @@ import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, todayISO, addDays } from '@/lib/format';
 import { Plus, CreditCard as Edit, BedDouble, Sparkles } from 'lucide-react';
 import type { Room, RoomType, RoomStatus, Branch } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const ROOM_DRAFT_KEY = 'room_form_draft';
+
+const initialRoomForm = {
+  branch_id: '',
+  room_type_id: '',
+  room_number: '',
+  floor: '1',
+  base_rate: '0',
+  max_occupancy: '2',
+  status: 'available',
+  is_active: true,
+  notes: '',
+};
 
 const STATUSES: RoomStatus[] = ['available', 'reserved', 'occupied', 'dirty', 'cleaning', 'inspected', 'out_of_service', 'out_of_order'];
 
@@ -435,16 +450,9 @@ function RoomFormModal({ open, onClose, room, branches, roomTypes, userId, onSav
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    branch_id: '',
-    room_type_id: '',
-    room_number: '',
-    floor: '1',
-    base_rate: '0',
-    max_occupancy: '2',
-    status: 'available',
-    is_active: true,
-    notes: '',
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialRoomForm>(ROOM_DRAFT_KEY);
+    return draft || { ...initialRoomForm };
   });
 
   useEffect(() => {
@@ -461,9 +469,14 @@ function RoomFormModal({ open, onClose, room, branches, roomTypes, userId, onSav
         notes: room.notes || '',
       });
     } else {
-      setForm({ branch_id: branches[0]?.id || '', room_type_id: '', room_number: '', floor: '1', base_rate: '0', max_occupancy: '2', status: 'available', is_active: true, notes: '' });
+      const draft = loadDraft<typeof initialRoomForm>(ROOM_DRAFT_KEY);
+      setForm(draft ? { ...initialRoomForm, ...draft, branch_id: draft.branch_id || branches[0]?.id || '' } : { ...initialRoomForm, branch_id: branches[0]?.id || '' });
     }
   }, [room, open, branches]);
+
+  useEffect(() => {
+    if (open && !room) saveDraft(ROOM_DRAFT_KEY, form);
+  }, [form, open, room]);
 
   const availableTypes = roomTypes.filter((rt) => rt.branch_id === form.branch_id);
 
@@ -486,13 +499,15 @@ function RoomFormModal({ open, onClose, room, branches, roomTypes, userId, onSav
       ? await supabase.from('rooms').update(payload).eq('id', room.id)
       : await supabase.from('rooms').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(ROOM_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(ROOM_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={room ? t('common.edit') : t('common.add')} size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={room ? t('common.edit') : t('common.add')} size="md"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <Select label={t('common.branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value, room_type_id: '' })} required>
           <option value="">--</option>

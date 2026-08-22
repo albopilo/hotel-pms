@@ -9,8 +9,13 @@ import {Modal,ConfirmModal} from '@/components/ui/Modal';
 import {Input,Select} from '@/components/ui/Form';
 import {Badge} from '@/components/ui/Badge';
 import {LoadingPage,EmptyState} from '@/components/ui/States';
-import {Plus,Edit,Users,Trash2} from 'lucide-react';
+import { Plus, CreditCard as Edit, Users, Trash2 } from 'lucide-react';
 import type {Profile,Branch,UserRole,UserBranchAccess} from '@/types/database';
+import {saveDraft,loadDraft,clearDraft} from '@/lib/formDraft';
+
+const USER_DRAFT_KEY='user_form_draft';
+
+const initialUserForm={full_name:'',email:'',password:'',role:'receptionist' as UserRole,is_active:true,branchIds:[] as string[]};
 
 export function UsersPage(){
 const {user}=useAuth();
@@ -92,12 +97,14 @@ function UserFormModal({open,onClose,profile,branches,currentAccess,orgId,onSave
 const {t}=useI18n();
 const {showToast}=useToast();
 const [saving,setSaving]=useState(false);
-const [form,setForm]=useState({full_name:'',email:'',password:'',role:'receptionist' as UserRole,is_active:true,branchIds:[] as string[]});
+const [form,setForm]=useState(()=>{const draft=loadDraft<typeof initialUserForm>(USER_DRAFT_KEY);return draft||{...initialUserForm};});
 
 useEffect(()=>{
 if(profile)setForm({full_name:profile.full_name,email:profile.email,password:'',role:profile.role,is_active:profile.is_active,branchIds:currentAccess});
-else setForm({full_name:'',email:'',password:'',role:'receptionist',is_active:true,branchIds:[]});
+else{const draft=loadDraft<typeof initialUserForm>(USER_DRAFT_KEY);setForm(draft||{...initialUserForm});}
 },[profile,open,currentAccess]);
+
+useEffect(()=>{if(open&&!profile)saveDraft(USER_DRAFT_KEY,form);},[form,open,profile]);
 
 const handleSubmit=async()=>{
 if(!form.full_name||!form.email||(!profile&&!form.password)){showToast('Name, email and password required','error');return;}
@@ -116,12 +123,15 @@ body:{email:form.email,password:form.password,full_name:form.full_name,role:form
 if(error)throw error;
 }
 showToast('Saved','success');
+clearDraft(USER_DRAFT_KEY);
 onSaved();
 }catch(e:any){showToast(e.message||'Failed','error')}
 setSaving(false);
 };
 
-return <Modal open={open} onClose={onClose} title={profile?t('common.edit'):t('common.add')} size="md" footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+const handleCancel=()=>{clearDraft(USER_DRAFT_KEY);onClose();};
+
+return <Modal open={open} onClose={handleCancel} title={profile?t('common.edit'):t('common.add')} size="md" footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
 <form className="space-y-4">
 <Input label={t('common.name')} value={form.full_name} onChange={e=>setForm({...form,full_name:e.target.value})}/>
 <Input label={t('common.email')} type="email" value={form.email} autoComplete="username" disabled={!!profile} onChange={e=>setForm({...form,email:e.target.value})}/>

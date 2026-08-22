@@ -13,6 +13,13 @@ import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, todayISO, addDays } from '@/lib/format';
 import { Plus, CreditCard as Edit, DoorOpen, Trash2, CalendarClock } from 'lucide-react';
 import type { RoomType, Branch, IndonesianHoliday } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const ROOM_TYPE_DRAFT_KEY = 'room_type_form_draft';
+
+const initialRoomTypeForm = {
+  branch_id: '', name: '', code: '', description: '', base_rate: '0', weekday_rate: '0', weekend_rate: '0', max_occupancy: '2', default_tax_rate: '0', is_active: true, sort_order: '0',
+};
 
 export function RoomTypesPage() {
   const { user, branches } = useAuth();
@@ -135,8 +142,9 @@ function RoomTypeFormModal({ open, onClose, roomType, branches, holidays, onSave
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    branch_id: '', name: '', code: '', description: '', base_rate: '0', weekday_rate: '0', weekend_rate: '0', max_occupancy: '2', default_tax_rate: '0', is_active: true, sort_order: '0',
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialRoomTypeForm>(ROOM_TYPE_DRAFT_KEY);
+    return draft || { ...initialRoomTypeForm };
   });
 
   useEffect(() => {
@@ -148,9 +156,14 @@ function RoomTypeFormModal({ open, onClose, roomType, branches, holidays, onSave
         default_tax_rate: String(roomType.default_tax_rate), is_active: roomType.is_active, sort_order: String(roomType.sort_order),
       });
     } else {
-      setForm({ branch_id: branches[0]?.id || '', name: '', code: '', description: '', base_rate: '0', weekday_rate: '0', weekend_rate: '0', max_occupancy: '2', default_tax_rate: '0', is_active: true, sort_order: '0' });
+      const draft = loadDraft<typeof initialRoomTypeForm>(ROOM_TYPE_DRAFT_KEY);
+      setForm(draft ? { ...initialRoomTypeForm, ...draft, branch_id: draft.branch_id || branches[0]?.id || '' } : { ...initialRoomTypeForm, branch_id: branches[0]?.id || '' });
     }
   }, [roomType, open, branches]);
+
+  useEffect(() => {
+    if (open && !roomType) saveDraft(ROOM_TYPE_DRAFT_KEY, form);
+  }, [form, open, roomType]);
 
   // Rate preview for the next 7 days
   const previewDates = useMemo(() => Array.from({ length: 7 }, (_, i) => addDays(todayISO(), i)), []);
@@ -186,13 +199,15 @@ function RoomTypeFormModal({ open, onClose, roomType, branches, holidays, onSave
       ? await supabase.from('room_types').update(payload).eq('id', roomType.id)
       : await supabase.from('room_types').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(ROOM_TYPE_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(ROOM_TYPE_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={roomType ? t('common.edit') : t('common.add')} size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={roomType ? t('common.edit') : t('common.add')} size="lg"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Select label={t('common.branch')} value={form.branch_id} onChange={(e) => setForm({ ...form, branch_id: e.target.value })} required>
           <option value="">--</option>

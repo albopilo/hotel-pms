@@ -9,8 +9,13 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { Plus, Edit, Tags, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as Edit, Tags, Trash2 } from 'lucide-react';
 import type { BookingSource } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const SOURCE_DRAFT_KEY = 'booking_source_form_draft';
+
+const initialSourceForm = { name: '', code: '', is_ota: false, is_active: true, sort_order: '0' };
 
 export function BookingSourcesPage() {
   const { user } = useAuth();
@@ -96,15 +101,23 @@ function SourceFormModal({ open, onClose, source, orgId, onSaved }: {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', is_ota: false, is_active: true, sort_order: '0' });
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialSourceForm>(SOURCE_DRAFT_KEY);
+    return draft || { ...initialSourceForm };
+  });
 
   useEffect(() => {
     if (source) {
       setForm({ name: source.name, code: source.code, is_ota: source.is_ota, is_active: source.is_active, sort_order: String(source.sort_order) });
     } else {
-      setForm({ name: '', code: '', is_ota: false, is_active: true, sort_order: '0' });
+      const draft = loadDraft<typeof initialSourceForm>(SOURCE_DRAFT_KEY);
+      setForm(draft || { ...initialSourceForm });
     }
   }, [source, open]);
+
+  useEffect(() => {
+    if (open && !source) saveDraft(SOURCE_DRAFT_KEY, form);
+  }, [form, open, source]);
 
   const handleSubmit = async () => {
     if (!form.name || !form.code) { showToast('Name and code required', 'error'); return; }
@@ -117,13 +130,15 @@ function SourceFormModal({ open, onClose, source, orgId, onSaved }: {
       ? await supabase.from('booking_sources').update(payload).eq('id', source.id)
       : await supabase.from('booking_sources').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(SOURCE_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(SOURCE_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={source ? t('common.edit') : t('common.add')} size="sm"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={source ? t('common.edit') : t('common.add')} size="sm"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Input label={t('common.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />

@@ -9,8 +9,17 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { Plus, Edit, Building2, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as Edit, Building2, Trash2 } from 'lucide-react';
 import type { Branch } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const BRANCH_DRAFT_KEY = 'branch_form_draft';
+
+const initialBranchForm = {
+  name: '', code: '', address: '', phone: '', email: '', tax_id: '',
+  timezone: 'Asia/Jakarta', standard_checkin_time: '14:00', standard_checkout_time: '12:00',
+  business_day_cutoff: '04:30', is_active: true,
+};
 
 export function BranchesPage() {
   const { user } = useAuth();
@@ -93,10 +102,9 @@ function BranchFormModal({ open, onClose, branch, orgId, onSaved }: {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: '', code: '', address: '', phone: '', email: '', tax_id: '',
-    timezone: 'Asia/Jakarta', standard_checkin_time: '14:00', standard_checkout_time: '12:00',
-    business_day_cutoff: '04:30', is_active: true,
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialBranchForm>(BRANCH_DRAFT_KEY);
+    return draft || { ...initialBranchForm };
   });
 
   useEffect(() => {
@@ -108,9 +116,14 @@ function BranchFormModal({ open, onClose, branch, orgId, onSaved }: {
         business_day_cutoff: branch.business_day_cutoff, is_active: branch.is_active,
       });
     } else {
-      setForm({ name: '', code: '', address: '', phone: '', email: '', tax_id: '', timezone: 'Asia/Jakarta', standard_checkin_time: '14:00', standard_checkout_time: '12:00', business_day_cutoff: '04:30', is_active: true });
+      const draft = loadDraft<typeof initialBranchForm>(BRANCH_DRAFT_KEY);
+      setForm(draft || { ...initialBranchForm });
     }
   }, [branch, open]);
+
+  useEffect(() => {
+    if (open && !branch) saveDraft(BRANCH_DRAFT_KEY, form);
+  }, [form, open, branch]);
 
   const handleSubmit = async () => {
     if (!form.name || !form.code) { showToast('Name and code required', 'error'); return; }
@@ -126,13 +139,15 @@ function BranchFormModal({ open, onClose, branch, orgId, onSaved }: {
       ? await supabase.from('branches').update(payload).eq('id', branch.id)
       : await supabase.from('branches').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(BRANCH_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(BRANCH_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={branch ? t('common.edit') : t('common.add')} size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={branch ? t('common.edit') : t('common.add')} size="md"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Input label={t('common.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
