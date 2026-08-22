@@ -21,6 +21,49 @@ interface RoomRow {
   rate: string;
 }
 
+const DRAFT_KEY = 'reservation_form_draft';
+
+interface DraftState {
+  form: typeof initialForm;
+  roomRows: RoomRow[];
+}
+
+const initialForm = {
+  branch_id: '', guest_id: '',
+  check_in_date: todayISO(), check_in_time: '14:00',
+  check_out_date: addDays(todayISO(), 1), check_out_time: '12:00',
+  adults: '1', children: '0', discount: '0', tax: '0', deposit: '',
+  booking_source_id: '', special_requests: '', notes: ''
+};
+
+function loadDraft(): DraftState | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as DraftState;
+    if (!parsed.form || !parsed.roomRows) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(form: typeof initialForm, roomRows: RoomRow[]) {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ form, roomRows }));
+  } catch {
+    // ignore quota errors
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // ignore
+  }
+}
+
 export function ReservationsPage({ searchQuery = '', onSelectReservation }: { searchQuery?: string; onSelectReservation?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
@@ -141,6 +184,7 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation }: { se
       <ReservationFormModal
         open={showForm}
         onClose={() => setShowForm(false)}
+        onCancel={() => { clearDraft(); setShowForm(false); }}
         branches={branches}
         rooms={rooms}
         roomTypes={roomTypes}
@@ -149,15 +193,16 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation }: { se
         userId={user!.id}
         orgId={user!.organization_id}
         defaultBranchId={selectedBranchId || branches[0]?.id || ''}
-        onSaved={() => { setShowForm(false); load(); }}
+        onSaved={() => { clearDraft(); setShowForm(false); load(); }}
       />
     </div>
   );
 }
 
-export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes, guests, bookingSources, userId, orgId, defaultBranchId, reservation, onSaved }: {
+export function ReservationFormModal({ open, onClose, onCancel, branches, rooms, roomTypes, guests, bookingSources, userId, orgId, defaultBranchId, reservation, onSaved }: {
   open: boolean;
   onClose: () => void;
+  onCancel: () => void;
   branches: Branch[];
   rooms: Room[];
   roomTypes: RoomType[];
@@ -176,15 +221,16 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
   const [occupiedWarning, setOccupiedWarning] = useState<any>(null);
   const [dirtyWarning, setDirtyWarning] = useState<any>(null);
 
-  const [form, setForm] = useState({
-    branch_id: '', guest_id: '',
-    check_in_date: todayISO(), check_in_time: '14:00',
-    check_out_date: addDays(todayISO(), 1), check_out_time: '12:00',
-    adults: '1', children: '0', discount: '0', tax: '0', deposit: '',
-    booking_source_id: '', special_requests: '', notes: ''
+  const [form, setForm] = useState<typeof initialForm>(() => {
+    const draft = loadDraft();
+    if (draft && !draft.form.branch_id) draft.form.branch_id = defaultBranchId;
+    return draft ? { ...initialForm, ...draft.form } : { ...initialForm, branch_id: defaultBranchId };
   });
 
-  const [roomRows, setRoomRows] = useState<RoomRow[]>([{ room_type_id: '', room_id: '', rate: '' }]);
+  const [roomRows, setRoomRows] = useState<RoomRow[]>(() => {
+    const draft = loadDraft();
+    return draft?.roomRows?.length ? draft.roomRows : [{ room_type_id: '', room_id: '', rate: '' }];
+  });
 
   useEffect(() => {
     if (reservation) {
@@ -205,11 +251,24 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
         notes: reservation.notes || ''
       });
       setRoomRows([{ room_type_id: reservation.room_type_id || '', room_id: reservation.room_id || '', rate: String(reservation.rate ?? '') }]);
-    } else {
-      setForm(x => ({ ...x, branch_id: defaultBranchId, check_in_date: todayISO(), check_out_date: addDays(todayISO(), 1) }));
-      setRoomRows([{ room_type_id: '', room_id: '', rate: '' }]);
+    } else if (open) {
+      const draft = loadDraft();
+      if (draft) {
+        setForm({ ...initialForm, ...draft.form, branch_id: draft.form.branch_id || defaultBranchId });
+        setRoomRows(draft.roomRows.length ? draft.roomRows : [{ room_type_id: '', room_id: '', rate: '' }]);
+      } else {
+        setForm({ ...initialForm, branch_id: defaultBranchId });
+        setRoomRows([{ room_type_id: '', room_id: '', rate: '' }]);
+      }
     }
   }, [reservation, open, defaultBranchId]);
+
+  // Auto-save draft whenever form or roomRows change (only for new reservations, not edits)
+  useEffect(() => {
+    if (open && !reservation) {
+      saveDraft(form, roomRows);
+    }
+  }, [form, roomRows, open, reservation]);
 
   const set = (k: string, v: string) => setForm(x => ({ ...x, [k]: v }));
 
@@ -510,7 +569,7 @@ export function ReservationFormModal({ open, onClose, branches, rooms, roomTypes
 
   return (
     <Modal open={open} onClose={onClose} title={reservation ? t('common.edit') : t('res.new_reservation')} size="xl"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={() => save(false)}>{t('common.save')}</Button></>}>
+      footer={<><Button variant="secondary" onClick={onCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={() => save(false)}>{t('common.save')}</Button></>}>
 
       <form className="space-y-4">
         <div className="grid md:grid-cols-3 gap-4">
