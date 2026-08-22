@@ -21,6 +21,7 @@ import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, Paymen
 const ADD_CHARGE_DRAFT_KEY = 'folio_add_charge_draft';
 const TAKE_PAYMENT_DRAFT_KEY = 'folio_take_payment_draft';
 const POST_STAY_DRAFT_KEY = 'folio_post_stay_draft';
+const ROOM_TRANSFER_DRAFT_KEY = 'folio_room_transfer_draft';
 
 type FolioListRow = Folio & {
   guest?: Pick<Guest, 'full_name'> | null;
@@ -458,9 +459,6 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
   );
 }
 
-const ROOM_TRANSFER_DRAFT_KEY = 'folio_room_transfer_draft';
-const initialTransferForm = { toRoomId: '', reason: '' };
-
 function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, branchId, onClose, onSaved }: {
   folio: Folio; reservation: Reservation | null; currentRoom: Room | null;
   userId: string; orgId: string; branchId: string;
@@ -470,6 +468,7 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const initialTransferForm = { to_room_id: '', reason: '' };
   const [form, setForm] = useState(() => {
     const draft = loadDraft<typeof initialTransferForm>(ROOM_TRANSFER_DRAFT_KEY);
     return draft || { ...initialTransferForm };
@@ -482,21 +481,21 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
   useEffect(() => { saveDraft(ROOM_TRANSFER_DRAFT_KEY, form); }, [form]);
 
   const handleSubmit = async () => {
-    if (!form.toRoomId) { showToast('Select a room', 'error'); return; }
+    if (!form.to_room_id) { showToast('Select a room', 'error'); return; }
     setSaving(true);
     try {
-      const { error: resErr } = await supabase.from('reservations').update({ room_id: form.toRoomId }).eq('id', folio.reservation_id);
+      const { error: resErr } = await supabase.from('reservations').update({ room_id: form.to_room_id }).eq('id', folio.reservation_id);
       if (resErr) throw resErr;
       if (currentRoom) await supabase.from('rooms').update({ status: 'dirty' }).eq('id', currentRoom.id);
-      await supabase.from('rooms').update({ status: 'occupied' }).eq('id', form.toRoomId);
+      await supabase.from('rooms').update({ status: 'occupied' }).eq('id', form.to_room_id);
       await supabase.from('room_transfers').insert({
         reservation_id: folio.reservation_id, from_room_id: currentRoom?.id || null,
-        to_room_id: form.toRoomId, reason: form.reason || null, performed_by: userId,
+        to_room_id: form.to_room_id, reason: form.reason || null, performed_by: userId,
       });
       await supabase.from('audit_logs').insert({
         organization_id: orgId, branch_id: branchId, user_id: userId,
         action: 'room_transfer', object_type: 'reservation', object_id: folio.reservation_id,
-        previous_value: { room: currentRoom?.room_number }, new_value: { room: rooms.find((r) => r.id === form.toRoomId)?.room_number },
+        previous_value: { room: currentRoom?.room_number }, new_value: { room: rooms.find((r) => r.id === form.to_room_id)?.room_number },
       });
       const provider = getLockProvider();
       await provider.invalidateGuestCard({ cardId: folio.reservation_id });
@@ -511,12 +510,14 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
     }
   };
 
+  const handleCancel = () => { clearDraft(ROOM_TRANSFER_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open onClose={onClose} title={t('res.transfer_room')} size="md"
-      footer={<><Button variant="secondary" onClick={() => { clearDraft(ROOM_TRANSFER_DRAFT_KEY); onClose(); }}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.confirm')}</Button></>}>
+    <Modal open onClose={handleCancel} title={t('res.transfer_room')} size="md"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.confirm')}</Button></>}>
       <div className="space-y-4">
-        <div className="text-sm text-slate-600">{t('common.room')}: <span className="font-medium">{currentRoom?.room_number || '-'}</span> → <span className="text-blue-600 font-medium">{rooms.find((r) => r.id === form.toRoomId)?.room_number || '?'}</span></div>
-        <Select label="New Room" value={form.toRoomId} onChange={(e) => setForm({ ...form, toRoomId: e.target.value })} required>
+        <div className="text-sm text-slate-600">{t('common.room')}: <span className="font-medium">{currentRoom?.room_number || '-'}</span> → <span className="text-blue-600 font-medium">{rooms.find((r) => r.id === form.to_room_id)?.room_number || '?'}</span></div>
+        <Select label="New Room" value={form.to_room_id} onChange={(e) => setForm({ ...form, to_room_id: e.target.value })} required>
           <option value="">--</option>
           {rooms.map((r) => <option key={r.id} value={r.id}>{r.room_number} ({t(`room.${r.status}`)})</option>)}
         </Select>

@@ -16,8 +16,14 @@ import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import { folioService } from '@/services/financial';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
+
+const CHECKIN_DRAFT_KEY = 'checkin_time_draft';
+const CHECKOUT_DRAFT_KEY = 'checkout_time_draft';
+const EXTEND_DRAFT_KEY = 'extend_stay_draft';
+const SPLIT_DRAFT_KEY = 'split_room_draft';
 
 export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavigateToPayment, onNavigateToInvoice }: { initialReservationId?: string | null; searchQuery?: string; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { branches } = useAuth();
@@ -211,7 +217,10 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
   const [groupRooms, setGroupRooms] = useState<ReservationRoom[]>([]);
   const [loading, setLoading] = useState(true);
   const [earlyWarning, setEarlyWarning] = useState(false);
-  const [checkinTime, setCheckinTime] = useState(nowInTimezone('Asia/Jakarta'));
+  const [checkinTime, setCheckinTime] = useState(() => {
+    const draft = loadDraft<string>(CHECKIN_DRAFT_KEY);
+    return draft || nowInTimezone('Asia/Jakarta');
+  });
   const [cardState, setCardState] = useState<'idle'|'connecting'|'writing'|'confirming'|'success'|'failed'|'unavailable'>('idle');
   const [cardMessage, setCardMessage] = useState('');
   const [completing, setCompleting] = useState(false);
@@ -252,6 +261,8 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
       setLoading(false);
     })();
   }, [reservation]);
+
+  useEffect(() => { saveDraft(CHECKIN_DRAFT_KEY, checkinTime); }, [checkinTime]);
 
   useEffect(() => {
     // Use the branch's timezone to determine the actual local date.
@@ -373,6 +384,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
     });
 
     showToast(t('checkin.complete'),'success');
+    clearDraft(CHECKIN_DRAFT_KEY);
     setCompleting(false);
     onClose();
   };
@@ -470,7 +482,10 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   const [groupRooms,setGroupRooms]=useState<ReservationRoom[]>([]);
   const [loading,setLoading]=useState(true);
   const [lateWarning,setLateWarning]=useState(false);
-  const [checkoutTime,setCheckoutTime]=useState(new Date().toTimeString().slice(0,5));
+  const [checkoutTime,setCheckoutTime]=useState(() => {
+    const draft = loadDraft<string>(CHECKOUT_DRAFT_KEY);
+    return draft || new Date().toTimeString().slice(0,5);
+  });
   const [completing,setCompleting]=useState(false);
   const [overrideUnpaid,setOverrideUnpaid]=useState(false);
   const [showOverrideConfirm,setShowOverrideConfirm]=useState(false);
@@ -514,6 +529,8 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
       setLoading(false);
     })();
   },[reservation]);
+
+  useEffect(() => { saveDraft(CHECKOUT_DRAFT_KEY, checkoutTime); }, [checkoutTime]);
 
   useEffect(()=>{
     const today = todayISO();
@@ -615,6 +632,7 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
       });
 
       showToast(t('checkout.complete'), 'success');
+      clearDraft(CHECKOUT_DRAFT_KEY);
       setCompleting(false);
       onClose();
     } catch(err:any) {
@@ -745,8 +763,14 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   const [rateTouched, setRateTouched] = useState(false);
 
   const previousCheckoutDate = reservation.check_out_date;
-  const [newCheckoutDate, setNewCheckoutDate] = useState(addDays(previousCheckoutDate, 1));
-  const [roomRate, setRoomRate] = useState(String(reservation.rate));
+  const [newCheckoutDate, setNewCheckoutDate] = useState(() => {
+    const draft = loadDraft<{ newCheckoutDate: string; roomRate: string }>(EXTEND_DRAFT_KEY);
+    return draft?.newCheckoutDate || addDays(previousCheckoutDate, 1);
+  });
+  const [roomRate, setRoomRate] = useState(() => {
+    const draft = loadDraft<{ newCheckoutDate: string; roomRate: string }>(EXTEND_DRAFT_KEY);
+    return draft?.roomRate || String(reservation.rate);
+  });
 
   useEffect(() => {
     (async () => {
@@ -783,6 +807,8 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
       setLoading(false);
     })();
   }, [reservation, user]);
+
+  useEffect(() => { saveDraft(EXTEND_DRAFT_KEY, { newCheckoutDate, roomRate }); }, [newCheckoutDate, roomRate]);
 
   // Calculation: extra nights = new checkout date - previous checkout date
   const extraNights = Math.max(0, nightsBetween(previousCheckoutDate, newCheckoutDate));
@@ -903,6 +929,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
       });
 
       showToast(`Stay extended by ${extraNights} night(s). Additional charge: ${formatIDR(additionalCharge)}`, 'success');
+      clearDraft(EXTEND_DRAFT_KEY);
       setSaving(false);
       onClose();
     } catch (err: any) {
@@ -1005,7 +1032,12 @@ function SplitRoomModal({ reservation, reservationRooms, rooms, onClose }: {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [selectedRoomId, setSelectedRoomId] = useState('');
+  const [selectedRoomId, setSelectedRoomId] = useState(() => {
+    const draft = loadDraft<string>(SPLIT_DRAFT_KEY);
+    return draft || '';
+  });
+
+  useEffect(() => { saveDraft(SPLIT_DRAFT_KEY, selectedRoomId); }, [selectedRoomId]);
 
   const roomMap = useMemo(() => new Map(rooms.map(r => [r.id, r])), [rooms]);
 
@@ -1103,6 +1135,7 @@ function SplitRoomModal({ reservation, reservationRooms, rooms, onClose }: {
       });
 
       showToast(`Room split into new reservation ${newResNum}.`, 'success');
+      clearDraft(SPLIT_DRAFT_KEY);
       setSaving(false);
       onClose();
     } catch (err: any) {

@@ -9,6 +9,10 @@ import { Input, Textarea } from '@/components/ui/Form';
 import { LoadingPage } from '@/components/ui/States';
 import { Save, Settings } from 'lucide-react';
 import type { Organization, SystemSetting } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const ORG_DRAFT_KEY = 'system_settings_org_draft';
+const SETTINGS_DRAFT_KEY = 'system_settings_values_draft';
 
 const SETTING_KEYS = [
   { key: 'early_checkin_charge', label: 'settings.early_checkin_charge', type: 'number' },
@@ -19,6 +23,8 @@ const SETTING_KEYS = [
   { key: 'reservation_prefix', label: 'settings.reservation_prefix', type: 'string' },
 ];
 
+const initialOrgForm = { name: '', legal_name: '', address: '', phone: '', email: '', tax_id: '', currency: 'IDR', timezone: 'Asia/Jakarta' };
+
 export function SystemSettingsPage() {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -27,8 +33,16 @@ export function SystemSettingsPage() {
   const [settings, setSettings] = useState<SystemSetting[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [orgForm, setOrgForm] = useState({ name: '', legal_name: '', address: '', phone: '', email: '', tax_id: '', currency: 'IDR', timezone: 'Asia/Jakarta' });
-  const [settingValues, setSettingValues] = useState<Record<string, string>>({});
+  const [orgForm, setOrgForm] = useState(() => {
+    const draft = loadDraft<typeof initialOrgForm>(ORG_DRAFT_KEY);
+    return draft || { ...initialOrgForm };
+  });
+  const [settingValues, setSettingValues] = useState<Record<string, string>>(() => {
+    const draft = loadDraft<Record<string, string>>(SETTINGS_DRAFT_KEY);
+    const vals: Record<string, string> = {};
+    SETTING_KEYS.forEach(({ key }) => { vals[key] = draft?.[key] || ''; });
+    return vals;
+  });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -39,21 +53,29 @@ export function SystemSettingsPage() {
     const o = orgData as Organization | null;
     setOrg(o);
     if (o) {
-      setOrgForm({ name: o.name, legal_name: o.legal_name || '', address: o.address || '', phone: o.phone || '', email: o.email || '', tax_id: o.tax_id || '', currency: o.currency, timezone: o.timezone });
+      const orgDraft = loadDraft<typeof initialOrgForm>(ORG_DRAFT_KEY);
+      if (orgDraft) {
+        setOrgForm(orgDraft);
+      } else {
+        setOrgForm({ name: o.name, legal_name: o.legal_name || '', address: o.address || '', phone: o.phone || '', email: o.email || '', tax_id: o.tax_id || '', currency: o.currency, timezone: o.timezone });
+      }
     }
     const s = (settingData as SystemSetting[]) || [];
     setSettings(s);
+    const settingsDraft = loadDraft<Record<string, string>>(SETTINGS_DRAFT_KEY);
     const vals: Record<string, string> = {};
     s.forEach((s) => { vals[s.key] = s.value; });
-    // Defaults
     SETTING_KEYS.forEach(({ key }) => {
-      if (!vals[key]) vals[key] = '';
+      if (!vals[key]) vals[key] = settingsDraft?.[key] || '';
     });
     setSettingValues(vals);
     setLoading(false);
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => { saveDraft(ORG_DRAFT_KEY, orgForm); }, [orgForm]);
+  useEffect(() => { saveDraft(SETTINGS_DRAFT_KEY, settingValues); }, [settingValues]);
 
   const handleSaveOrg = async () => {
     setSaving(true);
@@ -63,7 +85,7 @@ export function SystemSettingsPage() {
       currency: orgForm.currency, timezone: orgForm.timezone,
     }).eq('id', user!.organization_id);
     if (error) showToast(error.message, 'error');
-    else showToast('Organization saved', 'success');
+    else { showToast('Organization saved', 'success'); clearDraft(ORG_DRAFT_KEY); }
     setSaving(false);
   };
 
@@ -81,6 +103,7 @@ export function SystemSettingsPage() {
       }
     }
     showToast('Settings saved', 'success');
+    clearDraft(SETTINGS_DRAFT_KEY);
     setSaving(false);
   };
 
