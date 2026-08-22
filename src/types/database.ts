@@ -105,6 +105,8 @@ export interface RoomType {
   code: string;
   description: string | null;
   base_rate: number;
+  weekday_rate: number;
+  weekend_rate: number;
   max_occupancy: number;
   default_tax_rate: number;
   is_active: boolean;
@@ -188,25 +190,8 @@ export interface Reservation {
   created_by: string | null;
   parent_reservation_id: string | null;
   is_group: boolean;
-  parent_reservation_id: string | null;
-  is_group: boolean;
   created_at: string;
   updated_at: string;
-export interface ReservationRoom {
-  id: string;
-  reservation_id: string;
-  branch_id: string;
-  room_id: string | null;
-  room_type_id: string | null;
-  rate: number;
-  check_in_date: string;
-  check_out_date: string;
-  num_nights: number;
-  status: string;
-  created_at: string;
-  updated_at: string;
-}
-
 }
 
 export interface ReservationRoom {
@@ -441,11 +426,6 @@ export interface NightAudit {
 export interface RoomTransfer {
   id: string;
   reservation_id: string;
-export interface ReservationRoomWithRelations extends ReservationRoom {
-  room?: Room | null;
-  room_type?: RoomType | null;
-}
-
   from_room_id: string | null;
   to_room_id: string;
   reason: string | null;
@@ -453,7 +433,6 @@ export interface ReservationRoomWithRelations extends ReservationRoom {
   created_at: string;
 }
 
-  reservation_rooms?: ReservationRoomWithRelations[];
 export interface RoomStatusHistory {
   id: string;
   room_id: string;
@@ -463,6 +442,16 @@ export interface RoomStatusHistory {
   reason: string | null;
   revert_after_nights: number | null;
   revert_to: string | null;
+  created_at: string;
+}
+
+export interface IndonesianHoliday {
+  id: string;
+  organization_id: string;
+  holiday_date: string;
+  holiday_name: string;
+  is_active: boolean;
+  created_by: string | null;
   created_at: string;
 }
 

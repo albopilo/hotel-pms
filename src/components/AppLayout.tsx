@@ -49,7 +49,7 @@ const navItems: NavItem[] = [
   { key: 'hotel_lock', labelKey: 'nav.hotel_lock', icon: <KeyRound size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
   { key: 'system_settings', labelKey: 'nav.system_settings', icon: <Settings size={20} />, roles: ['super_admin'], group: 'admin' },
   { key: 'audit_logs', labelKey: 'nav.audit_logs', icon: <ScrollText size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
-  { key: 'guide', labelKey: 'nav.guide', icon: <BookOpen size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
+  { key: 'guide', labelKey: 'nav.guide', icon: <BookOpen size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
 ];
 
 interface LayoutProps {
