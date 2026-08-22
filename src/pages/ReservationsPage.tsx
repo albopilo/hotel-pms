@@ -519,23 +519,52 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
       } else if (folio) {
         const items: any[] = [];
 
-        // Room charges for each room
+        // Room charges for each room — one folio item per night using weekday/weekend breakdown
         roomRows.forEach((row, idx) => {
           const room = rooms.find(r => r.id === row.room_id);
-          items.push({
-            folio_id: folio.id,
-            branch_id: form.branch_id,
-            reservation_id: data.id,
-            guest_id: form.guest_id,
-            room_id: row.room_id,
-            item_type: 'charge',
-            category: 'room',
-            description: isGroup ? `Room charge - Room ${room?.room_number || idx + 1}` : 'Room charge',
-            quantity: Number(nights) || 1,
-            unit_amount: Number(row.rate),
-            amount: Number(row.rate) * (Number(nights) || 1),
-            created_by: userId
-          });
+          const roomType = roomTypes.find(rt => rt.id === row.room_type_id);
+          let perNightCharges: { date: string; rate: number; rateType: string }[] = [];
+          if (roomType) {
+            const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
+            perNightCharges = breakdown;
+          }
+          if (perNightCharges.length > 0) {
+            perNightCharges.forEach((day) => {
+              items.push({
+                folio_id: folio.id,
+                branch_id: form.branch_id,
+                reservation_id: data.id,
+                guest_id: form.guest_id,
+                room_id: row.room_id,
+                item_type: 'charge',
+                category: 'room',
+                description: isGroup
+                  ? `Room ${room?.room_number || idx + 1} - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`
+                  : `Room charge - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`,
+                quantity: 1,
+                unit_amount: day.rate,
+                amount: day.rate,
+                business_date: day.date,
+                created_by: userId
+              });
+            });
+          } else {
+            // Fallback: use flat rate if no room type found
+            items.push({
+              folio_id: folio.id,
+              branch_id: form.branch_id,
+              reservation_id: data.id,
+              guest_id: form.guest_id,
+              room_id: row.room_id,
+              item_type: 'charge',
+              category: 'room',
+              description: isGroup ? `Room charge - Room ${room?.room_number || idx + 1}` : 'Room charge',
+              quantity: Number(nights) || 1,
+              unit_amount: Number(row.rate),
+              amount: Number(row.rate) * (Number(nights) || 1),
+              created_by: userId
+            });
+          }
         });
 
         if (Number(form.discount) > 0) {
