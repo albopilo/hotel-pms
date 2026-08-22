@@ -9,8 +9,11 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { Plus, Edit, CreditCard, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as Edit, CreditCard, Trash2 } from 'lucide-react';
 import type { PaymentMethod } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const METHOD_DRAFT_KEY = 'payment_method_form_draft';
 
 export function PaymentSettingsPage() {
   const { user } = useAuth();
@@ -94,21 +97,31 @@ export function PaymentSettingsPage() {
   );
 }
 
+const initialMethodForm = { name: '', code: '', is_cash: false, is_edc: false, is_ota: false, is_active: true, sort_order: '0' };
+
 function MethodFormModal({ open, onClose, method, orgId, onSaved }: {
   open: boolean; onClose: () => void; method: PaymentMethod | null; orgId: string; onSaved: () => void;
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ name: '', code: '', is_cash: false, is_edc: false, is_ota: false, is_active: true, sort_order: '0' });
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialMethodForm>(METHOD_DRAFT_KEY);
+    return draft || { ...initialMethodForm };
+  });
 
   useEffect(() => {
     if (method) {
       setForm({ name: method.name, code: method.code, is_cash: method.is_cash, is_edc: method.is_edc, is_ota: method.is_ota, is_active: method.is_active, sort_order: String(method.sort_order) });
     } else {
-      setForm({ name: '', code: '', is_cash: false, is_edc: false, is_ota: false, is_active: true, sort_order: '0' });
+      const draft = loadDraft<typeof initialMethodForm>(METHOD_DRAFT_KEY);
+      setForm(draft || { ...initialMethodForm });
     }
   }, [method, open]);
+
+  useEffect(() => {
+    if (open && !method) saveDraft(METHOD_DRAFT_KEY, form);
+  }, [form, open, method]);
 
   const handleSubmit = async () => {
     if (!form.name || !form.code) { showToast('Name and code required', 'error'); return; }
@@ -122,13 +135,15 @@ function MethodFormModal({ open, onClose, method, orgId, onSaved }: {
       ? await supabase.from('payment_methods').update(payload).eq('id', method.id)
       : await supabase.from('payment_methods').insert(payload);
     if (error) showToast(error.message, 'error');
-    else { showToast('Saved', 'success'); onSaved(); }
+    else { showToast('Saved', 'success'); clearDraft(METHOD_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
+  const handleCancel = () => { clearDraft(METHOD_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open={open} onClose={onClose} title={method ? t('common.edit') : t('common.add')} size="sm"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open={open} onClose={handleCancel} title={method ? t('common.edit') : t('common.add')} size="sm"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Input label={t('common.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
         <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />

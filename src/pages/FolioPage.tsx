@@ -15,7 +15,12 @@ import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle,
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType, ReservationRoom } from '@/types/database';
+
+const ADD_CHARGE_DRAFT_KEY = 'folio_add_charge_draft';
+const TAKE_PAYMENT_DRAFT_KEY = 'folio_take_payment_draft';
+const POST_STAY_DRAFT_KEY = 'folio_post_stay_draft';
 
 type FolioListRow = Folio & {
   guest?: Pick<Guest, 'full_name'> | null;
@@ -324,6 +329,8 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   );
 }
 
+const initialAddChargeForm = { category_id: '', description: '', amount: '0', quantity: '1', notes: '' };
+
 function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, onClose, onSaved }: {
   folio: Folio; reservation: Reservation | null; room: Room | null; chargeCats: ChargeCategory[];
   userId: string; orgId: string; onClose: () => void; onSaved: () => void;
@@ -331,7 +338,12 @@ function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, o
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ category_id: '', description: '', amount: '0', quantity: '1', notes: '' });
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialAddChargeForm>(ADD_CHARGE_DRAFT_KEY);
+    return draft || { ...initialAddChargeForm };
+  });
+
+  useEffect(() => { if (open) saveDraft(ADD_CHARGE_DRAFT_KEY, form); }, [form, open]);
 
   const handleSubmit = async () => {
     if (!form.description || parseFloat(form.amount) <= 0) { showToast('Description and amount required', 'error'); return; }
@@ -345,6 +357,7 @@ function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, o
         notes: form.notes, userId, orgId,
       }, chargeCats);
       showToast('Charge added', 'success');
+      clearDraft(ADD_CHARGE_DRAFT_KEY);
       setSaving(false);
       onSaved();
     } catch (e) {
@@ -354,9 +367,11 @@ function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, o
     }
   };
 
+  const handleCancel = () => { clearDraft(ADD_CHARGE_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open onClose={onClose} title={t('folio.add_charge')} size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open onClose={handleCancel} title={t('folio.add_charge')} size="md"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Select label={t('common.category')} value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
           <option value="">--</option>
@@ -373,6 +388,8 @@ function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, o
   );
 }
 
+const initialTakePaymentForm = { method_id: '', subtype: '', edc_terminal: '', reference_number: '', approval_code: '', amount: '0', notes: '' };
+
 function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, onClose, onSaved }: {
   folio: Folio; reservation: Reservation | null; paymentMethods: PaymentMethod[];
   userId: string; orgId: string; onClose: () => void; onSaved: () => void;
@@ -380,7 +397,12 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ method_id: '', subtype: '', edc_terminal: '', reference_number: '', approval_code: '', amount: '0', notes: '' });
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialTakePaymentForm>(TAKE_PAYMENT_DRAFT_KEY);
+    return draft || { ...initialTakePaymentForm };
+  });
+
+  useEffect(() => { if (open) saveDraft(TAKE_PAYMENT_DRAFT_KEY, form); }, [form, open]);
 
   const selectedMethod = paymentMethods.find((m) => m.id === form.method_id);
 
@@ -396,6 +418,7 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
         notes: form.notes, userId, orgId,
       }, paymentMethods);
       showToast('Payment recorded', 'success');
+      clearDraft(TAKE_PAYMENT_DRAFT_KEY);
       setSaving(false);
       onSaved();
     } catch (e) {
@@ -405,9 +428,11 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
     }
   };
 
+  const handleCancel = () => { clearDraft(TAKE_PAYMENT_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open onClose={onClose} title={t('payment.record_payment')} size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} variant="success" onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open onClose={handleCancel} title={t('payment.record_payment')} size="md"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} variant="success" onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
         <Select label={t('common.payment_method')} value={form.method_id} onChange={(e) => setForm({ ...form, method_id: e.target.value, subtype: '' })} required>
           <option value="">--</option>
@@ -493,6 +518,8 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
   );
 }
 
+const initialPostStayForm = { category_id: '', description: '', amount: '0', notes: '' };
+
 function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, orgId, onClose, onSaved }: {
   folio: Folio; reservation: Reservation | null; room: Room | null; chargeCats: ChargeCategory[];
   userId: string; orgId: string; onClose: () => void; onSaved: () => void;
@@ -500,7 +527,12 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ category_id: '', description: '', amount: '0', notes: '' });
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialPostStayForm>(POST_STAY_DRAFT_KEY);
+    return draft || { ...initialPostStayForm };
+  });
+
+  useEffect(() => { if (open) saveDraft(POST_STAY_DRAFT_KEY, form); }, [form, open]);
 
   const handleSubmit = async () => {
     if (!form.description || parseFloat(form.amount) <= 0) { showToast('Description and amount required', 'error'); return; }
@@ -513,6 +545,7 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
         amount: parseFloat(form.amount), notes: form.notes, userId, orgId,
       }, chargeCats);
       showToast('Post-stay charge added', 'success');
+      clearDraft(POST_STAY_DRAFT_KEY);
       setSaving(false);
       onSaved();
     } catch (e) {
@@ -522,9 +555,11 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
     }
   };
 
+  const handleCancel = () => { clearDraft(POST_STAY_DRAFT_KEY); onClose(); };
+
   return (
-    <Modal open onClose={onClose} title={t('folio.post_stay_charge')} size="md"
-      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} variant="warning" onClick={handleSubmit}>{t('common.save')}</Button></>}>
+    <Modal open onClose={handleCancel} title={t('folio.post_stay_charge')} size="md"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} variant="warning" onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <div className="space-y-4">
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">This charge will be added as a post-stay additional charge. The original finalized invoice will not be modified.</div>
         <Select label={t('common.category')} value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
