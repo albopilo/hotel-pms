@@ -44,9 +44,14 @@ function AuthenticatedApp() {
     setCurrentPage('checkin_checkout');
   };
 
+  const handleNavigateToPayment = (id: string) => {
+    setSelectedReservationId(id);
+    setCurrentPage('payments');
+  };
+
   const handleNavigate = (page: PageKey) => {
     setCurrentPage(page);
-    if (page !== 'checkin_checkout') {
+    if (page !== 'checkin_checkout' && page !== 'payments') {
       setSelectedReservationId(null);
     }
   };
@@ -56,15 +61,15 @@ function AuthenticatedApp() {
       case 'dashboard':
         return <DashboardPage />;
       case 'reservations':
-        return <ReservationsPage searchQuery={searchQuery} onSelectReservation={handleSelectReservation} />;
+        return <ReservationsPage searchQuery={searchQuery} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
       case 'calendar':
-        return <CalendarPage onSelectReservation={handleSelectReservation} />;
+        return <CalendarPage onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
       case 'rooms':
         return <RoomsPage />;
       case 'guests':
         return <GuestsPage searchQuery={searchQuery} />;
       case 'checkin_checkout':
-        return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} />;
+        return <CheckinCheckoutPage initialReservationId={selectedReservationId} searchQuery={searchQuery} onNavigateToPayment={handleNavigateToPayment} />;
       case 'payments':
         return <FolioPage searchQuery={searchQuery} reservationId={selectedReservationId} />;
       case 'invoices':

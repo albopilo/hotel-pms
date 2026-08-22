@@ -64,7 +64,7 @@ function clearDraft() {
   }
 }
 
-export function ReservationsPage({ searchQuery = '', onSelectReservation }: { searchQuery?: string; onSelectReservation?: (id: string) => void }) {
+export function ReservationsPage({ searchQuery = '', onSelectReservation, onNavigateToPayment }: { searchQuery?: string; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -171,7 +171,10 @@ export function ReservationsPage({ searchQuery = '', onSelectReservation }: { se
                       <td className="text-center">{r.num_nights}</td>
                       <td className="text-right">{formatIDR(r.rate)}</td>
                       <td className="text-center"><ResStatusBadge status={r.status} label={t(`res.${r.status}`)} /></td>
-                      <td><button onClick={e => { e.stopPropagation(); onSelectReservation?.(r.id); }} className="text-blue-600 text-xs">{t('common.view')}</button></td>
+                      <td className="py-3 px-4"><div className="flex gap-2 justify-end">
+                        <button onClick={e => { e.stopPropagation(); onSelectReservation?.(r.id); }} className="text-blue-600 text-xs font-medium">{t('common.view')}</button>
+                        <button onClick={e => { e.stopPropagation(); onNavigateToPayment?.(r.id); }} className="text-emerald-600 text-xs font-medium">{t('res.view_folio')}</button>
+                      </div></td>
                     </tr>
                   );
                 })}
