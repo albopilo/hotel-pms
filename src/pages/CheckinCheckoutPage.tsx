@@ -16,6 +16,7 @@ import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import { folioService } from '@/services/financial';
+import { getBusinessDate } from '@/services/businessDateService';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
@@ -282,20 +283,20 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
     const charge = parseFloat(data?.value || '0');
     if (charge <= 0) return showToast('No early check-in charge configured','warning');
 
-    const businessDate = todayInTimezone(branchTimezone);
+    const businessDate = await getBusinessDate(reservation.branch_id);
 
     await supabase.from('folio_items').insert({
       folio_id: folio.id, branch_id: reservation.branch_id, reservation_id: reservation.id,
       guest_id: reservation.primary_guest_id, room_id: reservation.room_id,
       item_type:'charge', category:'early_checkin', description:'Early check-in charge',
-      quantity:1, unit_amount:charge, amount:charge, business_date, created_by:user!.id
+      quantity:1, unit_amount:charge, amount:charge, business_date: businessDate, created_by:user!.id
     });
 
     await supabase.from('transactions').insert({
       branch_id:reservation.branch_id, organization_id:user!.organization_id,
       reservation_id:reservation.id, guest_id:reservation.primary_guest_id, folio_id:folio.id,
       transaction_type:'early_checkin_charge', description:'Early check-in charge',
-      amount:charge, debit_credit:'debit', business_date, created_by:user!.id
+      amount:charge, debit_credit:'debit', business_date: businessDate, created_by:user!.id
     });
 
     showToast(`Early check-in charge added: ${formatIDR(charge)}`,'success');
@@ -557,11 +558,12 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
     const charge = parseFloat(data?.value || '0');
     if (charge <= 0) return showToast('No late checkout charge configured','warning');
 
+    const businessDate = await getBusinessDate(reservation.branch_id);
     await supabase.from('folio_items').insert({
       folio_id:folio.id, branch_id:reservation.branch_id, reservation_id:reservation.id,
       guest_id:reservation.primary_guest_id, room_id:reservation.room_id,
       item_type:'charge', category:'late_checkout', description:'Late check-out charge',
-      quantity:1, unit_amount:charge, amount:charge, business_date:todayISO(), created_by:user!.id
+      quantity:1, unit_amount:charge, amount:charge, business_date: businessDate, created_by:user!.id
     });
 
     showToast(`Late checkout charge added: ${formatIDR(charge)}`,'success');
@@ -887,6 +889,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
           const { error: chargeError } = await supabase.from('folio_items').insert(items);
           if (chargeError) throw chargeError;
         } else {
+          const businessDate = await getBusinessDate(reservation.branch_id);
           const { error: chargeError } = await supabase.from('folio_items').insert({
             folio_id: folio.id,
             branch_id: reservation.branch_id,
@@ -899,7 +902,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
             quantity: extraNights,
             unit_amount: Number(roomRate),
             amount: additionalCharge,
-            business_date: todayISO(),
+            business_date: businessDate,
             created_by: user!.id,
           });
           if (chargeError) throw chargeError;

@@ -16,6 +16,7 @@ import type { Reservation, Guest, Room, RoomType, BookingSource, Branch, Indones
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import { reservationService, ReservationError } from '@/services/reservation';
+import { getBusinessDate } from '@/services/businessDateService';
 
 interface RoomRow {
   room_type_id: string;
@@ -511,6 +512,8 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     const firstRow = roomRows[0];
     const totalRoomCharges = roomRows.reduce((sum, row) => sum + Number(row.rate) * nights, 0);
 
+    const businessDate = await getBusinessDate(form.branch_id);
+
     const payload: any = {
       branch_id: form.branch_id,
       organization_id: orgId,
@@ -628,7 +631,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
               quantity: Number(nights) || 1,
               unit_amount: Number(row.rate),
               amount: Number(row.rate) * (Number(nights) || 1),
-              business_date: form.check_in_date,
+              business_date: businessDate,
               created_by: userId
             });
           }
@@ -638,7 +641,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           items.push({
             folio_id: folio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
             item_type: 'discount', category: 'discount', description: 'Discount',
-            quantity: 1, unit_amount: -Number(form.discount), amount: -Number(form.discount), business_date: form.check_in_date, created_by: userId
+            quantity: 1, unit_amount: -Number(form.discount), amount: -Number(form.discount), business_date: businessDate, created_by: userId
           });
         }
 
@@ -646,7 +649,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           items.push({
             folio_id: folio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
             item_type: 'tax', category: 'tax', description: 'Tax',
-            quantity: 1, unit_amount: Number(form.tax), amount: Number(form.tax), business_date: form.check_in_date, created_by: userId
+            quantity: 1, unit_amount: Number(form.tax), amount: Number(form.tax), business_date: businessDate, created_by: userId
           });
         }
 
@@ -654,7 +657,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           items.push({
             folio_id: folio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
             item_type: 'charge', category: 'deposit', description: 'Security deposit',
-            quantity: 1, unit_amount: Number(form.deposit), amount: Number(form.deposit), business_date: form.check_in_date, created_by: userId
+            quantity: 1, unit_amount: Number(form.deposit), amount: Number(form.deposit), business_date: businessDate, created_by: userId
           });
         }
 
