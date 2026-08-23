@@ -107,10 +107,25 @@ export const invoiceService = {
 
     const folioItems = (items || []) as FolioItem[];
 
-    await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId);
+    await supabase.from('invoice_items').delete().eq('invoice_id', invoiceId).is('folio_item_id', null);
 
     // Only show charge and tax items as invoice line items; payments are shown as paid amount
     const lineItems = folioItems.filter((i) => i.item_type === 'charge' || i.item_type === 'tax' || i.item_type === 'discount');
+
+    const activeFolioItemIds = new Set(lineItems.map((i) => i.id));
+
+    const { data: existingItems } = await supabase
+      .from('invoice_items')
+      .select('id, folio_item_id')
+      .eq('invoice_id', invoiceId)
+      .not('folio_item_id', 'is', null);
+
+    const staleIds = ((existingItems || []) as { id: string; folio_item_id: string }[])
+      .filter((ei) => !activeFolioItemIds.has(ei.folio_item_id))
+      .map((ei) => ei.id);
+    if (staleIds.length) {
+      await supabase.from('invoice_items').delete().in('id', staleIds);
+    }
 
     const invoiceItems = lineItems.map((item, index) => ({
       invoice_id: invoiceId,
@@ -126,7 +141,7 @@ export const invoiceService = {
     if (invoiceItems.length) {
       const { error: itemError } = await supabase
         .from('invoice_items')
-        .insert(invoiceItems);
+        .upsert(invoiceItems, { onConflict: 'invoice_id,folio_item_id' });
       if (itemError) {
         throw new InvoiceError(itemError.message);
       }
