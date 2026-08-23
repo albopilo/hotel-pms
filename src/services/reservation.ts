@@ -175,6 +175,189 @@ export const reservationService = {
     });
   },
 
+  async cancelReservation(
+    reservationId: string,
+    branchId: string,
+    userId: string,
+    orgId: string,
+    reason: string,
+  ): Promise<void> {
+    const { data: res, error: fetchErr } = await supabase
+      .from('reservations')
+      .select('id, status, room_id, reservation_number')
+      .eq('id', reservationId)
+      .maybeSingle();
+    if (fetchErr || !res) {
+      throw new ReservationError('Reservation not found', 'not_found');
+    }
+    if (res.status === 'cancelled') {
+      throw new ReservationError('Reservation is already cancelled', 'already_cancelled');
+    }
+
+    const { error } = await supabase
+      .from('reservations')
+      .update({ status: 'cancelled' })
+      .eq('id', reservationId);
+    if (error) {
+      if (error.message.includes('row-level security')) {
+        throw new ReservationError(
+          'You do not have permission to cancel reservations. Only managers and super admins can void reservations.',
+          'permission_denied',
+        );
+      }
+      throw new ReservationError(error.message, 'db_error');
+    }
+
+    if (res.room_id) {
+      await supabase.from('rooms').update({ status: 'available' }).eq('id', res.room_id);
+    }
+
+    const { data: folio } = await supabase
+      .from('folios')
+      .select('id')
+      .eq('reservation_id', reservationId)
+      .maybeSingle();
+    if (folio) {
+      await supabase.from('folios').update({ status: 'void' }).eq('id', folio.id);
+    }
+
+    const { data: invoices } = await supabase
+      .from('invoices')
+      .select('id')
+      .eq('reservation_id', reservationId);
+    if (invoices && invoices.length > 0) {
+      for (const inv of invoices) {
+        await supabase.from('invoices').update({ status: 'void' }).eq('id', inv.id);
+      }
+    }
+
+    await supabase.from('audit_logs').insert({
+      organization_id: orgId,
+      branch_id: branchId,
+      user_id: userId,
+      action: 'reservation_voided',
+      object_type: 'reservation',
+      object_id: reservationId,
+      previous_value: { status: res.status, reservation_number: res.reservation_number },
+      new_value: { status: 'cancelled', reason },
+      reason: reason || null,
+    });
+
+    if (folio) {
+      await supabase.from('audit_logs').insert({
+        organization_id: orgId,
+        branch_id: branchId,
+        user_id: userId,
+        action: 'folio_voided',
+        object_type: 'folio',
+        object_id: folio.id,
+        new_value: { reason, reservation_id: reservationId },
+        reason: reason || null,
+      });
+    }
+
+    if (invoices && invoices.length > 0) {
+      for (const inv of invoices) {
+        await supabase.from('audit_logs').insert({
+          organization_id: orgId,
+          branch_id: branchId,
+          user_id: userId,
+          action: 'invoice_voided',
+          object_type: 'invoice',
+          object_id: inv.id,
+          new_value: { reason, reservation_id: reservationId },
+          reason: reason || null,
+        });
+      }
+    }
+  },
+
+  async voidFolio(
+    folioId: string,
+    branchId: string,
+    userId: string,
+    orgId: string,
+    reason: string,
+  ): Promise<void> {
+    const { data: folio, error: fetchErr } = await supabase
+      .from('folios')
+      .select('id, status, folio_number, reservation_id')
+      .eq('id', folioId)
+      .maybeSingle();
+    if (fetchErr || !folio) {
+      throw new ReservationError('Folio not found', 'not_found');
+    }
+
+    const { error } = await supabase
+      .from('folios')
+      .update({ status: 'void' })
+      .eq('id', folioId);
+    if (error) {
+      if (error.message.includes('row-level security')) {
+        throw new ReservationError(
+          'You do not have permission to void folios. Only managers and super admins can void folios.',
+          'permission_denied',
+        );
+      }
+      throw new ReservationError(error.message, 'db_error');
+    }
+
+    await supabase.from('audit_logs').insert({
+      organization_id: orgId,
+      branch_id: branchId,
+      user_id: userId,
+      action: 'folio_voided',
+      object_type: 'folio',
+      object_id: folioId,
+      previous_value: { status: folio.status, folio_number: folio.folio_number },
+      new_value: { status: 'void', reason },
+      reason: reason || null,
+    });
+  },
+
+  async voidInvoice(
+    invoiceId: string,
+    branchId: string,
+    userId: string,
+    orgId: string,
+    reason: string,
+  ): Promise<void> {
+    const { data: inv, error: fetchErr } = await supabase
+      .from('invoices')
+      .select('id, status, invoice_number')
+      .eq('id', invoiceId)
+      .maybeSingle();
+    if (fetchErr || !inv) {
+      throw new ReservationError('Invoice not found', 'not_found');
+    }
+
+    const { error } = await supabase
+      .from('invoices')
+      .update({ status: 'void' })
+      .eq('id', invoiceId);
+    if (error) {
+      if (error.message.includes('row-level security')) {
+        throw new ReservationError(
+          'You do not have permission to void invoices. Only managers and super admins can void invoices.',
+          'permission_denied',
+        );
+      }
+      throw new ReservationError(error.message, 'db_error');
+    }
+
+    await supabase.from('audit_logs').insert({
+      organization_id: orgId,
+      branch_id: branchId,
+      user_id: userId,
+      action: 'invoice_voided',
+      object_type: 'invoice',
+      object_id: invoiceId,
+      previous_value: { status: inv.status, invoice_number: inv.invoice_number },
+      new_value: { status: 'void', reason },
+      reason: reason || null,
+    });
+  },
+
   async checkOut(
     reservationId: string,
     branchId: string,
