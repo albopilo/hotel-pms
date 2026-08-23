@@ -286,6 +286,3 @@ export function WarningModal() {
     </>
   );
 }
-
-
-export { WarningModal }

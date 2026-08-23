@@ -1,4 +1,19 @@
+import type { HotelLockIntegration } from '@/types/database';
+
+export interface HotelLockProviderConfig {
+  bridgeUrl: string | null;
+  bridgeToken: string | null;
+  encoderPort: string | null;
+  dllPath: string | null;
+  hotelIdentifier: string | null;
+  encodingProfile: string | null;
+  autoPollEnabled: boolean;
+  providerType: 'mock' | 'production';
+}
+
 export interface HotelLockProvider {
+  configure(config: HotelLockProviderConfig): void;
+  getConfig(): HotelLockProviderConfig;
   connect(): Promise<boolean>;
   getStatus(): Promise<{ connected: boolean; encoderConnected: boolean }>;
   encodeGuestCard(params: {
@@ -34,11 +49,37 @@ export interface LockEvent {
   data?: Record<string, unknown>;
 }
 
+const DEFAULT_CONFIG: HotelLockProviderConfig = {
+  bridgeUrl: null,
+  bridgeToken: null,
+  encoderPort: null,
+  dllPath: null,
+  hotelIdentifier: null,
+  encodingProfile: null,
+  autoPollEnabled: false,
+  providerType: 'mock',
+};
+
+export function integrationToConfig(integ: HotelLockIntegration | null): HotelLockProviderConfig {
+  if (!integ) return { ...DEFAULT_CONFIG };
+  return {
+    bridgeUrl: integ.bridge_url,
+    bridgeToken: integ.bridge_token,
+    encoderPort: integ.encoder_port,
+    dllPath: integ.dll_path,
+    hotelIdentifier: integ.hotel_identifier,
+    encodingProfile: integ.encoding_profile,
+    autoPollEnabled: integ.auto_poll_enabled,
+    providerType: integ.provider_type,
+  };
+}
+
 export class MockHotelLockProvider implements HotelLockProvider {
   private connected = false;
   private encoderConnected = false;
   private events: LockEvent[] = [];
   private shouldFail = false;
+  private config: HotelLockProviderConfig = { ...DEFAULT_CONFIG };
 
   constructor() {
     this.events.push({
@@ -47,6 +88,15 @@ export class MockHotelLockProvider implements HotelLockProvider {
       message: 'Mock hotel lock provider initialized (DEVELOPMENT / MOCK MODE)',
       timestamp: new Date().toISOString(),
     });
+  }
+
+  configure(config: HotelLockProviderConfig): void {
+    this.config = { ...config };
+    this.logEvent('configure', 'info', `Provider configured (type=${config.providerType}, port=${config.encoderPort || '-'}, hotel=${config.hotelIdentifier || '-'})`);
+  }
+
+  getConfig(): HotelLockProviderConfig {
+    return { ...this.config };
   }
 
   async connect(): Promise<boolean> {

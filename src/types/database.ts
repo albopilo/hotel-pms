@@ -338,6 +338,11 @@ export interface HotelLockIntegration {
   card_technology: string;
   bridge_url: string | null;
   bridge_token: string | null;
+  encoder_port: string | null;
+  dll_path: string | null;
+  hotel_identifier: string | null;
+  encoding_profile: string | null;
+  auto_poll_enabled: boolean;
   is_enabled: boolean;
   connection_status: 'connected' | 'disconnected';
   encoder_status: 'connected' | 'disconnected';
