@@ -1,32 +1,27 @@
 {
-  "zkBioLock": {
-    "enabled": true,
-
-    "installPath": "C:\\Program Files (x86)\\ZKBiolock",
-
-    "exe": "LockSoftware.exe",
-
-    "architecture": "x86",
-
-    "runtime": ".NET Framework 2.0",
-
-    "dlls": {
-      "component": "ComponentDll.dll",
-      "database": "DataBase.dll",
-      "hardware": [
-        "generalHID.dll",
-        "RadioDev.dll",
-        "RadioLib.dll",
-        "WltRS.dll",
-        "Syn_IDCardRead.dll",
-        "sdtapi.dll"
-      ]
-    },
-
-    "card": {
-      "readerDll": "Syn_IDCardRead.dll",
-      "encoding": "unknown",
-      "verifyBeforeWrite": true
-    }
+  "port": 8765,
+  "authToken": "CHANGE-ME-TO-A-SECURE-TOKEN",
+  "dll": {
+    "searchPaths": [
+      "C:\\Program Files\\ZKTeco\\ZKBiolock",
+      "C:\\Program Files (x86)\\ZKTeco\\ZKBiolock",
+      "C:\\Program Files\\ZKTeco",
+      "C:\\Program Files (x86)\\ZKTeco",
+      "C:\\ZKBiolock",
+      "C:\\ZKTeco",
+      "D:\\ZKBiolock",
+      "D:\\ZKTeco"
+    ],
+    "dllNames": [
+      "zkemkeeper.dll",
+      "ZKBioLockSDK.dll",
+      "LockSDK.dll",
+      "CardEncoder.dll",
+      "BioLock.dll"
+    ]
+  },
+  "encoder": {
+    "defaultPort": "COM3",
+    "timeoutMs": 10000
   }
 }
