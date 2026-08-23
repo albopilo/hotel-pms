@@ -41,6 +41,19 @@ function digitsOnly(str: string): string {
   return (str || '').replace(/\D/g, '');
 }
 
+/**
+ * Weighted duplicate detection with prioritised requirements:
+ *   1. Full name must be similar (hard prerequisite — if name doesn't pass the
+ *      threshold the guest is never considered a duplicate).
+ *   2. Phone number — strongest secondary signal.
+ *   3. ID number — tertiary signal.
+ *
+ * The overall score is a weighted average of the three fields.  Weights are
+ * only counted for fields that have data on at least one side, so a guest with
+ * no phone or ID is judged primarily on name.
+ *
+ * Weights: name 50 %, phone 30 %, ID 20 %.
+ */
 export function findSimilarGuests(
   input: { full_name: string; phone: string; email: string; id_number: string },
   existingGuests: Guest[],
@@ -48,39 +61,61 @@ export function findSimilarGuests(
 ): SimilarGuestMatch[] {
   const matches: SimilarGuestMatch[] = [];
 
+  const NAME_WEIGHT = 0.5;
+  const PHONE_WEIGHT = 0.3;
+  const ID_WEIGHT = 0.2;
+
   for (const guest of existingGuests) {
-    let score = 0;
     const matchedFields: string[] = [];
 
+    // ── Requirement 1 (mandatory): full name must be similar ──────────────
     const nameSim = similarity(input.full_name, guest.full_name);
-    if (nameSim >= threshold) {
-      score = Math.max(score, nameSim);
-      matchedFields.push('name');
+    if (nameSim < threshold) {
+      continue; // name is the hard gate — skip entirely
     }
+    matchedFields.push('name');
 
+    // ── Requirement 2: phone number ──────────────────────────────────────
+    let phoneScore = 0;
     const inputPhone = digitsOnly(input.phone);
     const guestPhone = digitsOnly(guest.phone || '');
+    const hasPhoneData = inputPhone.length >= 6 || guestPhone.length >= 6;
     if (inputPhone.length >= 6 && guestPhone.length >= 6) {
       if (inputPhone === guestPhone) {
-        score = Math.max(score, 1);
+        phoneScore = 1;
         matchedFields.push('phone');
       } else if (inputPhone.includes(guestPhone) || guestPhone.includes(inputPhone)) {
-        score = Math.max(score, 0.85);
+        phoneScore = 0.85;
         matchedFields.push('phone');
       }
     }
 
-    const emailSim = similarity(input.email, guest.email || '');
-    if (input.email && guest.email && emailSim >= threshold) {
-      score = Math.max(score, emailSim);
-      matchedFields.push('email');
+    // ── Requirement 3: ID number ───────────────────────────────────────────
+    let idScore = 0;
+    const hasIdData = !!(input.id_number) || !!(guest.id_number);
+    if (input.id_number && guest.id_number) {
+      const idSim = similarity(input.id_number, guest.id_number);
+      if (idSim >= threshold) {
+        idScore = idSim;
+        matchedFields.push('id_number');
+      }
     }
 
-    const idSim = similarity(input.id_number, guest.id_number || '');
-    if (input.id_number && guest.id_number && idSim >= threshold) {
-      score = Math.max(score, idSim);
-      matchedFields.push('id_number');
+    // ── Weighted score ────────────────────────────────────────────────────
+    let totalWeight = NAME_WEIGHT;
+    let weightedSum = nameSim * NAME_WEIGHT;
+
+    if (hasPhoneData) {
+      totalWeight += PHONE_WEIGHT;
+      weightedSum += phoneScore * PHONE_WEIGHT;
     }
+
+    if (hasIdData) {
+      totalWeight += ID_WEIGHT;
+      weightedSum += idScore * ID_WEIGHT;
+    }
+
+    const score = totalWeight > 0 ? weightedSum / totalWeight : 0;
 
     if (score >= threshold) {
       matches.push({ guest, score, matchedFields });
