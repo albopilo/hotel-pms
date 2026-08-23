@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<SystemConfig>
+  <DataSource>.\SQLHotelLock</DataSource>
+  <UserID>sa</UserID>
+  <InitialCatalog>RadioLock</InitialCatalog>
+  <Password>123</Password>
+  <ConnectTimeout>30</ConnectTimeout>
+  <Radio>
+  </Radio>
+  <PersistSecurityInfo>False</PersistSecurityInfo>
+  <DevCom>0</DevCom>
+  <CardSec>14</CardSec>
+  <DevBaud>115200</DevBaud>
+  <SysLan>0</SysLan>
+  <DBAUTO>D;23:00</DBAUTO>
+  <DBPath>C:\BiolockData</DBPath>
+  <Discount>0</Discount>
+  <Debug>no</Debug>
+  <RESTOREFILE>
+  </RESTOREFILE>
+  <DBAUTOPATH>
+  </DBAUTOPATH>
+  <FirstRun>1</FirstRun>
+  <ShowOldMSG>1</ShowOldMSG>
+  <Users>
+  </Users>
+  <TaxType>Tax({0}):</TaxType>
+  <TaxPercent>0</TaxPercent>
+</SystemConfig>
