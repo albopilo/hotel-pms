@@ -222,8 +222,28 @@ export function ReportsPage() {
         .in('branch_id', branchIds).eq('voided', false)
         .gte('business_date', dateFrom).lte('business_date', dateTo);
 
-      const fi = (items || []) as any[];
-      const pay = (payments || []) as any[];
+      // Fetch voided folio IDs and cancelled reservation IDs to exclude their items
+      const { data: voidedFolios } = await supabase
+        .from('folios')
+        .select('id')
+        .in('branch_id', branchIds)
+        .eq('status', 'void');
+      const voidedFolioIds = new Set((voidedFolios || []).map((f: any) => f.id));
+
+      const { data: cancelledRes } = await supabase
+        .from('reservations')
+        .select('id')
+        .in('branch_id', branchIds)
+        .eq('status', 'cancelled');
+      const cancelledResIds = new Set((cancelledRes || []).map((r: any) => r.id));
+
+      // Filter out items and payments that belong to voided folios or cancelled reservations
+      const fi = ((items || []) as any[]).filter(
+        (x) => !voidedFolioIds.has(x.folio_id) && !cancelledResIds.has(x.reservation_id)
+      );
+      const pay = ((payments || []) as any[]).filter(
+        (x) => !voidedFolioIds.has(x.folio_id) && !cancelledResIds.has(x.reservation_id)
+      );
 
       if (report.key === 'daily_income_report') {
         // --- PAYMENTS BLOCK ---
@@ -287,7 +307,8 @@ export function ReportsPage() {
       else if (report.key === 'outstanding_balance_report') {
         const { data: r } = await supabase.from('folios')
           .select('*,guest:guests(*)')
-          .in('branch_id', branchIds).gt('balance', 0);
+          .in('branch_id', branchIds).gt('balance', 0)
+          .neq('status', 'void');
         setData(r || []);
         setSummary({ total: (r || []).reduce((s, x) => s + Number(x.balance), 0) });
       }

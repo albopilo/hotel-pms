@@ -219,7 +219,28 @@ export const reservationService = {
       .maybeSingle();
     if (folio) {
       await supabase.from('folios').update({ status: 'void' }).eq('id', folio.id);
+
+      // Void all folio_items so they are excluded from reports
+      await supabase
+        .from('folio_items')
+        .update({ voided: true, voided_by: userId, voided_at: new Date().toISOString() })
+        .eq('folio_id', folio.id)
+        .eq('voided', false);
     }
+
+    // Void all payments associated with this reservation
+    await supabase
+      .from('payments')
+      .update({ voided: true, voided_by: userId, voided_at: new Date().toISOString() })
+      .eq('reservation_id', reservationId)
+      .eq('voided', false);
+
+    // Void all additional charges associated with this reservation
+    await supabase
+      .from('additional_charges')
+      .update({ status: 'voided' })
+      .eq('reservation_id', reservationId)
+      .in('status', ['posted', 'pending_approval']);
 
     const { data: invoices } = await supabase
       .from('invoices')

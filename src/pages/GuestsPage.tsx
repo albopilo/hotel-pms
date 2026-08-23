@@ -10,9 +10,10 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus } from 'lucide-react';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+import { findSimilarGuests, type SimilarGuestMatch } from '@/lib/guest-similarity';
 
 const GUEST_DRAFT_KEY = 'guest_form_draft';
 
@@ -134,7 +135,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
         {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} onSelectReservation={onSelectReservation} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onNewReservationForGuest={onNewReservationForGuest} />}
       </Modal>
 
-      <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
+      <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} allGuests={guests} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
     </div>
   );
 }
@@ -155,16 +156,47 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
 
   useEffect(() => {
     (async () => {
-      const { data: res } = await supabase.from('reservations').select('*').eq('primary_guest_id', guest.id).order('created_at', { ascending: false });
-      setReservations((res as Reservation[]) || []);
-      const { data: folios } = await supabase.from('folios').select('total_charges, total_payments, balance, status').eq('guest_id', guest.id);
-      let spending = 0, outstanding = 0, stays = 0;
-      (folios || []).forEach((f) => {
-        spending += f.total_charges;
-        if (f.balance > 0) outstanding += f.balance;
-        if (f.status === 'finalized') stays++;
+      const { data: res } = await supabase
+        .from('reservations')
+        .select('*')
+        .eq('primary_guest_id', guest.id)
+        .neq('status', 'cancelled')
+        .order('created_at', { ascending: false });
+      const reservationList = (res as Reservation[]) || [];
+      setReservations(reservationList);
+
+      // Get the guest's folios, excluding voided ones
+      const { data: folios } = await supabase
+        .from('folios')
+        .select('id, status')
+        .eq('guest_id', guest.id)
+        .neq('status', 'void');
+      const folioIds = (folios || []).map((f) => f.id);
+      if (folioIds.length === 0) {
+        setStats({ totalStays: 0, totalSpending: 0, outstanding: 0 });
+        return;
+      }
+
+      // Calculate from actual folio_items, excluding voided items
+      const { data: items } = await supabase
+        .from('folio_items')
+        .select('item_type, amount, voided')
+        .in('folio_id', folioIds);
+      let charges = 0, payments = 0, discounts = 0, tax = 0;
+      (items || []).forEach((item) => {
+        if (item.voided) return;
+        if (item.item_type === 'charge') charges += Number(item.amount);
+        else if (item.item_type === 'payment') payments += Math.abs(Number(item.amount));
+        else if (item.item_type === 'discount') discounts += Math.abs(Number(item.amount));
+        else if (item.item_type === 'tax') tax += Number(item.amount);
       });
-      setStats({ totalStays: stays || reservations.length, totalSpending: spending, outstanding });
+      const netBalance = charges + tax - discounts - payments;
+      const stays = reservationList.filter((r) => r.status === 'checked_out').length;
+      setStats({
+        totalStays: stays || reservationList.length,
+        totalSpending: charges + tax - discounts,
+        outstanding: netBalance > 0 ? netBalance : 0,
+      });
     })();
   }, [guest.id]);
 
@@ -231,8 +263,8 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
   );
 }
 
-function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
-  open: boolean; onClose: () => void; guest: Guest | null; orgId: string; onSaved: () => void;
+function GuestFormModal({ open, onClose, guest, allGuests, orgId, onSaved }: {
+  open: boolean; onClose: () => void; guest: Guest | null; allGuests: Guest[]; orgId: string; onSaved: () => void;
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -241,6 +273,9 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
     const draft = loadDraft<typeof initialForm>(GUEST_DRAFT_KEY);
     return draft || { ...initialForm };
   });
+  const [duplicateMatches, setDuplicateMatches] = useState<SimilarGuestMatch[]>([]);
+  const [hasCheckedDuplicates, setHasCheckedDuplicates] = useState(false);
+  const [confirmedOverride, setConfirmedOverride] = useState(false);
 
   useEffect(() => {
     if (guest) {
@@ -249,15 +284,38 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
         gender: guest.gender || '', date_of_birth: guest.date_of_birth || '', phone: guest.phone || '', email: guest.email || '',
         address: guest.address || '', company: guest.company || '', notes: guest.notes || '',
       });
+      setDuplicateMatches([]);
+      setHasCheckedDuplicates(false);
+      setConfirmedOverride(false);
     } else {
       const draft = loadDraft<typeof initialForm>(GUEST_DRAFT_KEY);
       setForm(draft || { ...initialForm });
+      setDuplicateMatches([]);
+      setHasCheckedDuplicates(false);
+      setConfirmedOverride(false);
     }
   }, [guest, open]);
 
   useEffect(() => {
     if (open && !guest) saveDraft(GUEST_DRAFT_KEY, form);
   }, [form, open, guest]);
+
+  // Check for duplicates whenever the form changes (only for new guests)
+  useEffect(() => {
+    if (!open || guest) return;
+    if (!form.full_name.trim() && !form.phone.trim() && !form.email.trim() && !form.id_number.trim()) {
+      setDuplicateMatches([]);
+      setHasCheckedDuplicates(false);
+      return;
+    }
+    const matches = findSimilarGuests(
+      { full_name: form.full_name, phone: form.phone, email: form.email, id_number: form.id_number },
+      allGuests,
+    );
+    setDuplicateMatches(matches);
+    setHasCheckedDuplicates(true);
+    if (matches.length === 0) setConfirmedOverride(false);
+  }, [form.full_name, form.phone, form.email, form.id_number, allGuests, open, guest]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -273,6 +331,10 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
 
   const handleSubmit = async () => {
     if (!validate()) { showToast('Please fill in all required fields', 'error'); return; }
+    if (!guest && duplicateMatches.length > 0 && !confirmedOverride) {
+      showToast('A similar guest may already exist. Please confirm to proceed.', 'warning');
+      return;
+    }
     setSaving(true);
     const payload = { ...form, organization_id: orgId, date_of_birth: form.date_of_birth || null };
     const { error } = guest
@@ -289,6 +351,34 @@ function GuestFormModal({ open, onClose, guest, orgId, onSaved }: {
     <Modal open={open} onClose={handleCancel} title={guest ? t('common.edit') : t('guest.new_guest')} size="lg"
       footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <form className="space-y-4">
+        {/* Duplicate warning */}
+        {!guest && duplicateMatches.length > 0 && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={18} className="text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-amber-800">{t('guest.duplicate_warning')}</p>
+                <p className="text-xs text-amber-700 mt-0.5">{t('guest.duplicate_warning_desc')}</p>
+              </div>
+            </div>
+            <div className="space-y-1 ml-7">
+              {duplicateMatches.slice(0, 3).map((m) => (
+                <div key={m.guest.id} className="text-xs text-amber-800 bg-white/60 rounded px-2 py-1.5 flex items-center justify-between">
+                  <div>
+                    <span className="font-medium">{m.guest.full_name}</span>
+                    {m.guest.phone && <span className="text-amber-600 ml-2">{m.guest.phone}</span>}
+                    {m.guest.id_number && <span className="text-amber-600 ml-2">ID: {m.guest.id_number}</span>}
+                  </div>
+                  <span className="text-amber-500 capitalize">{m.matchedFields.join(', ')}</span>
+                </div>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 text-sm text-amber-800 ml-7 cursor-pointer">
+              <input type="checkbox" checked={confirmedOverride} onChange={(e) => setConfirmedOverride(e.target.checked)} />
+              {t('guest.duplicate_warning_continue')}
+            </label>
+          </div>
+        )}
         <Input label={t('guest.full_name')} value={form.full_name} onChange={(e) => { setForm({ ...form, full_name: e.target.value }); if (errors.full_name) setErrors({ ...errors, full_name: '' }); }} required error={errors.full_name} />
         <div className="grid grid-cols-2 gap-4">
           <Select label={t('common.id_type')} value={form.id_type} onChange={(e) => { setForm({ ...form, id_type: e.target.value }); if (errors.id_type) setErrors({ ...errors, id_type: '' }); }} required error={errors.id_type}>

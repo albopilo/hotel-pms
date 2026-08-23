@@ -368,6 +368,8 @@ const translations: Record<string, { en: string; id: string }> = {
   'guest.new_guest': { en: 'New Guest', id: 'Tamu Baru' },
   'guest.search_guests': { en: 'Search existing guests', id: 'Cari tamu yang ada' },
   'guest.duplicate_warning': { en: 'A similar guest may already exist', id: 'Tamu serupa mungkin sudah ada' },
+  'guest.duplicate_warning_desc': { en: 'This guest data closely matches existing records. Please verify before saving to avoid duplicates.', id: 'Data tamu ini cocok dengan catatan yang ada. Mohon verifikasi sebelum menyimpan untuk menghindari duplikat.' },
+  'guest.duplicate_warning_continue': { en: 'This is a different person — save anyway', id: 'Ini orang yang berbeda — tetap simpan' },
   'guest.previous_stays': { en: 'Previous Stays', id: 'Menginap Sebelumnya' },
   'guest.current_stay': { en: 'Current Stay', id: 'Menginap Saat Ini' },
   'guest.total_stays': { en: 'Total Stays', id: 'Total Menginap' },
