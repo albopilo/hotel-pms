@@ -11,10 +11,11 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { ResStatusBadge, Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, todayISO, addDays, nightsBetween } from '@/lib/format';
-import { Plus, CalendarDays, Search, Trash2, Users, Receipt, CircleAlert as AlertCircle } from 'lucide-react';
+import { Plus, CalendarDays, Search, Trash2, Users, Receipt, CircleAlert as AlertCircle, Ban } from 'lucide-react';
 import type { Reservation, Guest, Room, RoomType, BookingSource, Branch, IndonesianHoliday } from '@/types/database';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
+import { reservationService, ReservationError } from '@/services/reservation';
 
 interface RoomRow {
   room_type_id: string;
@@ -81,6 +82,9 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  const [voidTarget, setVoidTarget] = useState<Reservation | null>(null);
+  const [voidReason, setVoidReason] = useState('');
+  const [voiding, setVoiding] = useState(false);
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
 
   const load = useCallback(async () => {
@@ -122,6 +126,30 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
     const ro = roomMap.get(r.room_id || '');
     return r.reservation_number.toLowerCase().includes(q) || (g?.full_name || '').toLowerCase().includes(q) || (ro?.room_number || '').includes(q) || (g?.phone || '').includes(q);
   });
+
+  const canVoid = user?.role === 'super_admin' || user?.role === 'manager';
+
+  const handleVoid = async () => {
+    if (!voidTarget) return;
+    setVoiding(true);
+    try {
+      await reservationService.cancelReservation(
+        voidTarget.id,
+        voidTarget.branch_id,
+        user!.id,
+        user!.organization_id,
+        voidReason,
+      );
+      showToast('Reservation voided successfully', 'success');
+      setVoidTarget(null);
+      setVoidReason('');
+      load();
+    } catch (e) {
+      const err = e instanceof ReservationError ? e : { message: String(e) };
+      showToast(err.message, 'error');
+    }
+    setVoiding(false);
+  };
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -189,6 +217,9 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
                         {r.status !== 'tentative' && onNavigateToInvoice && (
                           <button onClick={e => { e.stopPropagation(); onNavigateToInvoice?.(r.id); }} className="text-slate-600 text-xs font-medium flex items-center gap-1"><Receipt size={12} />{t('res.view_invoice')}</button>
                         )}
+                        {canVoid && !['cancelled', 'checked_out'].includes(r.status) && (
+                          <button onClick={e => { e.stopPropagation(); setVoidTarget(r); }} className="text-red-500 text-xs font-medium flex items-center gap-1"><Ban size={12} />{t('common.void')}</button>
+                        )}
                       </div></td>
                     </tr>
                   );
@@ -216,6 +247,34 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
         preselectGuestId={initialGuestId || undefined}
         onSaved={() => { clearDraft(); setShowForm(false); setEditingReservation(null); load(); }}
       />
+
+      {voidTarget && (
+        <Modal
+          open
+          onClose={() => { setVoidTarget(null); setVoidReason(''); }}
+          title={t('common.void') + ' ' + voidTarget.reservation_number}
+          size="md"
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => { setVoidTarget(null); setVoidReason(''); }}>{t('common.cancel')}</Button>
+              <Button variant="danger" loading={voiding} onClick={handleVoid}>{t('common.void')}</Button>
+            </>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              Voiding this reservation will also void its folio and invoice. This action cannot be undone.
+            </p>
+            <Textarea
+              label={t('common.reason')}
+              value={voidReason}
+              onChange={e => setVoidReason(e.target.value)}
+              rows={3}
+              placeholder="Enter reason for voiding..."
+            />
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

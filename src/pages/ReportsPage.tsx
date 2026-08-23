@@ -131,15 +131,22 @@ const REPORTS: ReportDef[] = [
 const DEPOSIT_CATEGORY = 'deposit';
 
 export function ReportsPage() {
-  const { branches } = useAuth();
+  const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
+
+  const isReceptionist = user?.role === 'receptionist';
 
   const draft = useMemo(() => loadReportDraft(), []);
   const [activeReport, setActiveReport] = useState<ReportDef | null>(null);
   const [dateFrom, setDateFrom] = useState(draft?.dateFrom || '');
   const [dateTo, setDateTo] = useState(draft?.dateTo || '');
   const [businessDateResolved, setBusinessDateResolved] = useState(false);
+
+  // Receptionists can only access the Daily Income report
+  const accessibleReports = isReceptionist
+    ? REPORTS.filter(r => r.key === 'daily_income_report')
+    : REPORTS;
 
   // Resolve the current business date on mount and use it as the default date range
   useEffect(() => {
@@ -159,10 +166,16 @@ export function ReportsPage() {
     })();
   }, []); // run once on mount
 
-  // Restore the active report from draft after REPORTS is available
+  // Restore the active report from draft, or auto-select Daily Income for receptionists
   useEffect(() => {
-    if (draft?.reportKey && !activeReport) {
-      const found = REPORTS.find(r => r.key === draft.reportKey);
+    if (activeReport) return;
+    if (isReceptionist) {
+      const found = accessibleReports.find(r => r.key === 'daily_income_report');
+      if (found) setActiveReport(found);
+      return;
+    }
+    if (draft?.reportKey) {
+      const found = accessibleReports.find(r => r.key === draft.reportKey);
       if (found) setActiveReport(found);
     }
   }, []); // run once on mount
@@ -347,11 +360,13 @@ export function ReportsPage() {
     URL.revokeObjectURL(url);
   };
 
-  const groups = {
-    front_office: REPORTS.filter(r => r.category === 'front_office'),
-    financial: REPORTS.filter(r => r.category === 'financial'),
-    management: REPORTS.filter(r => r.category === 'management')
-  };
+  const groups = isReceptionist
+    ? { daily_income: accessibleReports }
+    : {
+        front_office: accessibleReports.filter(r => r.category === 'front_office'),
+        financial: accessibleReports.filter(r => r.category === 'financial'),
+        management: accessibleReports.filter(r => r.category === 'management')
+      };
 
   return (
     <div className="space-y-6">
@@ -508,7 +523,8 @@ function ReportGroup({ title, reports, activeKey, onSelect, t }: {
   const groupLabels: Record<string, string> = {
     front_office: 'Front Office',
     financial: 'Financial',
-    management: 'Management'
+    management: 'Management',
+    daily_income: 'Daily Income'
   };
   return (
     <div>
