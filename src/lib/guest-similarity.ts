@@ -89,3 +89,46 @@ export function findSimilarGuests(
 
   return matches.sort((a, b) => b.score - a.score);
 }
+
+export interface DuplicatePair {
+  primary: Guest;
+  duplicate: Guest;
+  score: number;
+  matchedFields: string[];
+}
+
+export function findDuplicateGuestPairs(guests: Guest[], threshold = 0.7): DuplicatePair[] {
+  const pairs: DuplicatePair[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < guests.length; i++) {
+    for (let j = i + 1; j < guests.length; j++) {
+      const key = `${guests[i].id}|${guests[j].id}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const matches = findSimilarGuests(
+        {
+          full_name: guests[i].full_name,
+          phone: guests[i].phone || '',
+          email: guests[i].email || '',
+          id_number: guests[i].id_number || '',
+        },
+        [guests[j]],
+        threshold,
+      );
+
+      if (matches.length > 0) {
+        const m = matches[0];
+        pairs.push({
+          primary: guests[i],
+          duplicate: guests[j],
+          score: m.score,
+          matchedFields: m.matchedFields,
+        });
+      }
+    }
+  }
+
+  return pairs.sort((a, b) => b.score - a.score);
+}

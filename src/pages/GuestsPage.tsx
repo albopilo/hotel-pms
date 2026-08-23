@@ -10,10 +10,11 @@ import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle } from 'lucide-react';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
-import { findSimilarGuests, type SimilarGuestMatch } from '@/lib/guest-similarity';
+import { findSimilarGuests, findDuplicateGuestPairs, type SimilarGuestMatch, type DuplicatePair } from '@/lib/guest-similarity';
+import { guestMergeService, type MergePreview } from '@/services/guestMergeService';
 
 const GUEST_DRAFT_KEY = 'guest_form_draft';
 
@@ -42,6 +43,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
   const [editing, setEditing] = useState<Guest | null>(null);
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
+  const [showMerge, setShowMerge] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,7 +78,10 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-slate-900">{t('nav.guests')}</h1>
-        <Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={18} /> {t('guest.new_guest')}</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowMerge(true)}><GitMerge size={18} /> Merge Duplicates</Button>
+          <Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={18} /> {t('guest.new_guest')}</Button>
+        </div>
       </div>
 
       <div className="relative max-w-md">
@@ -136,6 +141,8 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
       </Modal>
 
       <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} allGuests={guests} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
+
+      <MergeGuestsModal open={showMerge} onClose={() => setShowMerge(false)} guests={guests} userId={user!.id} orgId={user!.organization_id} onMerged={() => { setShowMerge(false); load(); }} />
     </div>
   );
 }
@@ -400,6 +407,195 @@ function GuestFormModal({ open, onClose, guest, allGuests, orgId, onSaved }: {
         <Textarea label={t('common.address')} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} />
         <Textarea label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
       </form>
+    </Modal>
+  );
+}
+
+function MergeGuestsModal({ open, onClose, guests, userId, orgId, onMerged }: {
+  open: boolean; onClose: () => void; guests: Guest[]; userId: string; orgId: string; onMerged: () => void;
+}) {
+  const { t } = useI18n();
+  const { showToast } = useToast();
+  const [duplicatePairs, setDuplicatePairs] = useState<DuplicatePair[]>([]);
+  const [selectedPairIdx, setSelectedPairIdx] = useState<number | null>(null);
+  const [preview, setPreview] = useState<MergePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [merging, setMerging] = useState(false);
+  const [keepPrimary, setKeepPrimary] = useState(true);
+
+  useEffect(() => {
+    if (open && guests.length > 0) {
+      const pairs = findDuplicateGuestPairs(guests, 0.7);
+      setDuplicatePairs(pairs);
+      setSelectedPairIdx(pairs.length > 0 ? 0 : null);
+    } else if (open) {
+      setDuplicatePairs([]);
+      setSelectedPairIdx(null);
+    }
+    setPreview(null);
+  }, [open, guests]);
+
+  useEffect(() => {
+    if (selectedPairIdx === null || !duplicatePairs[selectedPairIdx]) {
+      setPreview(null);
+      return;
+    }
+    const pair = duplicatePairs[selectedPairIdx];
+    setPreviewLoading(true);
+    const primaryId = keepPrimary ? pair.primary.id : pair.duplicate.id;
+    const duplicateId = keepPrimary ? pair.duplicate.id : pair.primary.id;
+    guestMergeService.previewMerge(primaryId, duplicateId)
+      .then((p) => setPreview(p))
+      .catch(() => setPreview(null))
+      .finally(() => setPreviewLoading(false));
+  }, [selectedPairIdx, duplicatePairs, keepPrimary]);
+
+  const currentPair = selectedPairIdx !== null ? duplicatePairs[selectedPairIdx] : null;
+
+  const handleMerge = async () => {
+    if (!currentPair) return;
+    const primaryId = keepPrimary ? currentPair.primary.id : currentPair.duplicate.id;
+    const duplicateId = keepPrimary ? currentPair.duplicate.id : currentPair.primary.id;
+    setMerging(true);
+    try {
+      await guestMergeService.mergeGuests(primaryId, duplicateId, userId, orgId);
+      showToast('Guests merged successfully', 'success');
+      setMerging(false);
+      onMerged();
+    } catch (e: any) {
+      showToast(e.message || 'Merge failed', 'error');
+      setMerging(false);
+    }
+  };
+
+  const handleSkip = () => {
+    if (selectedPairIdx === null) return;
+    if (selectedPairIdx < duplicatePairs.length - 1) {
+      setSelectedPairIdx(selectedPairIdx + 1);
+    } else {
+      setSelectedPairIdx(null);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose} title="Merge Duplicate Guests" size="lg"
+      footer={currentPair ? (
+        <>
+          <Button variant="secondary" onClick={handleSkip}>Skip</Button>
+          <Button variant="danger" loading={merging} onClick={handleMerge}>
+            <GitMerge size={14} /> Merge & Delete Duplicate
+          </Button>
+        </>
+      ) : (
+        <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+      )}>
+      <div className="space-y-4">
+        {duplicatePairs.length === 0 ? (
+          <div className="text-center py-8">
+            <CircleCheck size={40} className="mx-auto text-emerald-500 mb-3" />
+            <p className="text-sm text-slate-600 font-medium">No duplicate guests found</p>
+            <p className="text-xs text-slate-400 mt-1">All guests appear to be unique based on name, phone, ID, and address similarity.</p>
+          </div>
+        ) : (
+          <>
+            {/* Pair selector */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {duplicatePairs.map((pair, idx) => (
+                <button
+                  key={`${pair.primary.id}-${pair.duplicate.id}`}
+                  onClick={() => setSelectedPairIdx(idx)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    selectedPairIdx === idx ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {pair.primary.full_name} / {pair.duplicate.full_name}
+                  <span className="ml-1 opacity-70">({Math.round(pair.score * 100)}%)</span>
+                </button>
+              ))}
+            </div>
+
+            {currentPair && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  {/* Primary candidate */}
+                  <div className={`rounded-lg border-2 p-4 cursor-pointer transition-colors ${keepPrimary ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-slate-300'}`} onClick={() => setKeepPrimary(true)}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-emerald-600 uppercase">Keep (Primary)</span>
+                      {keepPrimary && <CircleCheck size={18} className="text-emerald-600" />}
+                    </div>
+                    <p className="font-bold text-slate-800">{currentPair.primary.full_name}</p>
+                    <div className="mt-2 space-y-1 text-xs text-slate-600">
+                      <div>Phone: {currentPair.primary.phone || '-'}</div>
+                      <div>ID: {currentPair.primary.id_number || '-'}</div>
+                      <div>Email: {currentPair.primary.email || '-'}</div>
+                      <div>Address: {currentPair.primary.address || '-'}</div>
+                    </div>
+                  </div>
+
+                  {/* Duplicate candidate */}
+                  <div className={`rounded-lg border-2 p-4 cursor-pointer transition-colors ${!keepPrimary ? 'border-emerald-400 bg-emerald-50' : 'border-red-200 bg-red-50/50 hover:border-red-300'}`} onClick={() => setKeepPrimary(false)}>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-red-600 uppercase">Delete (Duplicate)</span>
+                      {!keepPrimary && <CircleCheck size={18} className="text-emerald-600" />}
+                    </div>
+                    <p className="font-bold text-slate-800">{currentPair.duplicate.full_name}</p>
+                    <div className="mt-2 space-y-1 text-xs text-slate-600">
+                      <div>Phone: {currentPair.duplicate.phone || '-'}</div>
+                      <div>ID: {currentPair.duplicate.id_number || '-'}</div>
+                      <div>Email: {currentPair.duplicate.email || '-'}</div>
+                      <div>Address: {currentPair.duplicate.address || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Similarity info */}
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge color="amber">Similarity: {Math.round(currentPair.score * 100)}%</Badge>
+                  <span className="text-xs text-slate-500">Matched fields: {currentPair.matchedFields.join(', ')}</span>
+                </div>
+
+                {/* Preview */}
+                {previewLoading ? (
+                  <div className="text-center py-4 text-sm text-slate-400">Loading preview...</div>
+                ) : preview ? (
+                  <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-semibold text-slate-700 mb-3">Records to be reassigned from the duplicate to the primary guest:</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                      <div className="bg-white rounded-lg p-3 border border-slate-200">
+                        <p className="text-xs text-slate-500">Reservations</p>
+                        <p className="text-lg font-bold text-blue-700">{preview.reservationCount}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-slate-200">
+                        <p className="text-xs text-slate-500">Folios</p>
+                        <p className="text-lg font-bold text-blue-700">{preview.folioCount}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-slate-200">
+                        <p className="text-xs text-slate-500">Folio Items</p>
+                        <p className="text-lg font-bold text-blue-700">{preview.folioItemCount}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-slate-200">
+                        <p className="text-xs text-slate-500">Invoices</p>
+                        <p className="text-lg font-bold text-blue-700">{preview.invoiceCount}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-slate-200">
+                        <p className="text-xs text-slate-500">Payments</p>
+                        <p className="text-lg font-bold text-blue-700">{preview.paymentCount}</p>
+                      </div>
+                      <div className="bg-white rounded-lg p-3 border border-slate-200">
+                        <p className="text-xs text-slate-500">Card Issuances</p>
+                        <p className="text-lg font-bold text-blue-700">{preview.cardIssuanceCount}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-amber-600 mt-3">
+                      The duplicate guest record will be permanently deleted after all records are reassigned.
+                    </p>
+                  </div>
+                ) : null}
+              </>
+            )}
+          </>
+        )}
+      </div>
     </Modal>
   );
 }
