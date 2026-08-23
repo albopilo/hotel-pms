@@ -10,13 +10,13 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatDateTime } from '@/lib/format';
-import { getLockProvider, integrationToConfig, type LockEvent } from '@/lib/hotel-lock/provider';
-import { KeyRound, Wifi, Usb, Activity, AlertCircle, CheckCircle2, Save } from 'lucide-react';
+import { getLockProviderByType, integrationToConfig, type LockEvent, type InitializeResult } from '@/lib/hotel-lock/provider';
+import { KeyRound, Wifi, Usb, Activity, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Save, Power, Cpu, Circle as XCircle } from 'lucide-react';
 import type { HotelLockIntegration, HotelLockEvent, CardIssuance } from '@/types/database';
 
 const defaultConfigForm = {
   provider_type: 'mock' as 'mock' | 'production',
-  bridge_url: '',
+  bridge_url: 'http://localhost:8765',
   bridge_token: '',
   encoder_port: '',
   dll_path: '',
@@ -39,9 +39,11 @@ export function HotelLockPage() {
   const [cardIssuances, setCardIssuances] = useState<CardIssuance[]>([]);
   const [loading, setLoading] = useState(true);
   const [testing, setTesting] = useState(false);
-  const [mockEvents, setMockEvents] = useState<LockEvent[]>([]);
+  const [initializing, setInitializing] = useState(false);
+  const [providerEvents, setProviderEvents] = useState<LockEvent[]>([]);
   const [configForm, setConfigForm] = useState({ ...defaultConfigForm });
   const [saving, setSaving] = useState(false);
+  const [initResult, setInitResult] = useState<InitializeResult | null>(null);
 
   const branchId = selectedBranchId || branches[0]?.id;
   const isSuperAdmin = user?.role === 'super_admin';
@@ -62,7 +64,7 @@ export function HotelLockPage() {
     if (integRow) {
       setConfigForm({
         provider_type: integRow.provider_type,
-        bridge_url: integRow.bridge_url || '',
+        bridge_url: integRow.bridge_url || 'http://localhost:8765',
         bridge_token: integRow.bridge_token || '',
         encoder_port: integRow.encoder_port || '',
         dll_path: integRow.dll_path || '',
@@ -78,10 +80,11 @@ export function HotelLockPage() {
       setConfigForm({ ...defaultConfigForm });
     }
 
-    const provider = getLockProvider();
+    const providerType = integRow?.provider_type || 'mock';
+    const provider = getLockProviderByType(providerType);
     provider.configure(integrationToConfig(integRow));
     const me = await provider.getLockEvents();
-    setMockEvents(me);
+    setProviderEvents(me);
     setLoading(false);
   }, [branchId]);
 
@@ -114,7 +117,7 @@ export function HotelLockPage() {
       showToast(error.message, 'error');
     } else {
       showToast('Configuration saved', 'success');
-      const provider = getLockProvider();
+      const provider = getLockProviderByType(payload.provider_type);
       provider.configure({
         bridgeUrl: payload.bridge_url,
         bridgeToken: payload.bridge_token,
@@ -130,22 +133,71 @@ export function HotelLockPage() {
     setSaving(false);
   };
 
+  const handleInitialize = async () => {
+    setInitializing(true);
+    setInitResult(null);
+    const providerType = integration?.provider_type || configForm.provider_type;
+    const provider = getLockProviderByType(providerType);
+    provider.configure(integrationToConfig(integration));
+    const result = await provider.initialize();
+    setInitResult(result);
+
+    if (result.success) {
+      showToast(result.message, 'success');
+      if (integration) {
+        await supabase.from('hotel_lock_integrations').update({
+          connection_status: 'connected',
+          encoder_status: 'connected',
+          last_heartbeat: new Date().toISOString(),
+          dll_path: result.detectedDllPath || integration.dll_path,
+          encoder_port: result.encoderPort || integration.encoder_port,
+        }).eq('id', integration.id);
+      }
+      await supabase.from('hotel_lock_events').insert({
+        branch_id: branchId!, integration_id: integration?.id || null,
+        event_type: 'initialize', status: 'success', message: result.message,
+      });
+    } else {
+      showToast(result.message, 'error');
+      if (integration) {
+        await supabase.from('hotel_lock_integrations').update({
+          connection_status: 'disconnected',
+          last_error: result.message,
+        }).eq('id', integration.id);
+      }
+      await supabase.from('hotel_lock_events').insert({
+        branch_id: branchId!, integration_id: integration?.id || null,
+        event_type: 'initialize', status: 'error', message: result.message,
+      });
+    }
+    setInitializing(false);
+    load();
+  };
+
   const handleTestConnection = async () => {
     setTesting(true);
-    const provider = getLockProvider();
+    const providerType = integration?.provider_type || configForm.provider_type;
+    const provider = getLockProviderByType(providerType);
     provider.configure(integrationToConfig(integration));
     const connected = await provider.connect();
     if (connected) {
-      showToast(`Bridge connected (${integration?.provider_type || 'mock'} mode)`, 'success');
+      showToast(`Bridge connected (${providerType} mode)`, 'success');
       if (integration) {
         await supabase.from('hotel_lock_integrations').update({ connection_status: 'connected', last_heartbeat: new Date().toISOString() }).eq('id', integration.id);
       }
       await supabase.from('hotel_lock_events').insert({
         branch_id: branchId!, integration_id: integration?.id || null,
-        event_type: 'test_connection', status: 'success', message: `Test connection successful (${integration?.provider_type || 'mock'})`,
+        event_type: 'test_connection', status: 'success', message: `Test connection successful (${providerType})`,
       });
     } else {
-      showToast('Connection failed', 'error');
+      showToast('Bridge offline — connection failed', 'error');
+      if (integration) {
+        await supabase.from('hotel_lock_integrations').update({ connection_status: 'disconnected', last_error: 'Connection failed' }).eq('id', integration.id);
+      }
+      await supabase.from('hotel_lock_events').insert({
+        branch_id: branchId!, integration_id: integration?.id || null,
+        event_type: 'test_connection', status: 'error', message: 'Connection failed — bridge offline',
+      });
     }
     setTesting(false);
     load();
@@ -153,11 +205,17 @@ export function HotelLockPage() {
 
   const handleTestEncoder = async () => {
     setTesting(true);
-    const provider = getLockProvider();
+    const providerType = integration?.provider_type || configForm.provider_type;
+    const provider = getLockProviderByType(providerType);
+    provider.configure(integrationToConfig(integration));
     const status = await provider.readEncoderStatus();
     showToast(`Encoder: ${status.connected ? 'Connected' : 'Disconnected'} (${status.status})`, status.connected ? 'success' : 'warning');
     if (integration) {
-      await supabase.from('hotel_lock_integrations').update({ encoder_status: status.connected ? 'connected' : 'disconnected' }).eq('id', integration.id);
+      await supabase.from('hotel_lock_integrations').update({
+        encoder_status: status.connected ? 'connected' : 'disconnected',
+        dll_path: status.dllPath || integration.dll_path,
+        encoder_port: status.encoderPort || integration.encoder_port,
+      }).eq('id', integration.id);
     }
     await supabase.from('hotel_lock_events').insert({
       branch_id: branchId!, integration_id: integration?.id || null,
@@ -170,12 +228,24 @@ export function HotelLockPage() {
 
   const handleTestCard = async () => {
     setTesting(true);
-    const provider = getLockProvider();
+    const providerType = integration?.provider_type || configForm.provider_type;
+    const provider = getLockProviderByType(providerType);
+    provider.configure(integrationToConfig(integration));
     const result = await provider.encodeGuestCard({
       roomId: 'test', roomNumber: 'TEST', guestName: 'Test Guest',
       validFrom: new Date().toISOString(), validUntil: new Date(Date.now() + 86400000).toISOString(),
     });
     showToast(result.message, result.success ? 'success' : 'error');
+    if (result.success && integration) {
+      await supabase.from('hotel_lock_integrations').update({
+        last_success_encoding: new Date().toISOString(),
+        encoder_status: 'connected',
+      }).eq('id', integration.id);
+    } else if (!result.success && integration) {
+      await supabase.from('hotel_lock_integrations').update({
+        last_error: result.message,
+      }).eq('id', integration.id);
+    }
     await supabase.from('hotel_lock_events').insert({
       branch_id: branchId!, integration_id: integration?.id || null,
       event_type: 'test_card', status: result.success ? 'success' : 'error',
@@ -188,6 +258,8 @@ export function HotelLockPage() {
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
   const isMock = !integration || integration.provider_type === 'mock';
+  const bridgeConnected = integration?.connection_status === 'connected';
+  const encoderConnected = integration?.encoder_status === 'connected';
 
   return (
     <div className="space-y-6">
@@ -198,39 +270,81 @@ export function HotelLockPage() {
       </div>
 
       {/* Status cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Bridge status */}
         <Card>
           <div className="flex items-center gap-3">
-            <div className={`rounded-lg p-3 ${integration?.connection_status === 'connected' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
-              <Wifi size={24} />
+            <div className={`rounded-lg p-3 ${bridgeConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+              {bridgeConnected ? <Wifi size={24} /> : <XCircle size={24} />}
             </div>
             <div>
-              <p className="text-sm text-slate-500">{t('lock.integration_status')}</p>
-              <p className="font-bold text-slate-800">{integration?.connection_status === 'connected' ? t('lock.connected') : t('lock.disconnected')}</p>
+              <p className="text-sm text-slate-500">{t('lock.bridge_status')}</p>
+              <p className="font-bold text-slate-800">{bridgeConnected ? t('lock.connected') : t('lock.disconnected')}</p>
             </div>
           </div>
         </Card>
+
+        {/* DLL status */}
         <Card>
           <div className="flex items-center gap-3">
-            <div className={`rounded-lg p-3 ${integration?.encoder_status === 'connected' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
+            <div className={`rounded-lg p-3 ${(initResult?.detectedDllPath || integration?.dll_path) ? 'bg-emerald-50 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
+              <Cpu size={24} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm text-slate-500">DLL Status</p>
+              <p className="font-bold text-slate-800 truncate">{(initResult?.detectedDllPath || integration?.dll_path) ? 'Detected' : 'Not detected'}</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Encoder status */}
+        <Card>
+          <div className="flex items-center gap-3">
+            <div className={`rounded-lg p-3 ${encoderConnected ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>
               <Usb size={24} />
             </div>
             <div>
               <p className="text-sm text-slate-500">{t('lock.encoder_status')}</p>
-              <p className="font-bold text-slate-800">{integration?.encoder_status === 'connected' ? t('lock.connected') : t('lock.disconnected')}</p>
+              <p className="font-bold text-slate-800">{encoderConnected ? t('lock.connected') : t('lock.disconnected')}</p>
             </div>
           </div>
         </Card>
+
+        {/* Last successful connection */}
         <Card>
           <div className="flex items-center gap-3">
             <div className="rounded-lg p-3 bg-blue-50 text-blue-600"><Activity size={24} /></div>
             <div>
-              <p className="text-sm text-slate-500">{t('lock.last_heartbeat')}</p>
-              <p className="font-bold text-slate-800">{integration?.last_heartbeat ? formatDateTime(integration.last_heartbeat) : '-'}</p>
+              <p className="text-sm text-slate-500">Last Successful Connection</p>
+              <p className="font-bold text-slate-800 text-sm">{integration?.last_heartbeat ? formatDateTime(integration.last_heartbeat) : '-'}</p>
             </div>
           </div>
         </Card>
       </div>
+
+      {/* Error banner */}
+      {integration?.last_error && (
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-lg px-4 py-3 text-sm text-red-700">
+          <AlertCircle size={18} className="flex-shrink-0" />
+          <div>
+            <span className="font-medium">Last Error: </span>
+            {integration.last_error}
+          </div>
+        </div>
+      )}
+
+      {/* Initialize result banner */}
+      {initResult && (
+        <div className={`flex items-center gap-2 rounded-lg px-4 py-3 text-sm ${initResult.success ? 'bg-emerald-50 border border-emerald-200 text-emerald-700' : 'bg-red-50 border border-red-200 text-red-700'}`}>
+          {initResult.success ? <CheckCircle2 size={18} className="flex-shrink-0" /> : <AlertCircle size={18} className="flex-shrink-0" />}
+          <div>
+            <span className="font-medium">Initialization: </span>
+            {initResult.message}
+            {initResult.detectedDllPath && <div className="text-xs mt-0.5">DLL: {initResult.detectedDllPath}</div>}
+            {initResult.encoderPort && <div className="text-xs">Port: {initResult.encoderPort}</div>}
+          </div>
+        </div>
+      )}
 
       {/* Configuration */}
       <Card title="Integration Configuration">
@@ -246,7 +360,7 @@ export function HotelLockPage() {
                     className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="mock">Mock (Development)</option>
-                    <option value="production">Production</option>
+                    <option value="production">Local Bridge (Production)</option>
                   </select>
                 </div>
                 <Input label="Lock System" value={configForm.lock_system} onChange={(e) => setConfigForm({ ...configForm, lock_system: e.target.value })} />
@@ -257,7 +371,7 @@ export function HotelLockPage() {
               <div className="rounded-lg border border-slate-200 p-4 bg-slate-50 space-y-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase">Bridge & Encoder Settings</p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <Input label="Bridge URL" value={configForm.bridge_url} onChange={(e) => setConfigForm({ ...configForm, bridge_url: e.target.value })} placeholder="http://localhost:8080" />
+                  <Input label="Bridge URL" value={configForm.bridge_url} onChange={(e) => setConfigForm({ ...configForm, bridge_url: e.target.value })} placeholder="http://localhost:8765" />
                   <Input label="Bridge Token" value={configForm.bridge_token} onChange={(e) => setConfigForm({ ...configForm, bridge_token: e.target.value })} placeholder="Authentication token" />
                   <Input label="Encoder COM Port" value={configForm.encoder_port} onChange={(e) => setConfigForm({ ...configForm, encoder_port: e.target.value })} placeholder="COM3 or /dev/ttyUSB0" />
                   <Input label="DLL Path" value={configForm.dll_path} onChange={(e) => setConfigForm({ ...configForm, dll_path: e.target.value })} placeholder="C:\LockSystem\encoder.dll" />
@@ -302,13 +416,16 @@ export function HotelLockPage() {
           <div><span className="text-slate-500">{t('lock.last_success')}:</span> <span className="font-medium">{integration?.last_success_encoding ? formatDateTime(integration.last_success_encoding) : '-'}</span></div>
           <div><span className="text-slate-500">{t('lock.last_error')}:</span> <span className="font-medium text-red-600">{integration?.last_error || '-'}</span></div>
           <div><span className="text-slate-500">Provider:</span> <span className="font-medium">{integration?.provider_type || 'mock'}</span></div>
+          {integration?.dll_path && <div><span className="text-slate-500">DLL Path:</span> <span className="font-medium text-xs">{integration.dll_path}</span></div>}
+          {integration?.encoder_port && <div><span className="text-slate-500">Encoder Port:</span> <span className="font-medium">{integration.encoder_port}</span></div>}
         </div>
       </Card>
 
-      {/* Test buttons */}
+      {/* Diagnostics */}
       <Card title="Diagnostics">
         <div className="flex flex-wrap gap-3">
-          <Button onClick={handleTestConnection} loading={testing}><Wifi size={16} /> {t('lock.test_connection')}</Button>
+          <Button onClick={handleInitialize} loading={initializing} variant="primary"><Power size={16} /> Initialize</Button>
+          <Button variant="outline" onClick={handleTestConnection} loading={testing}><Wifi size={16} /> {t('lock.test_connection')}</Button>
           <Button variant="outline" onClick={handleTestEncoder} loading={testing}><Usb size={16} /> {t('lock.test_encoder')}</Button>
           <Button variant="outline" onClick={handleTestCard} loading={testing}><KeyRound size={16} /> {t('lock.test_card')}</Button>
         </div>
@@ -353,12 +470,12 @@ export function HotelLockPage() {
       {/* Integration logs */}
       <Card title="Integration Logs">
         <div className="space-y-2 max-h-64 overflow-y-auto">
-          {events.length === 0 && mockEvents.length === 0 ? (
+          {events.length === 0 && providerEvents.length === 0 ? (
             <EmptyState title={t('common.no_data')} />
           ) : (
             <>
-              {mockEvents.map((evt, i) => (
-                <div key={`mock-${i}`} className="flex items-center gap-2 text-sm border border-slate-100 rounded-lg px-3 py-2">
+              {providerEvents.map((evt, i) => (
+                <div key={`prov-${i}`} className="flex items-center gap-2 text-sm border border-slate-100 rounded-lg px-3 py-2">
                   {evt.status === 'success' && <CheckCircle2 size={14} className="text-emerald-500" />}
                   {evt.status === 'error' && <AlertCircle size={14} className="text-red-500" />}
                   {evt.status === 'info' && <Activity size={14} className="text-blue-500" />}
