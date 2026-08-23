@@ -5,11 +5,15 @@ import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Modal } from '@/components/ui/Modal';
+import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, todayISO } from '@/lib/format';
+import { formatIDR, todayISO, formatDate, formatDateTime } from '@/lib/format';
 import { getBusinessDate } from '@/services/businessDateService';
-import { FileSpreadsheet, Download } from 'lucide-react';
+import { folioService } from '@/services/financial';
+import { FileSpreadsheet, Download, ChevronDown, ChevronUp, FileText, User as UserIcon } from 'lucide-react';
+import type { Folio, FolioItem, Guest, Room, Reservation } from '@/types/database';
 
 const REPORT_DRAFT_KEY = 'reports_form_draft';
 
@@ -130,6 +134,42 @@ const REPORTS: ReportDef[] = [
 
 const DEPOSIT_CATEGORY = 'deposit';
 
+// ── Detailed row types for the expandable daily income report ──────────────
+
+interface PaymentDetailRow {
+  payment_number: string;
+  amount: number;
+  reservation_id: string;
+  folio_id: string;
+  guest_id: string | null;
+  guest_name: string;
+  room_number: string;
+  business_date: string;
+}
+
+interface ChargeDetailRow {
+  description: string;
+  amount: number;
+  reservation_id: string;
+  folio_id: string;
+  guest_id: string | null;
+  guest_name: string;
+  room_number: string;
+  business_date: string;
+}
+
+interface PaymentBlockRow {
+  label: string;
+  amount: number;
+  details: PaymentDetailRow[];
+}
+
+interface ChargeBlockRow {
+  label: string;
+  amount: number;
+  details: ChargeDetailRow[];
+}
+
 export function ReportsPage() {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
@@ -246,27 +286,73 @@ export function ReportsPage() {
       );
 
       if (report.key === 'daily_income_report') {
+        // Collect all reservation IDs and folio IDs referenced by payments and charges
+        const resIds = new Set<string>();
+        const folioIds = new Set<string>();
+        pay.forEach((p) => { if (p.reservation_id) resIds.add(p.reservation_id); if (p.folio_id) folioIds.add(p.folio_id); });
+        fi.forEach((x) => { if (x.reservation_id) resIds.add(x.reservation_id); if (x.folio_id) folioIds.add(x.folio_id); });
+
+        // Fetch reservations with guest and room info
+        let resMap: Record<string, any> = {};
+        if (resIds.size > 0) {
+          const { data: resData } = await supabase
+            .from('reservations')
+            .select('*,primary_guest:guests(full_name),room:rooms(room_number)')
+            .in('id', Array.from(resIds));
+          (resData || []).forEach((r: any) => { resMap[r.id] = r; });
+        }
+
         // --- PAYMENTS BLOCK ---
-        // Group payments by method code (CASH, EDC, OTA). Deposits are NOT income.
-        const payByMethod: Record<string, number> = {};
+        const payByMethod: Record<string, { amount: number; details: PaymentDetailRow[] }> = {};
         pay.forEach((p) => {
           const code = (p.payment_method_code || 'OTHER').toUpperCase();
           const label = p.is_ota ? 'OTA / Xendit' : code === 'CASH' ? 'Cash' : code === 'EDC' ? 'EDC' : code;
-          payByMethod[label] = (payByMethod[label] || 0) + Number(p.amount);
+          if (!payByMethod[label]) payByMethod[label] = { amount: 0, details: [] };
+          payByMethod[label].amount += Number(p.amount);
+          const res = p.reservation_id ? resMap[p.reservation_id] : null;
+          payByMethod[label].details.push({
+            payment_number: p.payment_number,
+            amount: Number(p.amount),
+            reservation_id: p.reservation_id || '',
+            folio_id: p.folio_id || '',
+            guest_id: p.guest_id || null,
+            guest_name: res?.primary_guest?.full_name || '-',
+            room_number: res?.room?.room_number || '-',
+            business_date: p.business_date,
+          });
         });
-        const paymentRows: PaymentBlockRow[] = Object.entries(payByMethod).map(([label, amount]) => ({ label, amount }));
+        const paymentRows: PaymentBlockRow[] = Object.entries(payByMethod).map(([label, val]) => ({
+          label,
+          amount: val.amount,
+          details: val.details,
+        }));
         const totalPayments = paymentRows.reduce((s, r) => s + r.amount, 0);
 
         // --- CHARGES BLOCK ---
-        // Group charge items by category. Exclude deposits (not income). Exclude payments/discounts/tax from charges.
         const chargeItems = fi.filter((x) => x.item_type === 'charge' && x.amount > 0 && x.category !== DEPOSIT_CATEGORY);
-        const chargeByCat: Record<string, number> = {};
+        const chargeByCat: Record<string, { amount: number; details: ChargeDetailRow[] }> = {};
         chargeItems.forEach((x) => {
           const cat = x.category || 'miscellaneous';
           const label = cat === 'room' ? 'Room Charges' : cat === 'early_checkin' ? 'Early Check-in' : cat === 'late_checkout' ? 'Late Check-out' : cat === 'amenity' ? 'Amenities' : cat === 'damage' ? 'Damage' : cat.charAt(0).toUpperCase() + cat.slice(1);
-          chargeByCat[label] = (chargeByCat[label] || 0) + Number(x.amount);
+          if (!chargeByCat[label]) chargeByCat[label] = { amount: 0, details: [] };
+          chargeByCat[label].amount += Number(x.amount);
+          const res = x.reservation_id ? resMap[x.reservation_id] : null;
+          chargeByCat[label].details.push({
+            description: x.description,
+            amount: Number(x.amount),
+            reservation_id: x.reservation_id || '',
+            folio_id: x.folio_id || '',
+            guest_id: x.guest_id || null,
+            guest_name: res?.primary_guest?.full_name || '-',
+            room_number: res?.room?.room_number || '-',
+            business_date: x.business_date,
+          });
         });
-        const chargeRows: ChargeBlockRow[] = Object.entries(chargeByCat).map(([label, amount]) => ({ label, amount }));
+        const chargeRows: ChargeBlockRow[] = Object.entries(chargeByCat).map(([label, val]) => ({
+          label,
+          amount: val.amount,
+          details: val.details,
+        }));
         const totalCharges = chargeRows.reduce((s, r) => s + r.amount, 0);
 
         const discounts = fi.filter((x) => x.item_type === 'discount').reduce((s, x) => s + Math.abs(Number(x.amount)), 0);
@@ -438,12 +524,34 @@ export function ReportsPage() {
   );
 }
 
-interface PaymentBlockRow { label: string; amount: number; }
-interface ChargeBlockRow { label: string; amount: number; }
+// ════════════════════════════════════════════════════════════════════════════
+// Daily Income Report — expandable rows with reservation details + folio modal
+// ════════════════════════════════════════════════════════════════════════════
 
 function DailyIncomeReport({ blocks, summary }: { blocks: { payments: PaymentBlockRow[]; charges: ChargeBlockRow[] }; summary: any }) {
   const totalPayments = blocks.payments.reduce((s, r) => s + r.amount, 0);
   const totalCharges = blocks.charges.reduce((s, r) => s + r.amount, 0);
+  const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set());
+  const [expandedCharges, setExpandedCharges] = useState<Set<string>>(new Set());
+  const [folioReservationId, setFolioReservationId] = useState<string | null>(null);
+
+  const togglePayment = (label: string) => {
+    setExpandedPayments((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const toggleCharge = (label: string) => {
+    setExpandedCharges((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -454,23 +562,24 @@ function DailyIncomeReport({ blocks, summary }: { blocks: { payments: PaymentBlo
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <th className="text-left py-2 px-3 w-8"></th>
                 <th className="text-left py-2 px-3">Payment Method</th>
                 <th className="text-right py-2 px-3">Amount</th>
               </tr>
             </thead>
             <tbody>
               {blocks.payments.length === 0 ? (
-                <tr><td colSpan={2} className="text-center py-4 text-slate-400">No payments</td></tr>
-              ) : blocks.payments.map((r, i) => (
-                <tr key={i} className="border-b border-slate-100">
-                  <td className="py-2 px-3 font-medium text-slate-700">{r.label}</td>
-                  <td className="text-right py-2 px-3 font-medium text-emerald-700">{formatIDR(r.amount)}</td>
-                </tr>
-              ))}
+                <tr><td colSpan={3} className="text-center py-4 text-slate-400">No payments</td></tr>
+              ) : blocks.payments.map((r) => {
+                const isOpen = expandedPayments.has(r.label);
+                return (
+                  <PaymentRowGroup key={r.label} row={r} isOpen={isOpen} onToggle={() => togglePayment(r.label)} onViewFolio={(resId) => setFolioReservationId(resId)} />
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-emerald-50 font-bold">
-                <td className="py-2 px-3">Total Payments</td>
+                <td colSpan={2} className="py-2 px-3">Total Payments</td>
                 <td className="text-right py-2 px-3 text-emerald-700">{formatIDR(totalPayments)}</td>
               </tr>
             </tfoot>
@@ -485,23 +594,24 @@ function DailyIncomeReport({ blocks, summary }: { blocks: { payments: PaymentBlo
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <th className="text-left py-2 px-3 w-8"></th>
                 <th className="text-left py-2 px-3">Charge Category</th>
                 <th className="text-right py-2 px-3">Amount</th>
               </tr>
             </thead>
             <tbody>
               {blocks.charges.length === 0 ? (
-                <tr><td colSpan={2} className="text-center py-4 text-slate-400">No charges</td></tr>
-              ) : blocks.charges.map((r, i) => (
-                <tr key={i} className="border-b border-slate-100">
-                  <td className="py-2 px-3 font-medium text-slate-700">{r.label}</td>
-                  <td className="text-right py-2 px-3 font-medium text-blue-700">{formatIDR(r.amount)}</td>
-                </tr>
-              ))}
+                <tr><td colSpan={3} className="text-center py-4 text-slate-400">No charges</td></tr>
+              ) : blocks.charges.map((r) => {
+                const isOpen = expandedCharges.has(r.label);
+                return (
+                  <ChargeRowGroup key={r.label} row={r} isOpen={isOpen} onToggle={() => toggleCharge(r.label)} onViewFolio={(resId) => setFolioReservationId(resId)} />
+                );
+              })}
             </tbody>
             <tfoot>
               <tr className="bg-blue-50 font-bold">
-                <td className="py-2 px-3">Total Charges (excl. deposits)</td>
+                <td colSpan={2} className="py-2 px-3">Total Charges (excl. deposits)</td>
                 <td className="text-right py-2 px-3 text-blue-700">{formatIDR(totalCharges)}</td>
               </tr>
             </tfoot>
@@ -530,7 +640,273 @@ function DailyIncomeReport({ blocks, summary }: { blocks: { payments: PaymentBlo
           </div>
         </div>
       )}
+
+      {folioReservationId && (
+        <FolioDetailModal reservationId={folioReservationId} onClose={() => setFolioReservationId(null)} />
+      )}
     </div>
+  );
+}
+
+function PaymentRowGroup({ row, isOpen, onToggle, onViewFolio }: {
+  row: PaymentBlockRow;
+  isOpen: boolean;
+  onToggle: () => void;
+  onViewFolio: (reservationId: string) => void;
+}) {
+  return (
+    <>
+      <tr
+        className="border-b border-slate-100 cursor-pointer hover:bg-slate-50"
+        onClick={onToggle}
+      >
+        <td className="py-2 px-3 text-slate-400">
+          {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </td>
+        <td className="py-2 px-3 font-medium text-slate-700">{row.label}</td>
+        <td className="text-right py-2 px-3 font-medium text-emerald-700">{formatIDR(row.amount)}</td>
+      </tr>
+      {isOpen && row.details.length > 0 && (
+        <tr className="bg-slate-50/50">
+          <td colSpan={3} className="px-3 pb-3 pt-1">
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-white text-slate-500">
+                    <th className="text-left py-1.5 px-3">Payment #</th>
+                    <th className="text-left py-1.5 px-3">Guest</th>
+                    <th className="text-left py-1.5 px-3">Room</th>
+                    <th className="text-right py-1.5 px-3">Amount</th>
+                    <th className="text-left py-1.5 px-3">Business Date</th>
+                    <th className="text-center py-1.5 px-3">Folio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {row.details.map((d, i) => (
+                    <tr key={i} className="border-b border-slate-100 hover:bg-blue-50/50">
+                      <td className="py-1.5 px-3 font-mono text-slate-600">{d.payment_number}</td>
+                      <td className="py-1.5 px-3 text-slate-700">{d.guest_name}</td>
+                      <td className="py-1.5 px-3 text-slate-600">{d.room_number}</td>
+                      <td className="text-right py-1.5 px-3 font-medium text-emerald-700">{formatIDR(d.amount)}</td>
+                      <td className="py-1.5 px-3 text-slate-400">{formatDate(d.business_date)}</td>
+                      <td className="text-center py-1.5 px-3">
+                        {d.reservation_id && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onViewFolio(d.reservation_id); }}
+                            className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1"
+                          >
+                            <FileText size={12} /> View
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function ChargeRowGroup({ row, isOpen, onToggle, onViewFolio }: {
+  row: ChargeBlockRow;
+  isOpen: boolean;
+  onToggle: () => void;
+  onViewFolio: (reservationId: string) => void;
+}) {
+  return (
+    <>
+      <tr
+        className="border-b border-slate-100 cursor-pointer hover:bg-slate-50"
+        onClick={onToggle}
+      >
+        <td className="py-2 px-3 text-slate-400">
+          {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </td>
+        <td className="py-2 px-3 font-medium text-slate-700">{row.label}</td>
+        <td className="text-right py-2 px-3 font-medium text-blue-700">{formatIDR(row.amount)}</td>
+      </tr>
+      {isOpen && row.details.length > 0 && (
+        <tr className="bg-slate-50/50">
+          <td colSpan={3} className="px-3 pb-3 pt-1">
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-white text-slate-500">
+                    <th className="text-left py-1.5 px-3">Description</th>
+                    <th className="text-left py-1.5 px-3">Guest</th>
+                    <th className="text-left py-1.5 px-3">Room</th>
+                    <th className="text-right py-1.5 px-3">Amount</th>
+                    <th className="text-left py-1.5 px-3">Business Date</th>
+                    <th className="text-center py-1.5 px-3">Folio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {row.details.map((d, i) => (
+                    <tr key={i} className="border-b border-slate-100 hover:bg-blue-50/50">
+                      <td className="py-1.5 px-3 text-slate-700">{d.description}</td>
+                      <td className="py-1.5 px-3 text-slate-700">{d.guest_name}</td>
+                      <td className="py-1.5 px-3 text-slate-600">{d.room_number}</td>
+                      <td className="text-right py-1.5 px-3 font-medium text-blue-700">{formatIDR(d.amount)}</td>
+                      <td className="py-1.5 px-3 text-slate-400">{formatDate(d.business_date)}</td>
+                      <td className="text-center py-1.5 px-3">
+                        {d.reservation_id && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onViewFolio(d.reservation_id); }}
+                            className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1"
+                          >
+                            <FileText size={12} /> View
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
+function FolioDetailModal({ reservationId, onClose }: { reservationId: string; onClose: () => void }) {
+  const { t } = useI18n();
+  const [loading, setLoading] = useState(true);
+  const [folio, setFolio] = useState<Folio | null>(null);
+  const [items, setItems] = useState<FolioItem[]>([]);
+  const [reservation, setReservation] = useState<Reservation | null>(null);
+  const [guest, setGuest] = useState<Guest | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      // Find the folio for this reservation
+      const { data: folioData } = await supabase
+        .from('folios')
+        .select('*')
+        .eq('reservation_id', reservationId)
+        .maybeSingle();
+
+      if (!folioData) {
+        setLoading(false);
+        return;
+      }
+
+      const f = folioData as Folio;
+      setFolio(f);
+
+      // Load folio items
+      const { data: itemData } = await supabase
+        .from('folio_items')
+        .select('*')
+        .eq('folio_id', f.id)
+        .order('created_at');
+      setItems((itemData as FolioItem[]) || []);
+
+      // Load reservation, guest, room
+      const { data: resData } = await supabase
+        .from('reservations')
+        .select('*,primary_guest:guests(*),room:rooms(*)')
+        .eq('id', reservationId)
+        .maybeSingle();
+      const res = resData as any;
+      setReservation(res);
+      setGuest(res?.primary_guest as Guest || null);
+      setRoom(res?.room as Room || null);
+
+      setLoading(false);
+    })();
+  }, [reservationId]);
+
+  if (loading) {
+    return <Modal open onClose={onClose} title="Folio Details" size="lg"><LoadingPage /></Modal>;
+  }
+
+  if (!folio) {
+    return (
+      <Modal open onClose={onClose} title="Folio Details" size="md">
+        <p className="text-sm text-slate-500 text-center py-4">No folio found for this reservation.</p>
+      </Modal>
+    );
+  }
+
+  const charges = items.filter((i) => i.item_type === 'charge' && !i.voided && i.amount > 0);
+  const payments = items.filter((i) => i.item_type === 'payment' && !i.voided);
+  const discounts = items.filter((i) => i.item_type === 'discount' && !i.voided);
+  const taxes = items.filter((i) => i.item_type === 'tax' && !i.voided);
+  const totalCharges = charges.reduce((s, i) => s + i.amount, 0);
+  const totalPayments = payments.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalDiscounts = discounts.reduce((s, i) => s + Math.abs(i.amount), 0);
+  const totalTax = taxes.reduce((s, i) => s + i.amount, 0);
+  const netBalance = totalCharges + totalTax - totalDiscounts - totalPayments;
+
+  return (
+    <Modal open onClose={onClose} title={`${t('folio.title')} — ${folio.folio_number}`} size="xl">
+      <div className="space-y-4">
+        {/* Summary info */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div>
+            <span className="text-slate-500">{t('common.guest')}:</span>{' '}
+            <span className="font-medium text-slate-800 flex items-center gap-1">
+              <UserIcon size={12} />{guest?.full_name || '-'}
+            </span>
+          </div>
+          <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{room?.room_number || '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.reservation')}:</span> <span className="font-medium text-blue-600">{reservation?.reservation_number || '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.status')}:</span> <Badge color={folio.status === 'open' ? 'blue' : 'gray'}>{folio.status}</Badge></div>
+        </div>
+
+        {/* Transaction history */}
+        <div className="border border-slate-200 rounded-lg overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <th className="text-left py-2 px-3">{t('common.description')}</th>
+                <th className="text-left py-2 px-3">{t('common.category')}</th>
+                <th className="text-center py-2 px-3">Type</th>
+                <th className="text-right py-2 px-3">{t('common.amount')}</th>
+                <th className="text-left py-2 px-3">{t('common.created_at')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item) => (
+                <tr key={item.id} className={`border-b border-slate-100 ${item.voided ? 'opacity-40 line-through' : ''}`}>
+                  <td className="py-2 px-3">{item.description}{item.is_post_stay && <span className="ml-2 text-xs text-amber-600 font-medium">POST-STAY</span>}</td>
+                  <td className="py-2 px-3">{item.category || '-'}</td>
+                  <td className="text-center py-2 px-3"><Badge color={item.item_type === 'charge' ? 'red' : item.item_type === 'payment' ? 'green' : 'gray'}>{item.item_type}</Badge></td>
+                  <td className={`text-right py-2 px-3 font-medium ${item.amount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{item.amount > 0 ? '+' : ''}{formatIDR(item.amount)}</td>
+                  <td className="py-2 px-3 text-xs text-slate-400">{formatDateTime(item.created_at)}</td>
+                </tr>
+              ))}
+              {items.length === 0 && <tr><td colSpan={5} className="text-center py-4 text-slate-400">{t('common.no_data')}</td></tr>}
+            </tbody>
+            <tfoot>
+              <tr className="bg-slate-50 font-bold">
+                <td colSpan={3} className="py-2 px-3">{t('folio.total_charges')}</td>
+                <td className="text-right py-2 px-3 text-red-600">{formatIDR(totalCharges + totalTax)}</td>
+                <td></td>
+              </tr>
+              <tr className="bg-slate-50 font-bold">
+                <td colSpan={3} className="py-2 px-3">{t('folio.total_payments')}</td>
+                <td className="text-right py-2 px-3 text-emerald-600">{formatIDR(totalPayments)}</td>
+                <td></td>
+              </tr>
+              <tr className="bg-slate-100 font-bold">
+                <td colSpan={3} className="py-2 px-3">{t('folio.net_balance')}</td>
+                <td className={`text-right py-2 px-3 ${netBalance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{formatIDR(Math.abs(netBalance))}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
