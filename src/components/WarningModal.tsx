@@ -10,7 +10,8 @@ import { formatIDR, formatDateTime, todayInTimezone, nowInTimezone } from '@/lib
 import { TriangleAlert as AlertTriangle, RefreshCw, Bell, BellRing } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, FolioItem } from '@/types/database';
 
-const SCAN_INTERVAL = 15 * 60 * 1000;
+const SCAN_INTERVAL = 60 * 60 * 1000; // 1 hour
+const OUTSTANDING_BALANCE_THRESHOLD_TIME = '17:00';
 const STORAGE_KEY_DISMISSED = 'warning_modal_dismissed_until';
 
 interface OverdueCheckout {
@@ -107,16 +108,19 @@ export function WarningModal() {
     }
 
     const outstandingBalances: OutstandingBalance[] = [];
-    for (const res of reservations) {
-      const folio = folioMap.get(res.id);
-      if (folio && folio.balance > 0) {
-        outstandingBalances.push({
-          reservation: res,
-          guest: guestMap.get(res.primary_guest_id || '') || null,
-          room: roomMap.get(res.room_id || '') || null,
-          folio,
-          balance: folio.balance,
-        });
+    const pastThreshold = nowTime >= OUTSTANDING_BALANCE_THRESHOLD_TIME;
+    if (pastThreshold) {
+      for (const res of reservations) {
+        const folio = folioMap.get(res.id);
+        if (folio && folio.balance > 0) {
+          outstandingBalances.push({
+            reservation: res,
+            guest: guestMap.get(res.primary_guest_id || '') || null,
+            room: roomMap.get(res.room_id || '') || null,
+            folio,
+            balance: folio.balance,
+          });
+        }
       }
     }
 
@@ -158,7 +162,7 @@ export function WarningModal() {
 
   const handleDismiss = () => {
     setOpen(false);
-    const dismissUntil = new Date(Date.now() + SCAN_INTERVAL).toISOString();
+    const dismissUntil = new Date(Date.now() + SCAN_INTERVAL).toISOString(); // suppress for 1 hour
     try { localStorage.setItem(STORAGE_KEY_DISMISSED, dismissUntil); } catch { /* ignore */ }
   };
 
@@ -282,3 +286,6 @@ export function WarningModal() {
     </>
   );
 }
+
+
+export { WarningModal }
