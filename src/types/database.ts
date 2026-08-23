@@ -250,6 +250,8 @@ export interface FolioItem {
   created_by: string;
   notes: string | null;
   created_at: string;
+  payment_id: string | null;
+  additional_charge_id: string | null;
 }
 
 export interface PaymentMethod {

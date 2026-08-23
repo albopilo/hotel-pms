@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
+import { ConfirmModal } from '@/components/ui/Modal';
 import { getLockProvider } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
@@ -135,8 +136,10 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const [showTakePayment, setShowTakePayment] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showPostStay, setShowPostStay] = useState(false);
+  const [voidTarget, setVoidTarget] = useState<FolioItem | null>(null);
 
   const isFinalized = folio.status === 'finalized';
+  const canVoid = user?.role === 'super_admin' || user?.role === 'manager';
 
   const reloadItems = useCallback(async () => {
     const { data } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).order('created_at');
@@ -209,7 +212,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const voidItem = async (item: FolioItem) => {
     try {
       await folioService.voidItem(item.id, folio.id, user!.id, user!.organization_id, folio.branch_id);
-      showToast('Item voided', 'success');
+      showToast(item.item_type === 'payment' ? 'Payment voided' : 'Item voided', 'success');
       await reloadItems();
     } catch (e) {
       const err = e instanceof FinancialError ? e : parseDbError(e as { message?: string });
@@ -277,7 +280,8 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
                   <td className="text-center py-2 px-3"><Badge color={item.item_type === 'charge' ? 'red' : item.item_type === 'payment' ? 'green' : 'gray'}>{item.item_type}</Badge></td>
                   <td className={`text-right py-2 px-3 font-medium ${item.amount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{item.amount > 0 ? '+' : ''}{formatIDR(item.amount)}</td>
                   <td className="py-2 px-3 text-xs text-slate-400">{formatDateTime(item.created_at)}</td>
-                  {!isFinalized && !item.voided && <td className="text-right py-2 px-3"><button onClick={() => voidItem(item)} className="text-xs text-red-500 hover:text-red-700">Void</button></td>}
+                  {!isFinalized && !item.voided && canVoid && <td className="text-right py-2 px-3"><button onClick={() => setVoidTarget(item)} className="text-xs text-red-500 hover:text-red-700">Void</button></td>}
+                  {!isFinalized && !item.voided && !canVoid && <td></td>}
                 </tr>
               ))}
               {items.length === 0 && <tr><td colSpan={6} className="text-center py-4 text-slate-400">{t('common.no_data')}</td></tr>}
@@ -326,6 +330,15 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async () => { setShowTakePayment(false); await reloadItems(); }} />}
       {showTransfer && <RoomTransferModal folio={folio} reservation={reservation} currentRoom={room} userId={user!.id} orgId={user!.organization_id} branchId={folio.branch_id} onClose={() => setShowTransfer(false)} onSaved={onClose} />}
       {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); await reloadItems(); }} />}
+      <ConfirmModal
+        open={!!voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onConfirm={() => { if (voidTarget) voidItem(voidTarget); setVoidTarget(null); }}
+        title={voidTarget?.item_type === 'payment' ? 'Void Payment' : 'Void Charge'}
+        message={`Void "${voidTarget?.description}" (${formatIDR(Math.abs(voidTarget?.amount || 0))})? This will remove it from the folio and mark the underlying ${voidTarget?.item_type === 'payment' ? 'payment' : 'charge'} record as voided.`}
+        confirmLabel={t('common.void')}
+        variant="danger"
+      />
     </Modal>
   );
 }

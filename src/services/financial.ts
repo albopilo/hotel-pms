@@ -110,9 +110,18 @@ export const folioService = {
   },
 
   async voidItem(itemId: string, folioId: string, userId: string, orgId: string, branchId: string): Promise<void> {
+    const { data: item, error: fetchErr } = await supabase
+      .from('folio_items')
+      .select('item_type, payment_id, additional_charge_id, description, amount')
+      .eq('id', itemId)
+      .maybeSingle();
+    if (fetchErr) throw new FinancialError(fetchErr.message, 'db_error');
+    if (!item) throw new FinancialError('Folio item not found', 'not_found');
+
+    const voidedAt = new Date().toISOString();
     const { error } = await supabase
       .from('folio_items')
-      .update({ voided: true, voided_by: userId, voided_at: new Date().toISOString() })
+      .update({ voided: true, voided_by: userId, voided_at: voidedAt })
       .eq('id', itemId);
     if (error) {
       if (error.message.includes('row-level security')) {
@@ -121,14 +130,29 @@ export const folioService = {
       throw new FinancialError(error.message, 'db_error');
     }
 
+    if (item.payment_id) {
+      await supabase
+        .from('payments')
+        .update({ voided: true, voided_by: userId, voided_at: voidedAt })
+        .eq('id', item.payment_id);
+    }
+
+    if (item.additional_charge_id) {
+      await supabase
+        .from('additional_charges')
+        .update({ status: 'voided' })
+        .eq('id', item.additional_charge_id);
+    }
+
+    const actionLabel = item.item_type === 'payment' ? 'payment_voided' : 'charge_voided';
     await supabase.from('audit_logs').insert({
       organization_id: orgId,
       branch_id: branchId,
       user_id: userId,
-      action: 'charge_voided',
+      action: actionLabel,
       object_type: 'folio_item',
       object_id: itemId,
-      previous_value: { folio_id: folioId },
+      previous_value: { folio_id: folioId, description: item.description, amount: item.amount },
     });
 
     await this.syncFolioTotals(folioId);
@@ -171,7 +195,7 @@ export const paymentService = {
 
     const payNum = `PAY-${new Date().getFullYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
 
-    const { error: payErr } = await supabase.from('payments').insert({
+    const { data: payRow, error: payErr } = await supabase.from('payments').insert({
       branch_id: input.branchId,
       reservation_id: input.reservationId,
       folio_id: input.folioId,
@@ -188,7 +212,7 @@ export const paymentService = {
       business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
       notes: input.notes || null,
-    });
+    }).select('id').single();
     if (payErr) {
       if (payErr.message.includes('row-level security')) {
         throw new FinancialError('You do not have permission to record payments for this branch.', 'permission_denied');
@@ -210,6 +234,7 @@ export const paymentService = {
       business_date: await getBusinessDate(input.branchId),
       created_by: input.userId,
       notes: input.notes || null,
+      payment_id: payRow.id,
     });
     if (folioErr) throw new FinancialError(folioErr.message, 'db_error');
 
@@ -255,6 +280,29 @@ export const chargeService = {
     const amount = input.amount * (input.quantity || 1);
     const needsApproval = cat?.requires_approval && amount > (cat?.approval_threshold || 0);
 
+    const { data: acRow, error: acErr } = await supabase.from('additional_charges').insert({
+      branch_id: input.branchId,
+      reservation_id: input.reservationId,
+      folio_id: input.folioId,
+      guest_id: input.guestId,
+      room_id: input.roomId,
+      charge_category_id: cat?.id || null,
+      category_code: cat?.code || 'miscellaneous',
+      description: input.description,
+      amount: input.amount,
+      quantity: input.quantity || 1,
+      is_damage: cat?.is_damage || false,
+      is_post_stay: false,
+      requires_approval: cat?.requires_approval || false,
+      approved_by: needsApproval ? null : input.userId,
+      approved_at: needsApproval ? null : new Date().toISOString(),
+      status: needsApproval ? 'pending_approval' : 'posted',
+      business_date: await getBusinessDate(input.branchId),
+      created_by: input.userId,
+      notes: input.notes || null,
+    }).select('id').single();
+    if (acErr) throw new FinancialError(acErr.message, 'db_error');
+
     const { error } = await supabase.from('folio_items').insert({
       folio_id: input.folioId,
       branch_id: input.branchId,
@@ -271,6 +319,7 @@ export const chargeService = {
       created_by: input.userId,
       notes: input.notes || null,
       approved_by: needsApproval ? null : input.userId,
+      additional_charge_id: acRow.id,
     });
     if (error) {
       if (error.message.includes('row-level security')) {
@@ -315,6 +364,25 @@ export const chargeService = {
 
     const cat = categories.find((c) => c.id === input.categoryId);
 
+    const { data: acRow, error: acErr } = await supabase.from('additional_charges').insert({
+      branch_id: input.branchId,
+      reservation_id: input.reservationId,
+      folio_id: input.folioId,
+      guest_id: input.guestId,
+      room_id: input.roomId,
+      charge_category_id: cat?.id || null,
+      category_code: cat?.code || 'post_stay',
+      description: input.description,
+      amount: input.amount,
+      quantity: 1,
+      is_post_stay: true,
+      status: 'posted',
+      business_date: await getBusinessDate(input.branchId),
+      created_by: input.userId,
+      notes: input.notes || null,
+    }).select('id').single();
+    if (acErr) throw new FinancialError(acErr.message, 'db_error');
+
     const { error: fiErr } = await supabase.from('folio_items').insert({
       folio_id: input.folioId,
       branch_id: input.branchId,
@@ -331,6 +399,7 @@ export const chargeService = {
       is_post_stay: true,
       created_by: input.userId,
       notes: input.notes || null,
+      additional_charge_id: acRow.id,
     });
     if (fiErr) {
       if (fiErr.message.includes('row-level security')) {
@@ -338,25 +407,6 @@ export const chargeService = {
       }
       throw new FinancialError(fiErr.message, 'db_error');
     }
-
-    const { error: acErr } = await supabase.from('additional_charges').insert({
-      branch_id: input.branchId,
-      reservation_id: input.reservationId,
-      folio_id: input.folioId,
-      guest_id: input.guestId,
-      room_id: input.roomId,
-      charge_category_id: cat?.id || null,
-      category_code: cat?.code || 'post_stay',
-      description: input.description,
-      amount: input.amount,
-      quantity: 1,
-      is_post_stay: true,
-      status: 'posted',
-      business_date: await getBusinessDate(input.branchId),
-      created_by: input.userId,
-      notes: input.notes || null,
-    });
-    if (acErr) throw new FinancialError(acErr.message, 'db_error');
 
     const { error: txnErr } = await supabase.from('transactions').insert({
       branch_id: input.branchId,
