@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { UserRole } from '@/types/database';
+import { WarningModal } from '@/components/WarningModal';
 
 export type PageKey =
   | 'dashboard' | 'reservations' | 'calendar' | 'rooms' | 'guests'
@@ -213,6 +214,9 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
           {children}
         </main>
       </div>
+
+      {/* Floating warning modal — visible on every page */}
+      <WarningModal />
     </div>
   );
 }

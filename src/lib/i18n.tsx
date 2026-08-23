@@ -425,6 +425,25 @@ const translations: Record<string, { en: string; id: string }> = {
   'action.replace_card': { en: 'Replace Card', id: 'Ganti Kartu' },
   'action.print_invoice': { en: 'Print Invoice', id: 'Cetak Faktur' },
   'action.view_details': { en: 'View Details', id: 'Lihat Detail' },
+
+  // Warning modal
+  'warning.title': { en: 'Attention Required', id: 'Perlu Perhatian' },
+  'warning.overdue_checkouts': { en: 'Overdue Checkouts', id: 'Check-out Terlambat' },
+  'warning.overdue_checkouts_desc': { en: 'Checked-in reservations past their check-out time without late checkout charges:', id: 'Reservasi yang sudah check-in melewati waktu check-out tanpa biaya check-out terlambat:' },
+  'warning.outstanding_balances': { en: 'Outstanding Balances', id: 'Saldo Tertunggak' },
+  'warning.outstanding_balances_desc': { en: 'Reservations with unpaid balance after midnight:', id: 'Reservasi dengan saldo belum dibayar setelah tengah malam:' },
+  'warning.no_warnings': { en: 'No warnings detected', id: 'Tidak ada peringatan' },
+  'warning.no_warnings_desc': { en: 'All clear — no overdue checkouts or outstanding balances found.', id: 'Semua aman — tidak ada check-out terlambat atau saldo tertunggak.' },
+  'warning.last_scan': { en: 'Last scanned', id: 'Terakhir dipindai' },
+  'warning.scanning': { en: 'Scanning...', id: 'Memindai...' },
+  'warning.scan_now': { en: 'Scan Now', id: 'Pindai Sekarang' },
+  'warning.dismiss': { en: 'Dismiss', id: 'Tutup' },
+  'warning.reservation': { en: 'Reservation', id: 'Reservasi' },
+  'warning.guest': { en: 'Guest', id: 'Tamu' },
+  'warning.room': { en: 'Room', id: 'Kamar' },
+  'warning.checkout_time': { en: 'Check-out Time', id: 'Waktu Check-out' },
+  'warning.balance': { en: 'Balance', id: 'Saldo' },
+  'warning.tooltip': { en: 'Active warnings', id: 'Peringatan aktif' },
 };
 
 interface I18nContextValue {
