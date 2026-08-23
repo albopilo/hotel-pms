@@ -1,6 +1,6 @@
 {
   "port": 8765,
-  "authToken": "CHANGE-ME-TO-A-SECURE-TOKEN",
+  "authToken": "millenium-hotel-lock-2026-secret",
   "dll": {
     "searchPaths": [
       "C:\\Program Files\\ZKTeco\\ZKBiolock",
