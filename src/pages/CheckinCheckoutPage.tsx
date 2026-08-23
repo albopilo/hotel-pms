@@ -720,7 +720,13 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
       }).eq('id', reservation.id);
       if(reservationError) throw reservationError;
 
-      try { await getLockProviderByType('mock').invalidateGuestCard({ cardId:reservation.id }); } catch(e) { console.warn('Card invalidation failed', e); }
+      try {
+        const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
+        const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
+        const provider = getLockProviderByType(lockType);
+        provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
+        await provider.invalidateGuestCard({ cardId: reservation.id });
+      } catch(e) { console.warn('Card invalidation failed', e); }
 
       await supabase.from('audit_logs').insert({
         organization_id: user!.organization_id, branch_id: reservation.branch_id, user_id: user!.id,
@@ -1266,7 +1272,7 @@ function SplitRoomModal({ reservation, reservationRooms, rooms, onClose }: {
                   <input
                     type="radio"
                     name="splitRoom"
-                    value={rr.room_id}
+                    value={rr.room_id || ''}
                     checked={selectedRoomId === rr.room_id}
                     onChange={e => setSelectedRoomId(e.target.value)}
                   />

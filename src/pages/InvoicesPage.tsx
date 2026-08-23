@@ -99,7 +99,7 @@ setInvoices(data || []);
                     {inv.invoice_number}
                   </td>
 
-                  <td className="py-3 px-4">{inv.guests?.full_name || '-'}</td>
+                  <td className="py-3 px-4">-</td>
 
                   <td className="text-right py-3 px-4">
                     {formatIDR(inv.total)}
@@ -144,7 +144,7 @@ setInvoices(data || []);
 }
 
 async function createInvoiceSnapshot(invoiceId:string){
-  const invoice = await invoiceService.getInvoiceDetail(invoice.id);
+  const invoice = await invoiceService.getInvoiceDetail(invoiceId);
 
   await supabase.from('invoice_snapshots').upsert({
     invoice_id:invoiceId,
@@ -170,6 +170,7 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
   const [guest,setGuest]=useState<Guest|null>(null);
   const [branch,setBranch]=useState<Branch|null>(null);
   const [reservation,setReservation]=useState<Reservation|null>(null);
+  const [roomNumber,setRoomNumber]=useState<string | null>(null);
   const [bookingSource,setBookingSource]=useState<BookingSource|null>(null);
   const [roomType,setRoomType]=useState<RoomType|null>(null);
   const [groupRooms,setGroupRooms]=useState<ReservationRoom[]>([]);
@@ -184,6 +185,10 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
       setGuest(detail.guests || null);
       setBranch(detail.branches || null);
       setReservation(res);
+      if (res?.room_id) {
+        const { data: roomData } = await supabase.from('rooms').select('room_number').eq('id', res.room_id).maybeSingle();
+        setRoomNumber((roomData as { room_number: string } | null)?.room_number || null);
+      }
 
       let bs: BookingSource|null = null;
       if (res?.booking_source_id) {
@@ -221,7 +226,7 @@ function InvoiceDetailModal({invoice,onClose,onPrint,onNavigateToPayment,onNavig
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div><b>{guest?.full_name||'-'}</b></div>
-          <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{reservation?.rooms?.room_number || '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{roomNumber || '-'}</span></div>
           {roomType && <div><span className="text-slate-500">{t('common.room_type')}:</span> <span className="font-medium">{roomType.name}</span></div>}
           {bookingSource && <div><span className="text-slate-500">{t('common.booking_source')}:</span> <span className="font-medium">{bookingSource.name}</span></div>}
           <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{reservation ? `${formatDate(reservation.check_in_date)} ${formatTime(reservation.check_in_time)}` : '-'}</span></div>

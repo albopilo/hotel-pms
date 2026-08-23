@@ -82,7 +82,7 @@ function AuthenticatedApp() {
       case 'reservations':
         return <ReservationsPage searchQuery={searchQuery} initialGuestId={newReservationGuestId} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'calendar':
-        return <CalendarPage onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} />;
+        return <CalendarPage onSelectReservation={handleSelectReservation} />;
       case 'rooms':
         return <RoomsPage />;
       case 'guests':

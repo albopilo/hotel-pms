@@ -316,7 +316,7 @@ function GuestFormModal({ open, onClose, guest, allGuests, orgId, onSaved }: {
       return;
     }
     const matches = findSimilarGuests(
-      { full_name: form.full_name, phone: form.phone, email: form.email, id_number: form.id_number },
+      { full_name: form.full_name, phone: form.phone, email: form.email, id_number: form.id_number, address: form.address },
       allGuests,
     );
     setDuplicateMatches(matches);

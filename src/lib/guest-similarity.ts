@@ -37,7 +37,7 @@ function levenshtein(a: string, b: string): number {
   return prev[b.length];
 }
 
-function stringSimilarity(a: string, b: string): number {
+function stringSimilarity(a: string | null | undefined, b: string | null | undefined): number {
   const na = normalize(a);
   const nb = normalize(b);
   if (!na && !nb) return 1;

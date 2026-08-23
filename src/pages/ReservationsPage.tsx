@@ -15,6 +15,7 @@ import { Plus, CalendarDays, Search, Trash2, Users, Receipt, CircleAlert as Aler
 import type { Reservation, Guest, Room, RoomType, BookingSource, Branch, IndonesianHoliday } from '@/types/database';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
+import type { RateType } from '@/lib/rate-calculator';
 import { reservationService, ReservationError } from '@/services/reservation';
 import { getBusinessDate } from '@/services/businessDateService';
 
@@ -608,8 +609,8 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
                 item_type: 'charge',
                 category: 'room',
                 description: isGroup
-                  ? `Room ${room?.room_number || idx + 1} - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`
-                  : `Room charge - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`,
+                  ? `Room ${room?.room_number || idx + 1} - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType as RateType, 'en')})`
+                  : `Room charge - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType as RateType, 'en')})`,
                 quantity: 1,
                 unit_amount: day.rate,
                 amount: day.rate,
@@ -810,7 +811,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
                     {rb.breakdown.map((day) => (
                       <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
                         <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
-                        <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType, 'en')}</p>
+                        <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType as RateType, 'en')}</p>
                         <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
                       </div>
                     ))}
