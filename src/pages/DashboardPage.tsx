@@ -6,8 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { Card, StatCard } from '@/components/ui/Card';
 import { LoadingPage } from '@/components/ui/States';
 import { formatIDR } from '@/lib/format';
-import { BedDouble, CircleCheck as CheckCircle2, LogIn, LogOut, Users, Wallet, TrendingUp, CircleAlert as AlertCircle, Building2 } from 'lucide-react';
-import type { RoomStatus, ReservationStatus } from '@/types/database';
+import { BedDouble, CircleCheck as CheckCircle2, LogIn, LogOut, Users, Wallet, TrendingUp, CircleAlert as AlertCircle } from 'lucide-react';
 
 interface DashboardStats {
   totalRooms: number;
@@ -33,25 +32,6 @@ interface BranchStats extends DashboardStats {
 }
 
 export function DashboardPage() {
-
-  const checkUser = async () => {
-    const { data, error } = await supabase.auth.getUser();
-
-    console.log("AUTH USER:", data.user);
-    console.log("AUTH ERROR:", error);
-  };
-
-  const testRooms = async () => {
-  const { data, error } = await supabase
-    .from('rooms')
-    .select('*');
-
-  console.log("ROOM DATA:", data);
-  console.log("ROOM ERROR:", error);
-};
-
-
-
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -61,21 +41,6 @@ export function DashboardPage() {
 
   const isSuperAdmin = user?.role === 'super_admin';
   const showAllBranches = isSuperAdmin && !selectedBranchId;
-
-  const testRole = async () => {
-  const { data, error } = await supabase.rpc(
-    'current_user_role'
-  );
-
-  console.log("ROLE:", data);
-  console.log("ROLE ERROR:", error);
-};
-
-useEffect(() => {
-  checkUser();
-  testRooms();
-  testRole();
-}, []);
 
   const loadStats = useCallback(async () => {
     setLoading(true);
@@ -88,10 +53,6 @@ useEffect(() => {
       .select('id, status, branch_id')
       .in('branch_id', branchIds)
       .eq('is_active', true);
-
-      console.log("USER:", user);
-console.log("BRANCHES:", branches);
-console.log("SELECTED:", selectedBranchId);
 
     const today = new Date().toISOString().split('T')[0];
 
