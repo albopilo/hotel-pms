@@ -130,6 +130,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
   });
 
   const canVoid = user?.role === 'super_admin' || user?.role === 'manager';
+  const canEdit = user?.role === 'super_admin' || user?.role === 'manager';
 
   const handleVoid = async () => {
     if (!voidTarget) return;
@@ -159,7 +160,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-slate-900">{t('nav.reservations')}</h1>
-        <Button onClick={() => setShowForm(true)}><Plus size={18} />{t('action.new_reservation')}</Button>
+        <Button onClick={() => { setEditingReservation(null); setShowForm(true); }}><Plus size={18} />{t('action.new_reservation')}</Button>
       </div>
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
@@ -214,7 +215,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
                       <td className="text-center"><ResStatusBadge status={r.status} label={t(`res.${r.status}`)} /></td>
                       <td className="py-3 px-4"><div className="flex gap-2 justify-end">
                         <button onClick={e => { e.stopPropagation(); onSelectReservation?.(r.id); }} className="text-blue-600 text-xs font-medium">{t('common.view')}</button>
-                        <button onClick={e => { e.stopPropagation(); setEditingReservation(r); setShowForm(true); }} className="text-slate-600 text-xs font-medium">{t('common.edit')}</button>
+                        {canEdit && <button onClick={e => { e.stopPropagation(); setEditingReservation(r); setShowForm(true); }} className="text-slate-600 text-xs font-medium">{t('common.edit')}</button>}
                         <button onClick={e => { e.stopPropagation(); onNavigateToPayment?.(r.id); }} className="text-emerald-600 text-xs font-medium">{t('res.view_folio')}</button>
                         {r.status !== 'tentative' && onNavigateToInvoice && (
                           <button onClick={e => { e.stopPropagation(); onNavigateToInvoice?.(r.id); }} className="text-slate-600 text-xs font-medium flex items-center gap-1"><Receipt size={12} />{t('res.view_invoice')}</button>
