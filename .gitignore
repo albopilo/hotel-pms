@@ -1,0 +1,29 @@
+# Node dependencies
+node_modules/
+
+# Build output
+bin/
+obj/
+dist/
+build/
+
+# Environment files
+.env
+
+# Logs
+*.log
+
+# Large binaries
+*.dll
+*.exe
+
+# Temporary files
+*.tmp
+
+# IDE files
+.vscode/
+.idea/
+
+# Windows files
+Thumbs.db
+Desktop.ini

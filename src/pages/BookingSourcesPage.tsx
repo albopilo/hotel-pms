@@ -1,0 +1,157 @@
+import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { useI18n } from '@/lib/i18n';
+import { useToast } from '@/lib/toast';
+import { Card } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { Modal, ConfirmModal } from '@/components/ui/Modal';
+import { Input } from '@/components/ui/Form';
+import { Badge } from '@/components/ui/Badge';
+import { LoadingPage, EmptyState } from '@/components/ui/States';
+import { Plus, CreditCard as Edit, Tags, Trash2 } from 'lucide-react';
+import type { BookingSource } from '@/types/database';
+import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+
+const SOURCE_DRAFT_KEY = 'booking_source_form_draft';
+
+const initialSourceForm = { name: '', code: '', is_ota: false, is_active: true, sort_order: '0' };
+
+export function BookingSourcesPage() {
+  const { user } = useAuth();
+  const { t } = useI18n();
+  const { showToast } = useToast();
+  const [sources, setSources] = useState<BookingSource[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState<BookingSource | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BookingSource | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supabase.from('booking_sources').select('*').order('sort_order');
+    setSources((data as BookingSource[]) || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    const { error } = await supabase.from('booking_sources').delete().eq('id', deleteTarget.id);
+    if (error) showToast(error.message, 'error');
+    else { showToast('Deleted', 'success'); load(); }
+    setDeleteTarget(null);
+  };
+
+  if (loading) return <LoadingPage message={t('common.loading')} />;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">{t('nav.booking_sources')}</h1>
+        <Button onClick={() => { setEditing(null); setShowForm(true); }}><Plus size={18} /> {t('common.add')}</Button>
+      </div>
+
+      {sources.length === 0 ? (
+        <EmptyState icon={<Tags size={48} />} title={t('common.no_data')} />
+      ) : (
+        <Card noPadding>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-slate-500">
+                  <th className="text-left py-3 px-4">{t('common.name')}</th>
+                  <th className="text-left py-3 px-4">Code</th>
+                  <th className="text-center py-3 px-4">OTA</th>
+                  <th className="text-center py-3 px-4">{t('common.status')}</th>
+                  <th className="text-right py-3 px-4">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sources.map((s) => (
+                  <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
+                    <td className="py-3 px-4 font-medium text-slate-800">{s.name}</td>
+                    <td className="py-3 px-4 text-slate-500">{s.code}</td>
+                    <td className="text-center py-3 px-4">{s.is_ota ? <Badge color="blue">OTA</Badge> : '-'}</td>
+                    <td className="text-center py-3 px-4"><Badge color={s.is_active ? 'green' : 'gray'}>{s.is_active ? t('common.active') : t('common.inactive')}</Badge></td>
+                    <td className="text-right py-3 px-4">
+                      <div className="flex justify-end gap-2">
+                        <button onClick={() => { setEditing(s); setShowForm(true); }} className="text-slate-400 hover:text-blue-600"><Edit size={16} /></button>
+                        <button onClick={() => setDeleteTarget(s)} className="text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      <SourceFormModal open={showForm} onClose={() => setShowForm(false)} source={editing} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
+      <ConfirmModal open={!!deleteTarget} onClose={() => setDeleteTarget(null)} onConfirm={handleDelete} title="Delete Booking Source" message={`Delete "${deleteTarget?.name}"?`} confirmLabel={t('common.delete')} variant="danger" />
+    </div>
+  );
+}
+
+function SourceFormModal({ open, onClose, source, orgId, onSaved }: {
+  open: boolean; onClose: () => void; source: BookingSource | null; orgId: string; onSaved: () => void;
+}) {
+  const { t } = useI18n();
+  const { showToast } = useToast();
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(() => {
+    const draft = loadDraft<typeof initialSourceForm>(SOURCE_DRAFT_KEY);
+    return draft || { ...initialSourceForm };
+  });
+
+  useEffect(() => {
+    if (source) {
+      setForm({ name: source.name, code: source.code, is_ota: source.is_ota, is_active: source.is_active, sort_order: String(source.sort_order) });
+    } else {
+      const draft = loadDraft<typeof initialSourceForm>(SOURCE_DRAFT_KEY);
+      setForm(draft || { ...initialSourceForm });
+    }
+  }, [source, open]);
+
+  useEffect(() => {
+    if (open && !source) saveDraft(SOURCE_DRAFT_KEY, form);
+  }, [form, open, source]);
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.code) { showToast('Name and code required', 'error'); return; }
+    setSaving(true);
+    const payload = {
+      organization_id: orgId, name: form.name, code: form.code.toUpperCase(),
+      is_ota: form.is_ota, is_active: form.is_active, sort_order: parseInt(form.sort_order) || 0,
+    };
+    const { error } = source
+      ? await supabase.from('booking_sources').update(payload).eq('id', source.id)
+      : await supabase.from('booking_sources').insert(payload);
+    if (error) showToast(error.message, 'error');
+    else { showToast('Saved', 'success'); clearDraft(SOURCE_DRAFT_KEY); onSaved(); }
+    setSaving(false);
+  };
+
+  const handleCancel = () => { clearDraft(SOURCE_DRAFT_KEY); onClose(); };
+
+  return (
+    <Modal open={open} onClose={handleCancel} title={source ? t('common.edit') : t('common.add')} size="sm"
+      footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleSubmit}>{t('common.save')}</Button></>}>
+      <form className="space-y-4">
+        <Input label={t('common.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+        <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} required />
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={form.is_ota} onChange={(e) => setForm({ ...form, is_ota: e.target.checked })} />
+          OTA Source
+        </label>
+        <label className="flex items-center gap-2 text-sm text-slate-700">
+          <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })} />
+          {t('common.active')}
+        </label>
+        <Input label="Sort Order" type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
+      </form>
+    </Modal>
+  );
+}
