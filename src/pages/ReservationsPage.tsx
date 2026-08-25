@@ -17,6 +17,8 @@ import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import type { RateType } from '@/lib/rate-calculator';
 import { reservationService, ReservationError } from '@/services/reservation';
+import { folioService } from '@/services/financial';
+import { invoiceService } from '@/services/invoiceService';
 import { getBusinessDate } from '@/services/businessDateService';
 
 interface RoomRow {
@@ -568,6 +570,91 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
       const { error: rrError } = await supabase.from('reservation_rooms').insert(rrRows);
       if (rrError) {
         showToast(`Reservation created but room linking failed: ${rrError.message}`, 'error');
+      }
+    }
+
+    // When editing: sync folio items (room charges, discount, tax, deposit) to match the updated reservation
+    if (reservation && data) {
+      const { data: existingFolio } = await supabase.from('folios').select('id').eq('reservation_id', data.id).maybeSingle();
+      if (existingFolio) {
+        // Void old auto-generated items so they can be replaced
+        await supabase.from('folio_items')
+          .update({ voided: true, voided_by: userId, voided_at: new Date().toISOString() })
+          .eq('folio_id', existingFolio.id)
+          .eq('voided', false)
+          .in('category', ['room', 'discount', 'tax', 'deposit']);
+
+        const syncBusinessDate = await getBusinessDate(form.branch_id);
+        const syncItems: any[] = [];
+
+        roomRows.forEach((row, idx) => {
+          const room = rooms.find(r => r.id === row.room_id);
+          const roomType = roomTypes.find(rt => rt.id === row.room_type_id);
+          const manualRate = rateTouched[idx] && Number(row.rate) > 0 ? Number(row.rate) : null;
+          let perNightCharges: { date: string; rate: number; rateType: string }[] = [];
+          if (roomType && !manualRate) {
+            const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
+            perNightCharges = breakdown;
+          }
+          if (perNightCharges.length > 0) {
+            perNightCharges.forEach((day) => {
+              syncItems.push({
+                folio_id: existingFolio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id, room_id: row.room_id,
+                item_type: 'charge', category: 'room',
+                description: isGroup
+                  ? `Room ${room?.room_number || idx + 1} - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType as RateType, 'en')})`
+                  : `Room charge - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType as RateType, 'en')})`,
+                quantity: 1, unit_amount: day.rate, amount: day.rate, business_date: day.date, created_by: userId
+              });
+            });
+          } else {
+            syncItems.push({
+              folio_id: existingFolio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id, room_id: row.room_id,
+              item_type: 'charge', category: 'room',
+              description: isGroup ? `Room charge - Room ${room?.room_number || idx + 1}` : 'Room charge',
+              quantity: Number(nights) || 1, unit_amount: Number(row.rate), amount: Number(row.rate) * (Number(nights) || 1),
+              business_date: syncBusinessDate, created_by: userId
+            });
+          }
+        });
+
+        if (Number(form.discount) > 0) {
+          syncItems.push({
+            folio_id: existingFolio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
+            item_type: 'discount', category: 'discount', description: 'Discount',
+            quantity: 1, unit_amount: -Number(form.discount), amount: -Number(form.discount), business_date: syncBusinessDate, created_by: userId
+          });
+        }
+        if (Number(form.tax) > 0) {
+          syncItems.push({
+            folio_id: existingFolio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
+            item_type: 'tax', category: 'tax', description: 'Tax',
+            quantity: 1, unit_amount: Number(form.tax), amount: Number(form.tax), business_date: syncBusinessDate, created_by: userId
+          });
+        }
+        if (Number(form.deposit) > 0) {
+          syncItems.push({
+            folio_id: existingFolio.id, branch_id: form.branch_id, reservation_id: data.id, guest_id: form.guest_id,
+            item_type: 'charge', category: 'deposit', description: 'Security deposit',
+            quantity: 1, unit_amount: Number(form.deposit), amount: Number(form.deposit), business_date: syncBusinessDate, created_by: userId
+          });
+        }
+
+        if (syncItems.length) {
+          await supabase.from('folio_items').insert(syncItems);
+        }
+
+        await folioService.syncFolioTotals(existingFolio.id);
+
+        try {
+          await invoiceService.ensureInvoice({
+            folioId: existingFolio.id, branchId: form.branch_id,
+            organizationId: orgId, reservationId: data.id,
+            guestId: form.guest_id, userId,
+          });
+        } catch (err) {
+          console.error('Invoice sync after reservation edit failed:', err);
+        }
       }
     }
 
