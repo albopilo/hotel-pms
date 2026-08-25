@@ -9,12 +9,11 @@ import { Modal } from '@/components/ui/Modal';
 import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
+import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR, formatDate } from '@/lib/format';
 import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
-import { usePagination, paginate } from '@/lib/usePagination';
-import { PaginationControls } from '@/components/ui/PaginationControls';
 import { findSimilarGuests, findDuplicateGuestPairs, type SimilarGuestMatch, type DuplicatePair } from '@/lib/guest-similarity';
 import { guestMergeService, type MergePreview } from '@/services/guestMergeService';
 
@@ -46,7 +45,8 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showMerge, setShowMerge] = useState(false);
-  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('guests_page');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -74,8 +74,9 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
     if (!q) return true;
     return g.full_name.toLowerCase().includes(q) || (g.phone || '').includes(q) || (g.id_number || '').includes(q) || (g.email || '').toLowerCase().includes(q);
   });
-  const { data: pagedGuests, totalPages, totalItems } = paginate(filtered, page, pageSize);
-  useEffect(() => { resetPage(); }, [localSearch, resetPage]);
+
+  const paged = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [localSearch]);
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -117,7 +118,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
                 </tr>
               </thead>
               <tbody>
-                {pagedGuests.map((g) => (
+                {paged.map((g) => (
                   <tr key={g.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedGuest(g)}>
                     <td className="py-3 px-4 font-medium text-slate-800">{g.full_name}</td>
                     <td className="py-3 px-4">{g.phone || '-'}</td>
@@ -137,15 +138,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
               </tbody>
             </table>
           </div>
-          <PaginationControls
-            page={page}
-            pageSize={pageSize}
-            totalItems={totalItems}
-            totalPages={totalPages}
-            pageSizeOptions={pageSizeOptions}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
         </Card>
       )}
 

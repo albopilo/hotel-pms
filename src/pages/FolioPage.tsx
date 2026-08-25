@@ -10,6 +10,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Input, Select, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
+import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
 import { ConfirmModal } from '@/components/ui/Modal';
@@ -17,8 +18,6 @@ import { getLockProviderByType, integrationToConfig } from '@/lib/hotel-lock/pro
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
-import { usePagination, paginate } from '@/lib/usePagination';
-import { PaginationControls } from '@/components/ui/PaginationControls';
 import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType, ReservationRoom, HotelLockIntegration } from '@/types/database';
 
 const ADD_CHARGE_DRAFT_KEY = 'folio_add_charge_draft';
@@ -39,8 +38,9 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
   const [loading, setLoading] = useState(true);
   const [selectedFolio, setSelectedFolio] = useState<Folio | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 20;
   const processedResId = useRef<string | null>(null);
-  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('folios_page');
 
   const branchIds = useMemo(
   () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
@@ -72,9 +72,8 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
     const q = localSearch.toLowerCase();
     return !q || f.folio_number.toLowerCase().includes(q) || (f.guest?.full_name || '').toLowerCase().includes(q) || (f.reservation?.room?.room_number || '').toLowerCase().includes(q);
   });
-  const { data: pagedFolios, totalPages, totalItems } = paginate(filteredFolios, page, pageSize);
-
-  useEffect(() => { resetPage(); }, [localSearch, resetPage]);
+  const pagedFolios = filteredFolios.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  useEffect(() => { setPage(1); }, [localSearch]);
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -117,17 +116,9 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
               </tbody>
             </table>
           </div>
-          <PaginationControls
-            page={page}
-            pageSize={pageSize}
-            totalItems={totalItems}
-            totalPages={totalPages}
-            pageSizeOptions={pageSizeOptions}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-          />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={filteredFolios.length} onPageChange={setPage} />
         </Card>
-      )}}
+      )}
 
       {selectedFolio && <FolioDetailModal folio={selectedFolio} onClose={() => { setSelectedFolio(null); load(); }} onNavigateToInvoice={onNavigateToInvoice} onSelectReservation={onSelectReservation} onNavigateToGuest={onNavigateToGuest} />}
     </div>

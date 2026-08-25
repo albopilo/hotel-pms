@@ -9,13 +9,13 @@ import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { InvoiceStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage,EmptyState } from '@/components/ui/States';
+import { Pagination } from '@/components/ui/Pagination';
+import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR,formatDate,formatDateTime,formatTime } from '@/lib/format';
 import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType,ReservationRoom } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
 import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
-import { usePagination, paginate } from '@/lib/usePagination';
-import { PaginationControls } from '@/components/ui/PaginationControls';
 
 export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNavigateToGuest}:{searchQuery?:string;reservationId?:string|null;onNavigateToPayment?:(id:string)=>void;onNavigateToGuest?:(id:string)=>void}) {
   const {branches}=useAuth();
@@ -26,9 +26,12 @@ export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNa
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState<Invoice|null>(null);
   const [printInvoiceId,setPrintInvoiceId]=useState<string|null>(null);
+  const [page,setPage]=useState(1);
+  const PAGE_SIZE=20;
   const [localSearch,setLocalSearch]=useState(searchQuery||'');
+  const [page,setPage]=useState(1);
+  const PAGE_SIZE=20;
   const processedResId=useRef<string|null>(null);
-  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('invoices_page');
 
   const branchIds=useMemo(()=>selectedBranchId?[selectedBranchId]:branches.map(b=>b.id),[selectedBranchId,branches]);
 
@@ -58,8 +61,8 @@ setInvoices(data || []);
   },[reservationId,invoices]);
 
   const filtered=invoices.filter(i=>!localSearch||i.invoice_number.toLowerCase().includes(localSearch.toLowerCase()));
-  const { data: pagedInvoices, totalPages, totalItems } = paginate(filtered, page, pageSize);
-  useEffect(() => { resetPage(); }, [localSearch, resetPage]);
+  const paged=filtered.slice((page-1)*PAGE_SIZE,page*PAGE_SIZE);
+  useEffect(()=>{setPage(1)},[localSearch]);
 
   if(loading)return <LoadingPage message={t('common.loading')}/>;
 
@@ -94,7 +97,7 @@ setInvoices(data || []);
             </thead>
 
             <tbody>
-              {pagedInvoices.map(inv=>(
+              {paged.map(inv=>(
                 <tr
                   key={inv.id}
                   onClick={()=>setSelected(inv)}
@@ -122,16 +125,9 @@ setInvoices(data || []);
             </tbody>
           </table>
         </div>
-        <PaginationControls
-          page={page}
-          pageSize={pageSize}
-          totalItems={totalItems}
-          totalPages={totalPages}
-          pageSizeOptions={pageSizeOptions}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-        />
-      </Card>
+          <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+        </Card>
     )}
 
     {selected && (
