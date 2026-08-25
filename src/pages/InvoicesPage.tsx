@@ -14,6 +14,8 @@ import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType,ReservationRoom } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
 import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
+import { usePagination, paginate } from '@/lib/usePagination';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 
 export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNavigateToGuest}:{searchQuery?:string;reservationId?:string|null;onNavigateToPayment?:(id:string)=>void;onNavigateToGuest?:(id:string)=>void}) {
   const {branches}=useAuth();
@@ -26,6 +28,7 @@ export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNa
   const [printInvoiceId,setPrintInvoiceId]=useState<string|null>(null);
   const [localSearch,setLocalSearch]=useState(searchQuery||'');
   const processedResId=useRef<string|null>(null);
+  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('invoices_page');
 
   const branchIds=useMemo(()=>selectedBranchId?[selectedBranchId]:branches.map(b=>b.id),[selectedBranchId,branches]);
 
@@ -54,9 +57,11 @@ setInvoices(data || []);
     }
   },[reservationId,invoices]);
 
-  if(loading)return <LoadingPage message={t('common.loading')}/>;
-
   const filtered=invoices.filter(i=>!localSearch||i.invoice_number.toLowerCase().includes(localSearch.toLowerCase()));
+  const { data: pagedInvoices, totalPages, totalItems } = paginate(filtered, page, pageSize);
+  useEffect(() => { resetPage(); }, [localSearch, resetPage]);
+
+  if(loading)return <LoadingPage message={t('common.loading')}/>;
 
   return (
   <div className="space-y-6">
@@ -89,7 +94,7 @@ setInvoices(data || []);
             </thead>
 
             <tbody>
-              {filtered.map(inv=>(
+              {pagedInvoices.map(inv=>(
                 <tr
                   key={inv.id}
                   onClick={()=>setSelected(inv)}
@@ -117,6 +122,15 @@ setInvoices(data || []);
             </tbody>
           </table>
         </div>
+        <PaginationControls
+          page={page}
+          pageSize={pageSize}
+          totalItems={totalItems}
+          totalPages={totalPages}
+          pageSizeOptions={pageSizeOptions}
+          onPageChange={setPage}
+          onPageSizeChange={setPageSize}
+        />
       </Card>
     )}
 

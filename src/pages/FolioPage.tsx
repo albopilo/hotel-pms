@@ -17,6 +17,8 @@ import { getLockProviderByType, integrationToConfig } from '@/lib/hotel-lock/pro
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+import { usePagination, paginate } from '@/lib/usePagination';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType, ReservationRoom, HotelLockIntegration } from '@/types/database';
 
 const ADD_CHARGE_DRAFT_KEY = 'folio_add_charge_draft';
@@ -38,6 +40,7 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
   const [selectedFolio, setSelectedFolio] = useState<Folio | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery || '');
   const processedResId = useRef<string | null>(null);
+  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('folios_page');
 
   const branchIds = useMemo(
   () => selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id),
@@ -65,6 +68,14 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
     })();
   }, [reservationId]);
 
+  const filteredFolios = folios.filter((f) => {
+    const q = localSearch.toLowerCase();
+    return !q || f.folio_number.toLowerCase().includes(q) || (f.guest?.full_name || '').toLowerCase().includes(q) || (f.reservation?.room?.room_number || '').toLowerCase().includes(q);
+  });
+  const { data: pagedFolios, totalPages, totalItems } = paginate(filteredFolios, page, pageSize);
+
+  useEffect(() => { resetPage(); }, [localSearch, resetPage]);
+
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
   return (
@@ -76,7 +87,7 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
         <input type="text" value={localSearch} onChange={(e) => setLocalSearch(e.target.value)} placeholder={t('common.search')} className="w-full rounded-lg border border-slate-300 pl-10 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
       </div>
 
-      {folios.length === 0 ? (
+      {filteredFolios.length === 0 ? (
         <EmptyState icon={<FileText size={48} />} title={t('common.no_data')} />
       ) : (
         <Card noPadding>
@@ -93,10 +104,7 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
                 </tr>
               </thead>
               <tbody>
-                {folios.filter((f) => {
-                  const q = localSearch.toLowerCase();
-                  return !q || f.folio_number.toLowerCase().includes(q) || (f.guest?.full_name || '').toLowerCase().includes(q) || (f.reservation?.room?.room_number || '').toLowerCase().includes(q);
-                }).map((f) => (
+                {pagedFolios.map((f) => (
                   <tr key={f.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedFolio(f)}>
                     <td className="py-3 px-4 font-medium text-blue-600">{f.folio_number}</td>
                     <td className="py-3 px-4">{f.guest?.full_name || '-'}</td>
@@ -109,8 +117,17 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={page}
+            pageSize={pageSize}
+            totalItems={totalItems}
+            totalPages={totalPages}
+            pageSizeOptions={pageSizeOptions}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </Card>
-      )}
+      )}}
 
       {selectedFolio && <FolioDetailModal folio={selectedFolio} onClose={() => { setSelectedFolio(null); load(); }} onNavigateToInvoice={onNavigateToInvoice} onSelectReservation={onSelectReservation} onNavigateToGuest={onNavigateToGuest} />}
     </div>

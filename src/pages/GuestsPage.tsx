@@ -13,6 +13,8 @@ import { formatIDR, formatDate } from '@/lib/format';
 import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck } from 'lucide-react';
 import type { Guest, Reservation } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+import { usePagination, paginate } from '@/lib/usePagination';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { findSimilarGuests, findDuplicateGuestPairs, type SimilarGuestMatch, type DuplicatePair } from '@/lib/guest-similarity';
 import { guestMergeService, type MergePreview } from '@/services/guestMergeService';
 
@@ -44,6 +46,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
   const [selectedGuest, setSelectedGuest] = useState<Guest | null>(null);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [showMerge, setShowMerge] = useState(false);
+  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('guests_page');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +74,8 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
     if (!q) return true;
     return g.full_name.toLowerCase().includes(q) || (g.phone || '').includes(q) || (g.id_number || '').includes(q) || (g.email || '').toLowerCase().includes(q);
   });
+  const { data: pagedGuests, totalPages, totalItems } = paginate(filtered, page, pageSize);
+  useEffect(() => { resetPage(); }, [localSearch, resetPage]);
 
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
@@ -112,7 +117,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((g) => (
+                {pagedGuests.map((g) => (
                   <tr key={g.id} className="border-b border-slate-100 hover:bg-slate-50 cursor-pointer" onClick={() => setSelectedGuest(g)}>
                     <td className="py-3 px-4 font-medium text-slate-800">{g.full_name}</td>
                     <td className="py-3 px-4">{g.phone || '-'}</td>
@@ -132,6 +137,15 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={page}
+            pageSize={pageSize}
+            totalItems={totalItems}
+            totalPages={totalPages}
+            pageSizeOptions={pageSizeOptions}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </Card>
       )}
 

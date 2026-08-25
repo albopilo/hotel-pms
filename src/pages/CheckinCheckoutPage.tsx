@@ -19,6 +19,8 @@ import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import { folioService } from '@/services/financial';
 import { getBusinessDate } from '@/services/businessDateService';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+import { usePagination, paginate } from '@/lib/usePagination';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
 
@@ -41,6 +43,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
   const [mode, setMode] = useState<'checkin' | 'checkout' | 'extend' | 'split' | null>(null);
   const [reservationRooms, setReservationRooms] = useState<ReservationRoom[]>([]);
   const processedInitialId = useRef<string | null>(null);
+  const { page: departuresLaterPage, pageSize: departuresLaterPageSize, setPage: setDeparturesLaterPage, setPageSize: setDeparturesLaterPageSize, resetPage: resetDeparturesLaterPage, pageSizeOptions: departuresLaterPageSizeOptions } = usePagination('checkin_departures_later_page');
+  const { page: checkedOutPage, pageSize: checkedOutPageSize, setPage: setCheckedOutPage, setPageSize: setCheckedOutPageSize, resetPage: resetCheckedOutPage, pageSizeOptions: checkedOutPageSizeOptions } = usePagination('checkin_checked_out_page');
 
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
 
@@ -50,7 +54,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
 
     const [{ data: res }, { data: co }, { data: g }, { data: r }] = await Promise.all([
       supabase.from('reservations').select('*').in('branch_id', branchIds).in('status', ['confirmed', 'checked_in']).order('check_in_date'),
-      supabase.from('reservations').select('*').in('branch_id', branchIds).eq('status', 'checked_out').order('actual_check_out', { ascending: false }).limit(20),
+      supabase.from('reservations').select('*').in('branch_id', branchIds).eq('status', 'checked_out').order('actual_check_out', { ascending: false }),
       supabase.from('guests').select('*'),
       supabase.from('rooms').select('*').in('branch_id', branchIds)
     ]);
@@ -90,6 +94,13 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
     const rm = roomMap.get(r.room_id || '');
     return r.reservation_number.toLowerCase().includes(q) || (g?.full_name || '').toLowerCase().includes(q) || (rm?.room_number || '').includes(q);
   };
+
+  const filteredDeparturesLater = departuresLater.filter(filterFn);
+  const filteredCheckedOut = checkedOut.filter(filterFn);
+  const { data: pagedDeparturesLater, totalPages: dlTotalPages, totalItems: dlTotalItems } = paginate(filteredDeparturesLater, departuresLaterPage, departuresLaterPageSize);
+  const { data: pagedCheckedOut, totalPages: coTotalPages, totalItems: coTotalItems } = paginate(filteredCheckedOut, checkedOutPage, checkedOutPageSize);
+  useEffect(() => { resetDeparturesLaterPage(); }, [q, resetDeparturesLaterPage]);
+  useEffect(() => { resetCheckedOutPage(); }, [q, resetCheckedOutPage]);
 
   const loadReservationRooms = async (resId: string) => {
     const { data } = await supabase.from('reservation_rooms').select('*').eq('reservation_id', resId).eq('status', 'active');
@@ -160,8 +171,9 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
       </div>
 
       <Card title={t('dash.departures_later')}>
-        {departuresLater.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
-        <div className="space-y-2">{departuresLater.filter(filterFn).map(r => {
+        {filteredDeparturesLater.length === 0 ? <EmptyState title={t('common.no_data')} /> :
+        <>
+        <div className="space-y-2">{pagedDeparturesLater.map(r => {
           const g = guestMap.get(r.primary_guest_id || '');
           const rm = roomMap.get(r.room_id || '');
           return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2 hover:bg-slate-50">
@@ -176,12 +188,23 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
               <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}><LogOut size={14}/>{t('action.check_out')}</Button>
             </div>
           </div>;
-        })}</div>}
+        })}</div>
+        <PaginationControls
+          page={departuresLaterPage}
+          pageSize={departuresLaterPageSize}
+          totalItems={dlTotalItems}
+          totalPages={dlTotalPages}
+          pageSizeOptions={departuresLaterPageSizeOptions}
+          onPageChange={setDeparturesLaterPage}
+          onPageSizeChange={setDeparturesLaterPageSize}
+        />
+        </>}
       </Card>
 
       <Card title={t('res.checked_out')}>
-        {checkedOut.filter(filterFn).length === 0 ? <EmptyState title={t('common.no_data')} /> :
-        <div className="space-y-2">{checkedOut.filter(filterFn).map(r => {
+        {filteredCheckedOut.length === 0 ? <EmptyState title={t('common.no_data')} /> :
+        <>
+        <div className="space-y-2">{pagedCheckedOut.map(r => {
           const g = guestMap.get(r.primary_guest_id || '');
           const rm = roomMap.get(r.room_id || '');
           return <div key={r.id} className="flex items-center justify-between border border-slate-100 rounded-lg px-3 py-2">
@@ -195,7 +218,17 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
               <Badge color="gray">{t('res.checked_out')}</Badge>
             </div>
           </div>;
-        })}</div>}
+        })}</div>
+        <PaginationControls
+          page={checkedOutPage}
+          pageSize={checkedOutPageSize}
+          totalItems={coTotalItems}
+          totalPages={coTotalPages}
+          pageSizeOptions={checkedOutPageSizeOptions}
+          onPageChange={setCheckedOutPage}
+          onPageSizeChange={setCheckedOutPageSize}
+        />
+        </>}
       </Card>
 
       {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}

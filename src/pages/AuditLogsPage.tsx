@@ -10,6 +10,8 @@ import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatDateTime, todayISO, addDays, formatIDR } from '@/lib/format';
 import { ScrollText, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import type { AuditLog } from '@/types/database';
+import { usePagination, paginate } from '@/lib/usePagination';
+import { PaginationControls } from '@/components/ui/PaginationControls';
 
 type ActionColor = 'green' | 'red' | 'blue' | 'amber' | 'gray' | 'teal' | 'orange';
 
@@ -100,6 +102,7 @@ export function AuditLogsPage() {
   const [actionFilter, setActionFilter] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const { page, pageSize, setPage, setPageSize, resetPage, pageSizeOptions } = usePagination('audit_logs_page');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -228,6 +231,9 @@ export function AuditLogsPage() {
     });
   }, [logs, searchText, profiles, refMap]);
 
+  const { data: pagedLogs, totalPages, totalItems } = paginate(filteredLogs, page, pageSize);
+  useEffect(() => { resetPage(); }, [searchText, dateFrom, dateTo, actionFilter, resetPage]);
+
   if (loading) return <LoadingPage message={t('common.loading')} />;
 
   return (
@@ -295,7 +301,7 @@ export function AuditLogsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredLogs.slice(0, 200).map((log) => {
+                {pagedLogs.map((log) => {
                   const prevValues = formatValueObj(log.previous_value);
                   const newValues = formatValueObj(log.new_value);
                   const hasDetails = prevValues.length > 0 || newValues.length > 0 || !!log.reason;
@@ -367,7 +373,15 @@ export function AuditLogsPage() {
               </tbody>
             </table>
           </div>
-          {filteredLogs.length > 200 && <p className="text-xs text-slate-400 p-3">Showing 200 of {filteredLogs.length} entries</p>}
+          <PaginationControls
+            page={page}
+            pageSize={pageSize}
+            totalItems={totalItems}
+            totalPages={totalPages}
+            pageSizeOptions={pageSizeOptions}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+          />
         </Card>
       )}
     </div>
