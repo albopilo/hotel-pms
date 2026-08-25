@@ -577,12 +577,13 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     if (reservation && data) {
       const { data: existingFolio } = await supabase.from('folios').select('id').eq('reservation_id', data.id).maybeSingle();
       if (existingFolio) {
-        // Void old auto-generated items so they can be replaced
-        await supabase.from('folio_items')
-          .update({ voided: true, voided_by: userId, voided_at: new Date().toISOString() })
+        // Collect IDs of old auto-generated items before inserting new ones
+        const { data: oldItems } = await supabase.from('folio_items')
+          .select('id')
           .eq('folio_id', existingFolio.id)
           .eq('voided', false)
           .in('category', ['room', 'discount', 'tax', 'deposit']);
+        const oldItemIds = (oldItems || []).map((i: any) => i.id);
 
         const syncBusinessDate = await getBusinessDate(form.branch_id);
         const syncItems: any[] = [];
@@ -640,8 +641,24 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
           });
         }
 
+        // Insert new items first — only void old ones if the insert succeeds
         if (syncItems.length) {
-          await supabase.from('folio_items').insert(syncItems);
+          const { error: syncInsertError } = await supabase.from('folio_items').insert(syncItems);
+          if (syncInsertError) {
+            showToast(`Failed to sync folio charges: ${syncInsertError.message}`, 'error');
+            setSaving(false);
+            return;
+          }
+        }
+
+        // Now safe to void the old items
+        if (oldItemIds.length) {
+          const { error: voidError } = await supabase.from('folio_items')
+            .update({ voided: true, voided_by: userId, voided_at: new Date().toISOString() })
+            .in('id', oldItemIds);
+          if (voidError) {
+            console.error('Failed to void old folio items:', voidError.message);
+          }
         }
 
         await folioService.syncFolioTotals(existingFolio.id);
