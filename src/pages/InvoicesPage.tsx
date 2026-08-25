@@ -10,7 +10,6 @@ import { Modal } from '@/components/ui/Modal';
 import { InvoiceStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage,EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
-import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR,formatDate,formatDateTime,formatTime } from '@/lib/format';
 import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType,ReservationRoom } from '@/types/database';
@@ -29,8 +28,6 @@ export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNa
   const [page,setPage]=useState(1);
   const PAGE_SIZE=20;
   const [localSearch,setLocalSearch]=useState(searchQuery||'');
-  const [page,setPage]=useState(1);
-  const PAGE_SIZE=20;
   const processedResId=useRef<string|null>(null);
 
   const branchIds=useMemo(()=>selectedBranchId?[selectedBranchId]:branches.map(b=>b.id),[selectedBranchId,branches]);
@@ -125,7 +122,6 @@ setInvoices(data || []);
             </tbody>
           </table>
         </div>
-          <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
           <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
         </Card>
     )}
