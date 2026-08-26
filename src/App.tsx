@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { I18nProvider } from '@/lib/i18n';
 import { ToastProvider } from '@/lib/toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -35,13 +35,6 @@ function AuthenticatedApp() {
   const [selectedGuestId, setSelectedGuestId] = useState<string | null>(null);
   const [newReservationGuestId, setNewReservationGuestId] = useState<string | null>(null);
   const processedNavId = useRef<string | null>(null);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      window.location.reload();
-    }, 30 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleSelectReservation = (id: string) => {
     setSelectedReservationId(id);
