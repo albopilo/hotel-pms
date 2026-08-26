@@ -311,11 +311,14 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
+  const { user } = useAuth();
+  const canEditRate = user?.role === 'super_admin' || user?.role === 'manager';
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [occupiedWarning, setOccupiedWarning] = useState<any>(null);
   const [dirtyWarning, setDirtyWarning] = useState<any>(null);
   const [rateTouched, setRateTouched] = useState<Record<number, boolean>>({});
+  const [nightRateOverrides, setNightRateOverrides] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState<typeof initialForm>(() => {
     const draft = loadDraft();
@@ -393,6 +396,10 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   const roomTypeSelectionKey = roomRows.map((row) => row.room_type_id).join('|');
 
   useEffect(() => {
+    setNightRateOverrides({});
+  }, [form.check_in_date, form.check_out_date]);
+
+  useEffect(() => {
     if (!open || !form.check_in_date || !form.check_out_date || form.check_out_date <= form.check_in_date) return;
     setRoomRows((currentRows) => currentRows.map((row, idx) => {
       if (!row.room_type_id) return row;
@@ -409,6 +416,11 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, [field]: value } : r));
     if (field === 'room_type_id') {
       setRateTouched(prev => ({ ...prev, [idx]: false }));
+      setNightRateOverrides(prev => {
+        const next: Record<string, string> = {};
+        Object.keys(prev).forEach(k => { if (!k.startsWith(`${idx}:`)) next[k] = prev[k]; });
+        return next;
+      });
       const newRoomType = roomTypes.find(rt => rt.id === value);
       const autoRate = newRoomType ? autoCalcRate({ room_type_id: value, room_id: '', rate: '' }) : '';
       setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, room_id: '', rate: autoRate } : r));
@@ -428,6 +440,49 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   const removeRoomRow = (idx: number) => {
     if (roomRows.length <= 1) return;
     setRoomRows(prev => prev.filter((_, i) => i !== idx));
+    setNightRateOverrides(prev => {
+      const next: Record<string, string> = {};
+      Object.keys(prev).forEach(k => { if (!k.startsWith(`${idx}:`)) next[k] = prev[k]; });
+      return next;
+    });
+  };
+
+  const getEffectivePerNightCharges = (idx: number, roomType: RoomType): { date: string; rate: number; rateType: string }[] => {
+    const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
+    return breakdown.map(day => {
+      const key = `${idx}:${day.date}`;
+      const override = nightRateOverrides[key];
+      if (override !== undefined && override !== '' && Number(override) !== day.rate) {
+        return { ...day, rate: Number(override) };
+      }
+      return day;
+    });
+  };
+
+  const handleNightRateChange = (idx: number, date: string, value: string) => {
+    const key = `${idx}:${date}`;
+    setNightRateOverrides(prev => {
+      const next = { ...prev };
+      if (value === '') {
+        delete next[key];
+      } else {
+        next[key] = value;
+      }
+      return next;
+    });
+    setRateTouched(prev => ({ ...prev, [idx]: true }));
+    const rt = roomTypes.find(r => r.id === roomRows[idx].room_type_id);
+    if (rt) {
+      const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, rt, holidays);
+      const effective = breakdown.map(day => {
+        const k = `${idx}:${day.date}`;
+        const currentOverride = k === key ? value : nightRateOverrides[k];
+        return currentOverride !== undefined && currentOverride !== '' ? Number(currentOverride) : day.rate;
+      });
+      const total = effective.reduce((s: number, r: number) => s + r, 0);
+      const avg = nights > 0 ? Math.round(total / nights) : 0;
+      setRoomRows(prev => prev.map((r, i) => i === idx ? { ...r, rate: String(avg) } : r));
+    }
   };
 
   const validate = () => {
@@ -599,9 +654,12 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
         roomRows.forEach((row, idx) => {
           const room = rooms.find(r => r.id === row.room_id);
           const roomType = roomTypes.find(rt => rt.id === row.room_type_id);
-          const manualRate = rateTouched[idx] && Number(row.rate) > 0 ? Number(row.rate) : null;
+          const rowHasOverrides = Object.keys(nightRateOverrides).some(k => k.startsWith(`${idx}:`) && nightRateOverrides[k] !== '');
+          const manualRate = !rowHasOverrides && rateTouched[idx] && Number(row.rate) > 0 ? Number(row.rate) : null;
           let perNightCharges: { date: string; rate: number; rateType: string }[] = [];
-          if (roomType && !manualRate) {
+          if (roomType && rowHasOverrides) {
+            perNightCharges = getEffectivePerNightCharges(idx, roomType);
+          } else if (roomType && !manualRate) {
             const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
             perNightCharges = breakdown;
           }
@@ -705,9 +763,12 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
         roomRows.forEach((row, idx) => {
           const room = rooms.find(r => r.id === row.room_id);
           const roomType = roomTypes.find(rt => rt.id === row.room_type_id);
-          const manualRate = rateTouched[idx] && Number(row.rate) > 0 ? Number(row.rate) : null;
+          const rowHasOverrides = Object.keys(nightRateOverrides).some(k => k.startsWith(`${idx}:`) && nightRateOverrides[k] !== '');
+          const manualRate = !rowHasOverrides && rateTouched[idx] && Number(row.rate) > 0 ? Number(row.rate) : null;
           let perNightCharges: { date: string; rate: number; rateType: string }[] = [];
-          if (roomType && !manualRate) {
+          if (roomType && rowHasOverrides) {
+            perNightCharges = getEffectivePerNightCharges(idx, roomType);
+          } else if (roomType && !manualRate) {
             const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, roomType, holidays);
             perNightCharges = breakdown;
           }
@@ -821,19 +882,29 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     onSaved();
   };
 
-  const totalRoomCharges = roomRows.reduce((sum, row) => sum + (Number(row.rate) || 0) * nights, 0);
+  const totalRoomCharges = rateBreakdowns.length > 0
+    ? rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0)
+    : roomRows.reduce((sum, row) => sum + (Number(row.rate) || 0) * nights, 0);
   const grandTotal = totalRoomCharges - Number(form.discount || 0) + Number(form.tax || 0);
 
-  // Rate breakdowns for ALL room rows (not just the first)
+  // Rate breakdowns for ALL room rows (not just the first), with per-night overrides applied
   const rateBreakdowns = useMemo(() => {
     return roomRows.map((row, idx) => {
       if (!row.room_type_id) return null;
       const rt = roomTypes.find(r => r.id === row.room_type_id);
       if (!rt) return null;
-      const { breakdown, total } = calculateTotalRate(form.check_in_date, form.check_out_date, rt, holidays);
-      return { idx, breakdown, total, roomType: rt, roomNumber: rooms.find(r => r.id === row.room_id)?.room_number };
+      const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, rt, holidays);
+      const effectiveBreakdown = breakdown.map(day => {
+        const key = `${idx}:${day.date}`;
+        const override = nightRateOverrides[key];
+        const isOverridden = override !== undefined && override !== '' && Number(override) !== day.rate;
+        return { ...day, rate: isOverridden ? Number(override) : day.rate, isOverridden };
+      });
+      const hasOverrides = effectiveBreakdown.some(d => d.isOverridden);
+      const total = effectiveBreakdown.reduce((sum, d) => sum + d.rate, 0);
+      return { idx, breakdown: effectiveBreakdown, total, hasOverrides, roomType: rt, roomNumber: rooms.find(r => r.id === row.room_id)?.room_number };
     }).filter(Boolean);
-  }, [roomRows, roomTypes, rooms, form.check_in_date, form.check_out_date, holidays]);
+  }, [roomRows, roomTypes, rooms, form.check_in_date, form.check_out_date, holidays, nightRateOverrides]);
 
   const grandRateTotal = rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0);
 
@@ -922,13 +993,25 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
                     {rb.breakdown.map((day) => (
-                      <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
+                      <div key={day.date} className={`rounded-md border p-2 text-center ${day.isOverridden ? 'border-amber-300 bg-amber-50' : 'border-white bg-white/70'}`}>
                         <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
                         <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType as RateType, 'en')}</p>
-                        <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+                        {canEditRate ? (
+                          <input
+                            type="number"
+                            value={nightRateOverrides[`${rb.idx}:${day.date}`] ?? String(day.rate)}
+                            onChange={e => handleNightRateChange(rb.idx, day.date, e.target.value)}
+                            className="w-full text-center text-xs font-bold text-blue-700 bg-transparent border-b border-blue-200 rounded px-1 py-0.5 outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        ) : (
+                          <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+                        )}
                       </div>
                     ))}
                   </div>
+                  {canEditRate && (
+                    <p className="text-xs text-blue-600 mt-2">Click any rate above to override it for that specific night. Overridden nights are highlighted in amber.</p>
+                  )}
                 </div>
               );
             })}
