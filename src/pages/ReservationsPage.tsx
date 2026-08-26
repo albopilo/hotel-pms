@@ -882,11 +882,6 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     onSaved();
   };
 
-  const totalRoomCharges = rateBreakdowns.length > 0
-    ? rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0)
-    : roomRows.reduce((sum, row) => sum + (Number(row.rate) || 0) * nights, 0);
-  const grandTotal = totalRoomCharges - Number(form.discount || 0) + Number(form.tax || 0);
-
   // Rate breakdowns for ALL room rows (not just the first), with per-night overrides applied
   const rateBreakdowns = useMemo(() => {
     return roomRows.map((row, idx) => {
@@ -906,6 +901,10 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
     }).filter(Boolean);
   }, [roomRows, roomTypes, rooms, form.check_in_date, form.check_out_date, holidays, nightRateOverrides]);
 
+  const totalRoomCharges = rateBreakdowns.length > 0
+    ? rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0)
+    : roomRows.reduce((sum, row) => sum + (Number(row.rate) || 0) * nights, 0);
+  const grandTotal = totalRoomCharges - Number(form.discount || 0) + Number(form.tax || 0);
   const grandRateTotal = rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0);
 
   return (
