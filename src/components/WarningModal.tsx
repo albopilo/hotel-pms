@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -10,6 +10,7 @@ import { formatIDR, formatDateTime, todayInTimezone, nowInTimezone } from '@/lib
 import { TriangleAlert as AlertTriangle, RefreshCw, Bell, BellRing } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, FolioItem } from '@/types/database';
 
+const SCAN_INTERVAL = 60 * 60 * 1000; // 1 hour
 const OUTSTANDING_BALANCE_THRESHOLD_TIME = '17:00';
 const STORAGE_KEY_DISMISSED = 'warning_modal_dismissed_until';
 
@@ -44,6 +45,7 @@ export function WarningModal() {
   const [result, setResult] = useState<ScanResult>({ overdueCheckouts: [], outstandingBalances: [] });
   const [lastScan, setLastScan] = useState<string | null>(null);
   const [hasWarnings, setHasWarnings] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const branchIds = selectedBranchId ? [selectedBranchId] : branches.map((b) => b.id);
 
@@ -152,8 +154,16 @@ export function WarningModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBranchId]);
 
+  useEffect(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => { runScan(); }, SCAN_INTERVAL);
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
+  }, [runScan]);
+
   const handleDismiss = () => {
     setOpen(false);
+    const dismissUntil = new Date(Date.now() + SCAN_INTERVAL).toISOString(); // suppress for 1 hour
+    try { localStorage.setItem(STORAGE_KEY_DISMISSED, dismissUntil); } catch { /* ignore */ }
   };
 
   const totalWarnings = result.overdueCheckouts.length + result.outstandingBalances.length;

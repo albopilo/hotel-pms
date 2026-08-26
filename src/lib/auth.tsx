@@ -64,13 +64,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile, loadBranches, setLanguage]);
 
   useEffect(() => {
+    let currentUserId: string | null = null;
+
     (async () => {
       setLoading(true);
       await refreshUser();
+      const { data: { session } } = await supabase.auth.getSession();
+      currentUserId = session?.user?.id ?? null;
       setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+      const sessionUserId = session?.user?.id ?? null;
+
+      // Skip re-fetching profile/branches when the user hasn't changed
+      // (e.g. TOKEN_REFRESHED fired by autoRefreshToken on tab refocus)
+      if (sessionUserId === currentUserId) return;
+      currentUserId = sessionUserId;
+
       (async () => {
         if (!session) {
           setUser(null);
