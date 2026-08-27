@@ -19,7 +19,7 @@ import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import { folioService } from '@/services/financial';
 import { getBusinessDate } from '@/services/businessDateService';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
-import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt } from 'lucide-react';
+import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt, CircleArrowUp as ArrowUpCircle } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
 
 const CHECKIN_DRAFT_KEY = 'checkin_time_draft';
@@ -38,7 +38,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Reservation | null>(null);
-  const [mode, setMode] = useState<'checkin' | 'checkout' | 'extend' | 'split' | null>(null);
+  const [mode, setMode] = useState<'checkin' | 'checkout' | 'extend' | 'split' | 'upgrade' | null>(null);
   const [reservationRooms, setReservationRooms] = useState<ReservationRoom[]>([]);
   const processedInitialId = useRef<string | null>(null);
 
@@ -96,7 +96,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
     setReservationRooms((data as ReservationRoom[]) || []);
   };
 
-  const handleSelectReservation = async (r: Reservation, m: 'checkin' | 'checkout' | 'extend' | 'split') => {
+  const handleSelectReservation = async (r: Reservation, m: 'checkin' | 'checkout' | 'extend' | 'split' | 'upgrade') => {
     setSelected(r);
     setMode(m);
     if (r.is_group) {
@@ -149,6 +149,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
             <div className="flex gap-1">
                 <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}
 ><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
+                <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'upgrade')}><ArrowUpCircle size={14}/>Upgrade Room</Button>
                 {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
                 {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/></Button>}
                 <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}
@@ -171,6 +172,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
             </div>
             <div className="flex gap-1">
               <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
+              <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'upgrade')}><ArrowUpCircle size={14}/>Upgrade Room</Button>
               {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
               {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/></Button>}
               <Button size="sm" variant="warning" onClick={() => handleSelectReservation(r, 'checkout')}><LogOut size={14}/>{t('action.check_out')}</Button>
@@ -202,6 +204,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
       {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
       {selected && mode === 'extend' && <ExtendStayModal reservation={selected} onClose={handleCloseModal} />}
       {selected && mode === 'split' && <SplitRoomModal reservation={selected} reservationRooms={reservationRooms} rooms={rooms} onClose={handleCloseModal} />}
+      {selected && mode === 'upgrade' && <UpgradeRoomModal reservation={selected} reservationRooms={reservationRooms} onClose={handleCloseModal} />}
     </div>
   );
 }
@@ -950,7 +953,9 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         .eq('is_active', true)
         .order('room_number');
 
-      const candidateRooms = (roomsOfType as Room[]) || [];
+      const candidateRooms = ((roomsOfType as Room[]) || []).filter(r =>
+        r.status !== 'occupied' && r.status !== 'out_of_order' && r.status !== 'out_of_service'
+      );
 
       const available: Room[] = [];
       for (const candidate of candidateRooms) {
@@ -1152,7 +1157,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         }
       }
 
-      // Update reservation_rooms if group
+      // Update reservation_rooms if group — only update the specific room being upgraded/extended
       if (reservation.is_group) {
         const rrUpdate: Record<string, unknown> = {
           check_out_date: newCheckoutDate,
@@ -1165,10 +1170,12 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         if (isRoomChanged) {
           rrUpdate.room_id = effectiveRoomId;
         }
+        // Only update the primary room's entry, not all rooms in the group
         await supabase.from('reservation_rooms')
           .update(rrUpdate)
           .eq('reservation_id', reservation.id)
-          .eq('status', 'active');
+          .eq('status', 'active')
+          .eq('room_id', reservation.room_id);
       }
 
       // Invalidate old guest card and encode new one if room changed
@@ -1374,6 +1381,528 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         {extraNights === 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-700 text-sm">
             {t('res.no_extra_nights')}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+const UPGRADE_DRAFT_KEY = 'upgrade_room_draft';
+
+interface UpgradeDraft {
+  newRoomTypeId: string;
+  newRoomId: string;
+  roomRate: string;
+  selectedRoomIdForGroup: string;
+}
+
+function UpgradeRoomModal({ reservation, reservationRooms, onClose }: {
+  reservation: Reservation;
+  reservationRooms: ReservationRoom[];
+  onClose: () => void;
+}) {
+  const { user } = useAuth();
+  const { t } = useI18n();
+  const { showToast } = useToast();
+
+  const [guest, setGuest] = useState<Guest | null>(null);
+  const [currentRoom, setCurrentRoom] = useState<Room | null>(null);
+  const [folio, setFolio] = useState<Folio | null>(null);
+  const [currentRoomType, setCurrentRoomType] = useState<RoomType | null>(null);
+  const [allRoomTypes, setAllRoomTypes] = useState<RoomType[]>([]);
+  const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
+  const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [rateTouched, setRateTouched] = useState(false);
+
+  // For group reservations: which room in the group to upgrade
+  const [selectedRoomIdForGroup, setSelectedRoomIdForGroup] = useState(() => {
+    const draft = loadDraft<UpgradeDraft>(UPGRADE_DRAFT_KEY);
+    return draft?.selectedRoomIdForGroup || reservation.room_id || '';
+  });
+
+  const isGroup = reservation.is_group && reservationRooms.length > 1;
+  const targetRoomId = isGroup ? selectedRoomIdForGroup : reservation.room_id;
+  const targetReservationRoom = isGroup
+    ? reservationRooms.find(rr => rr.room_id === targetRoomId)
+    : null;
+  const originalRoomTypeId = isGroup
+    ? (targetReservationRoom?.room_type_id || reservation.room_type_id || '')
+    : (reservation.room_type_id || currentRoom?.room_type_id || '');
+
+  const [newRoomTypeId, setNewRoomTypeId] = useState(() => {
+    const draft = loadDraft<UpgradeDraft>(UPGRADE_DRAFT_KEY);
+    return draft?.newRoomTypeId || originalRoomTypeId;
+  });
+  const [newRoomId, setNewRoomId] = useState(() => {
+    const draft = loadDraft<UpgradeDraft>(UPGRADE_DRAFT_KEY);
+    return draft?.newRoomId || '';
+  });
+  const [roomRate, setRoomRate] = useState(() => {
+    const draft = loadDraft<UpgradeDraft>(UPGRADE_DRAFT_KEY);
+    return draft?.roomRate || String(reservation.rate);
+  });
+
+  const isRoomTypeUpgraded = newRoomTypeId !== originalRoomTypeId;
+  const isRoomChanged = newRoomId && newRoomId !== targetRoomId;
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      const [{ data: g }, { data: r }, { data: f }] = await Promise.all([
+        supabase.from('guests').select('*').eq('id', reservation.primary_guest_id).maybeSingle(),
+        targetRoomId ? supabase.from('rooms').select('*').eq('id', targetRoomId).maybeSingle() : Promise.resolve({ data: null }),
+        supabase.from('folios').select('*').eq('reservation_id', reservation.id).maybeSingle()
+      ]);
+      setGuest(g as Guest);
+      setCurrentRoom(r as Room);
+      setFolio(f as Folio);
+
+      if (originalRoomTypeId) {
+        const { data: rt } = await supabase.from('room_types').select('*').eq('id', originalRoomTypeId).maybeSingle();
+        setCurrentRoomType(rt as RoomType | null);
+      }
+
+      const { data: rtList } = await supabase.from('room_types').select('*').eq('branch_id', reservation.branch_id).eq('is_active', true).order('sort_order');
+      setAllRoomTypes((rtList as RoomType[]) || []);
+
+      const { data: hol } = await supabase.from('indonesian_holidays').select('*').eq('organization_id', user!.organization_id).order('holiday_date');
+      setHolidays((hol as IndonesianHoliday[]) || []);
+
+      setLoading(false);
+    })();
+  }, [reservation, user, targetRoomId, originalRoomTypeId]);
+
+  // Load available rooms when room type changes
+  useEffect(() => {
+    if (!newRoomTypeId || !reservation.branch_id) return;
+    (async () => {
+      const { data: roomsOfType } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('branch_id', reservation.branch_id)
+        .eq('room_type_id', newRoomTypeId)
+        .eq('is_active', true)
+        .order('room_number');
+
+      // Exclude occupied, out_of_order, out_of_service rooms (except the current room)
+      const candidateRooms = ((roomsOfType as Room[]) || []).filter(r =>
+        (r.id === targetRoomId) ||
+        (r.status !== 'occupied' && r.status !== 'out_of_order' && r.status !== 'out_of_service')
+      );
+
+      const available: Room[] = [];
+      for (const candidate of candidateRooms) {
+        if (candidate.id === targetRoomId) {
+          available.push(candidate);
+          continue;
+        }
+        const { data: conflicts } = await supabase
+          .from('reservations')
+          .select('id')
+          .eq('room_id', candidate.id)
+          .in('status', ['confirmed', 'checked_in', 'tentative'])
+          .neq('id', reservation.id)
+          .lt('check_in_date', reservation.check_out_date)
+          .gt('check_out_date', reservation.check_in_date);
+        if (!conflicts || conflicts.length === 0) {
+          available.push(candidate);
+        }
+      }
+      setAvailableRooms(available);
+
+      if (isRoomTypeUpgraded && !available.find(rm => rm.id === newRoomId)) {
+        setNewRoomId(available[0]?.id || '');
+      }
+    })();
+  }, [newRoomTypeId, reservation.branch_id, reservation.id, reservation.check_in_date, reservation.check_out_date, targetRoomId, isRoomTypeUpgraded, newRoomId]);
+
+  useEffect(() => { saveDraft(UPGRADE_DRAFT_KEY, { newRoomTypeId, newRoomId, roomRate, selectedRoomIdForGroup }); }, [newRoomTypeId, newRoomId, roomRate, selectedRoomIdForGroup]);
+
+  const selectedRoomType = useMemo(() => {
+    return allRoomTypes.find(rt => rt.id === newRoomTypeId) || currentRoomType || null;
+  }, [allRoomTypes, newRoomTypeId, currentRoomType]);
+
+  // Rate breakdown for remaining nights under the new room type
+  const remainingNights = useMemo(() => {
+    const today = todayISO();
+    if (today >= reservation.check_out_date) return 0;
+    return nightsBetween(today, reservation.check_out_date);
+  }, [reservation.check_out_date]);
+
+  const rateBreakdown = useMemo(() => {
+    if (!selectedRoomType || remainingNights <= 0) return null;
+    const today = todayISO();
+    const { breakdown, total } = calculateTotalRate(today, reservation.check_out_date, selectedRoomType, holidays);
+    return { breakdown, total };
+  }, [selectedRoomType, remainingNights, reservation.check_out_date, holidays]);
+
+  useEffect(() => {
+    if (!rateTouched && selectedRoomType) {
+      setRoomRate(String(selectedRoomType.base_rate));
+    }
+  }, [selectedRoomType, rateTouched]);
+
+  const manualRate = rateTouched && Number(roomRate) > 0 ? Number(roomRate) : null;
+  const upgradeCharge = manualRate ? manualRate * remainingNights : (rateBreakdown ? rateBreakdown.total : Number(roomRate) * remainingNights);
+
+  const handleRoomTypeChange = (rtId: string) => {
+    setNewRoomTypeId(rtId);
+    setNewRoomId('');
+    setRateTouched(false);
+    const rt = allRoomTypes.find(r => r.id === rtId);
+    if (rt) setRoomRate(String(rt.base_rate));
+  };
+
+  const handleUpgrade = async () => {
+    if (!isRoomTypeUpgraded) {
+      showToast('Select a different room type to upgrade.', 'error');
+      return;
+    }
+    if (!newRoomId) {
+      showToast('Please select a room for the upgraded room type.', 'error');
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      // Check room availability for the new room
+      if (isRoomChanged && newRoomId !== targetRoomId) {
+        const { data: conflicts } = await supabase
+          .from('reservations')
+          .select('id,reservation_number')
+          .eq('room_id', newRoomId)
+          .in('status', ['confirmed', 'checked_in'])
+          .neq('id', reservation.id)
+          .lt('check_in_date', reservation.check_out_date)
+          .gt('check_out_date', reservation.check_in_date);
+        if (conflicts && conflicts.length > 0) {
+          showToast(`Room is already booked by ${conflicts[0].reservation_number}.`, 'error');
+          setSaving(false);
+          return;
+        }
+      }
+
+      const effectiveRoomId = newRoomId;
+      const effectiveRoomTypeId = newRoomTypeId;
+
+      // Update reservation
+      const updatePayload: Record<string, unknown> = {
+        room_type_id: effectiveRoomTypeId,
+        rate: Number(roomRate),
+      };
+
+      // For non-group: update room_id on the reservation itself
+      // For group: update the specific reservation_rooms entry
+      if (!isGroup) {
+        updatePayload.room_id = effectiveRoomId;
+      }
+
+      const { error: resError } = await supabase.from('reservations').update(updatePayload).eq('id', reservation.id);
+      if (resError) throw resError;
+
+      // Handle room status changes
+      if (isRoomChanged && targetRoomId && effectiveRoomId !== targetRoomId) {
+        // Old room → dirty
+        await supabase.from('rooms').update({ status: 'dirty' }).eq('id', targetRoomId);
+        // New room → occupied
+        await supabase.from('rooms').update({ status: 'occupied' }).eq('id', effectiveRoomId);
+
+        await supabase.from('room_transfers').insert({
+          reservation_id: reservation.id,
+          from_room_id: targetRoomId,
+          to_room_id: effectiveRoomId,
+          reason: `Mid-stay room type upgrade: ${currentRoomType?.name || ''} → ${selectedRoomType?.name || ''}`,
+          performed_by: user!.id,
+        });
+      }
+
+      // For group reservations: update the specific reservation_rooms entry
+      if (isGroup && targetReservationRoom) {
+        const rrUpdate: Record<string, unknown> = {
+          room_type_id: effectiveRoomTypeId,
+          rate: Number(roomRate),
+        };
+        if (isRoomChanged) {
+          rrUpdate.room_id = effectiveRoomId;
+        }
+        await supabase.from('reservation_rooms')
+          .update(rrUpdate)
+          .eq('id', targetReservationRoom.id);
+      }
+
+      // Add upgrade charge to folio for remaining nights
+      if (folio && remainingNights > 0) {
+        const chargeRoomId = effectiveRoomId;
+        const chargeDescriptionPrefix = `Room upgrade (${currentRoomType?.name || ''} → ${selectedRoomType?.name || ''})`;
+
+        if (!manualRate && rateBreakdown && rateBreakdown.breakdown.length > 0) {
+          const items = rateBreakdown.breakdown.map((day) => ({
+            folio_id: folio.id,
+            branch_id: reservation.branch_id,
+            reservation_id: reservation.id,
+            guest_id: reservation.primary_guest_id,
+            room_id: chargeRoomId,
+            item_type: 'charge' as const,
+            category: 'room',
+            description: `${chargeDescriptionPrefix} - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`,
+            quantity: 1,
+            unit_amount: day.rate,
+            amount: day.rate,
+            business_date: day.date,
+            created_by: user!.id,
+          }));
+          const { error: chargeError } = await supabase.from('folio_items').insert(items);
+          if (chargeError) throw chargeError;
+        } else {
+          const businessDate = await getBusinessDate(reservation.branch_id);
+          const { error: chargeError } = await supabase.from('folio_items').insert({
+            folio_id: folio.id,
+            branch_id: reservation.branch_id,
+            reservation_id: reservation.id,
+            guest_id: reservation.primary_guest_id,
+            room_id: chargeRoomId,
+            item_type: 'charge',
+            category: 'room',
+            description: `${chargeDescriptionPrefix} - ${remainingNights} night(s) at ${formatIDR(Number(roomRate))}/night`,
+            quantity: remainingNights,
+            unit_amount: Number(roomRate),
+            amount: upgradeCharge,
+            business_date: businessDate,
+            created_by: user!.id,
+          });
+          if (chargeError) throw chargeError;
+        }
+
+        await folioService.syncFolioTotals(folio.id);
+
+        try {
+          await invoiceService.ensureInvoice({
+            folioId: folio.id,
+            branchId: reservation.branch_id,
+            organizationId: user!.organization_id,
+            reservationId: reservation.id,
+            guestId: reservation.primary_guest_id,
+            userId: user!.id,
+          });
+        } catch (invoiceErr: any) {
+          console.error('Invoice sync during room upgrade failed:', invoiceErr);
+          showToast(`Invoice update after upgrade: ${invoiceErr.message || invoiceErr}`, 'warning');
+        }
+      }
+
+      // Invalidate old guest card and encode new one if room changed
+      if (isRoomChanged) {
+        try {
+          const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
+          const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
+          const provider = getLockProviderByType(lockType);
+          provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
+          await provider.invalidateGuestCard({ cardId: reservation.id });
+
+          const newRoom = availableRooms.find(rm => rm.id === effectiveRoomId);
+          if (newRoom && guest) {
+            await provider.encodeGuestCard({
+              roomId: newRoom.id,
+              roomNumber: newRoom.room_number,
+              guestName: guest.full_name,
+              validFrom: new Date().toISOString(),
+              validUntil: `${reservation.check_out_date}T${reservation.check_out_time}:00`,
+            });
+
+            await supabase.from('card_issuances').insert({
+              branch_id: reservation.branch_id,
+              reservation_id: reservation.id,
+              guest_id: guest.id,
+              room_id: newRoom.id,
+              issuance_type: 'replace',
+              card_sequence: 2,
+              valid_from: new Date().toISOString(),
+              valid_until: `${reservation.check_out_date}T${reservation.check_out_time}:00`,
+              status: 'success',
+              provider_type: lockType,
+              performed_by: user!.id,
+            });
+          }
+        } catch (e) {
+          console.warn('Card re-encoding during room upgrade failed', e);
+        }
+      }
+
+      // Audit log
+      await supabase.from('audit_logs').insert({
+        organization_id: user!.organization_id,
+        branch_id: reservation.branch_id,
+        user_id: user!.id,
+        action: 'room_upgrade',
+        object_type: 'reservation',
+        object_id: reservation.id,
+        previous_value: {
+          room_id: targetRoomId,
+          room_type_id: originalRoomTypeId,
+          rate: reservation.rate,
+        },
+        new_value: {
+          room_type_id: effectiveRoomTypeId,
+          room_id: isRoomChanged ? effectiveRoomId : targetRoomId,
+          room_rate: Number(roomRate),
+          remaining_nights: remainingNights,
+          upgrade_charge: upgradeCharge,
+          room_changed: isRoomChanged,
+          new_room_id: isRoomChanged ? effectiveRoomId : null,
+        },
+      });
+
+      const roomMsg = isRoomChanged ? ` (Moved to room ${availableRooms.find(rm => rm.id === effectiveRoomId)?.room_number || effectiveRoomId})` : '';
+      showToast(`Room upgraded to ${selectedRoomType?.name}${roomMsg}. Charge: ${formatIDR(upgradeCharge)} for ${remainingNights} night(s).`, 'success');
+      clearDraft(UPGRADE_DRAFT_KEY);
+      setSaving(false);
+      onClose();
+    } catch (err: any) {
+      console.error('Room upgrade error:', err);
+      showToast(err.message || 'Failed to upgrade room', 'error');
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <Modal open onClose={onClose} title="Upgrade Room"><LoadingPage /></Modal>;
+
+  return (
+    <Modal open onClose={onClose} title="Upgrade Room" size="lg"
+      footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleUpgrade}><ArrowUpCircle size={16} />{t('common.confirm')}</Button></>}>
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+          <div><span className="text-slate-500">{t('common.guest')}:</span> <span className="font-medium">{guest?.full_name || '-'}</span></div>
+          <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{currentRoom?.room_number || '-'}</span></div>
+          {currentRoomType && <div><span className="text-slate-500">{t('common.room_type')}:</span> <span className="font-medium">{currentRoomType.name}</span></div>}
+          <div><span className="text-slate-500">{t('common.check_in')}:</span> <span className="font-medium">{formatDate(reservation.check_in_date)} {formatTime(reservation.check_in_time)}</span></div>
+          <div><span className="text-slate-500">{t('common.check_out')}:</span> <span className="font-medium">{formatDate(reservation.check_out_date)} {formatTime(reservation.check_out_time)}</span></div>
+          <div><span className="text-slate-500">{t('common.nights')}:</span> <span className="font-medium">{reservation.num_nights}</span></div>
+          <div><span className="text-slate-500">Remaining Nights:</span> <span className="font-medium">{remainingNights}</span></div>
+          <div><span className="text-slate-500">{t('common.rate')}:</span> <span className="font-medium">{formatIDR(reservation.rate)}</span></div>
+        </div>
+
+        {/* Group room selector */}
+        {isGroup && (
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-700">Select Room to Upgrade</label>
+            <div className="space-y-2">
+              {reservationRooms.map(rr => {
+                const room = rr as any;
+                return (
+                  <label key={rr.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${selectedRoomIdForGroup === rr.room_id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:bg-slate-50'}`}>
+                    <input
+                      type="radio"
+                      name="upgradeGroupRoom"
+                      value={rr.room_id || ''}
+                      checked={selectedRoomIdForGroup === rr.room_id}
+                      onChange={e => { setSelectedRoomIdForGroup(e.target.value); setNewRoomTypeId(rr.room_type_id || ''); setNewRoomId(''); setRateTouched(false); }}
+                    />
+                    <div className="flex-1">
+                      <p className="font-medium text-slate-800">{room.room?.room_number || 'Unassigned'}</p>
+                      <p className="text-xs text-slate-500">{formatIDR(rr.rate)}/{t('common.nights')}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Room type upgrade selector */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">New Room Type</label>
+            <select
+              value={newRoomTypeId}
+              onChange={e => handleRoomTypeChange(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {allRoomTypes.map(rt => (
+                <option key={rt.id} value={rt.id}>
+                  {rt.name} — {formatIDR(rt.base_rate)}/night{rt.id === originalRoomTypeId ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Room selector — only show if room type was upgraded */}
+          {isRoomTypeUpgraded && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-700">Select New Room ({selectedRoomType?.name})</label>
+              {availableRooms.length === 0 ? (
+                <p className="text-sm text-red-500">No rooms available for the selected room type.</p>
+              ) : (
+                <select
+                  value={newRoomId}
+                  onChange={e => setNewRoomId(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Select a room --</option>
+                  {availableRooms.map(r => (
+                    <option key={r.id} value={r.id}>
+                      Room {r.room_number} (Floor {r.floor}) — {t(`room.${r.status}`)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="text-xs text-amber-600">
+                Upgrading will move the guest to the new room. The old room will be marked dirty and a new key card will be encoded.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <Input
+          label={t('res.room_rate_per_night')}
+          type="number"
+          value={roomRate}
+          onChange={e => { setRoomRate(e.target.value); setRateTouched(true); }}
+          hint={rateTouched ? 'Custom rate (auto-calc overridden)' : (rateBreakdown ? 'Auto-calculated from weekday/weekend rates — edit to override' : undefined)}
+          required
+        />
+
+        {rateBreakdown && rateBreakdown.breakdown.length > 0 && !manualRate && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3 text-sm">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')}{selectedRoomType ? ` · ${selectedRoomType.name}` : ''}</p>
+              <span className="text-xs text-blue-700">{formatIDR(rateBreakdown.total)} total</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+              {rateBreakdown.breakdown.map((day) => (
+                <div key={day.date} className="rounded-md border border-white bg-white/70 p-2 text-center">
+                  <p className="text-xs text-slate-500">{formatDate(day.date)}</p>
+                  <p className="text-xs font-semibold text-slate-700">{getRateTypeLabel(day.rateType, 'en')}</p>
+                  <p className="text-xs font-bold text-blue-700">{formatIDR(day.rate)}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {manualRate && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+            Custom rate active: {formatIDR(manualRate)} × {remainingNights} {t('common.nights')} = {formatIDR(upgradeCharge)}
+          </div>
+        )}
+
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2 text-sm">
+          {isRoomTypeUpgraded && (
+            <div className="flex justify-between"><span className="text-slate-600">Room Type:</span> <span className="font-medium text-blue-700">{currentRoomType?.name} → {selectedRoomType?.name}</span></div>
+          )}
+          {isRoomChanged && (
+            <div className="flex justify-between"><span className="text-slate-600">Room:</span> <span className="font-medium text-blue-700">{currentRoom?.room_number} → {availableRooms.find(rm => rm.id === newRoomId)?.room_number || '-'}</span></div>
+          )}
+          <div className="flex justify-between"><span className="text-slate-600">Remaining Nights:</span> <span className="font-bold text-blue-700">{remainingNights} {t('common.nights')}</span></div>
+          <div className="pt-2 border-t border-blue-200 flex justify-between"><span className="text-slate-700 font-medium">Upgrade Charge:</span> <span className="font-bold text-blue-700 text-lg">{formatIDR(upgradeCharge)}</span></div>
+        </div>
+
+        {remainingNights === 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-700 text-sm">
+            No remaining nights — the guest's check-out date has passed. The room type will still be updated but no charge will be applied.
           </div>
         )}
       </div>
