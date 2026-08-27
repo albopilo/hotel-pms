@@ -849,6 +849,13 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   </>);
 }
 
+interface ExtendDraft {
+  newCheckoutDate: string;
+  roomRate: string;
+  newRoomTypeId: string;
+  newRoomId: string;
+}
+
 function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -859,6 +866,8 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   const [folio, setFolio] = useState<Folio | null>(null);
   const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
   const [roomType, setRoomType] = useState<RoomType | null>(null);
+  const [allRoomTypes, setAllRoomTypes] = useState<RoomType[]>([]);
+  const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
   const [groupRooms, setGroupRooms] = useState<ReservationRoom[]>([]);
   const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
   const [loading, setLoading] = useState(true);
@@ -866,14 +875,27 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   const [rateTouched, setRateTouched] = useState(false);
 
   const previousCheckoutDate = reservation.check_out_date;
+  const originalRoomTypeId = reservation.room_type_id || room?.room_type_id || '';
+
   const [newCheckoutDate, setNewCheckoutDate] = useState(() => {
-    const draft = loadDraft<{ newCheckoutDate: string; roomRate: string }>(EXTEND_DRAFT_KEY);
+    const draft = loadDraft<ExtendDraft>(EXTEND_DRAFT_KEY);
     return draft?.newCheckoutDate || addDays(previousCheckoutDate, 1);
   });
   const [roomRate, setRoomRate] = useState(() => {
-    const draft = loadDraft<{ newCheckoutDate: string; roomRate: string }>(EXTEND_DRAFT_KEY);
+    const draft = loadDraft<ExtendDraft>(EXTEND_DRAFT_KEY);
     return draft?.roomRate || String(reservation.rate);
   });
+  const [newRoomTypeId, setNewRoomTypeId] = useState(() => {
+    const draft = loadDraft<ExtendDraft>(EXTEND_DRAFT_KEY);
+    return draft?.newRoomTypeId || originalRoomTypeId;
+  });
+  const [newRoomId, setNewRoomId] = useState(() => {
+    const draft = loadDraft<ExtendDraft>(EXTEND_DRAFT_KEY);
+    return draft?.newRoomId || reservation.room_id || '';
+  });
+
+  const isRoomTypeUpgraded = newRoomTypeId !== originalRoomTypeId;
+  const isRoomChanged = newRoomId !== (reservation.room_id || '');
 
   useEffect(() => {
     (async () => {
@@ -898,6 +920,11 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         const { data: rt } = await supabase.from('room_types').select('*').eq('id', (r as Room).room_type_id).maybeSingle();
         setRoomType(rt as RoomType | null);
       }
+
+      // Load all room types for this branch so user can upgrade
+      const { data: rtList } = await supabase.from('room_types').select('*').eq('branch_id', reservation.branch_id).eq('is_active', true).order('sort_order');
+      setAllRoomTypes((rtList as RoomType[]) || []);
+
       if (reservation.is_group) {
         const { data: rrData } = await supabase.from('reservation_rooms')
           .select('*,room:rooms(*)').eq('reservation_id', reservation.id).eq('status', 'active').order('created_at');
@@ -911,20 +938,80 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
     })();
   }, [reservation, user]);
 
-  useEffect(() => { saveDraft(EXTEND_DRAFT_KEY, { newCheckoutDate, roomRate }); }, [newCheckoutDate, roomRate]);
+  // Load available rooms when room type or checkout date changes
+  useEffect(() => {
+    if (!newRoomTypeId || !reservation.branch_id) return;
+    (async () => {
+      const { data: roomsOfType } = await supabase
+        .from('rooms')
+        .select('*')
+        .eq('branch_id', reservation.branch_id)
+        .eq('room_type_id', newRoomTypeId)
+        .eq('is_active', true)
+        .order('room_number');
+
+      const candidateRooms = (roomsOfType as Room[]) || [];
+
+      const available: Room[] = [];
+      for (const candidate of candidateRooms) {
+        if (candidate.id === reservation.room_id) {
+          available.push(candidate);
+          continue;
+        }
+        const { data: conflicts } = await supabase
+          .from('reservations')
+          .select('id')
+          .eq('room_id', candidate.id)
+          .in('status', ['confirmed', 'checked_in', 'tentative'])
+          .neq('id', reservation.id)
+          .lt('check_in_date', newCheckoutDate)
+          .gt('check_out_date', previousCheckoutDate);
+        if (!conflicts || conflicts.length === 0) {
+          available.push(candidate);
+        }
+      }
+      setAvailableRooms(available);
+
+      if (isRoomTypeUpgraded && !available.find(rm => rm.id === newRoomId)) {
+        setNewRoomId(available[0]?.id || '');
+      }
+    })();
+  }, [newRoomTypeId, newCheckoutDate, reservation.branch_id, reservation.id, reservation.room_id, previousCheckoutDate, isRoomTypeUpgraded, newRoomId]);
+
+  useEffect(() => { saveDraft(EXTEND_DRAFT_KEY, { newCheckoutDate, roomRate, newRoomTypeId, newRoomId }); }, [newCheckoutDate, roomRate, newRoomTypeId, newRoomId]);
+
+  // The selected room type for rate calculation (upgraded or original)
+  const selectedRoomType = useMemo(() => {
+    return allRoomTypes.find(rt => rt.id === newRoomTypeId) || roomType || null;
+  }, [allRoomTypes, newRoomTypeId, roomType]);
 
   // Calculation: extra nights = new checkout date - previous checkout date
   const extraNights = Math.max(0, nightsBetween(previousCheckoutDate, newCheckoutDate));
 
-  // Rate breakdown for the extra nights using weekday/weekend rates
+  // Rate breakdown for the extra nights using weekday/weekend rates of the selected room type
   const rateBreakdown = useMemo(() => {
-    if (!roomType || extraNights <= 0) return null;
-    const { breakdown, total } = calculateTotalRate(previousCheckoutDate, newCheckoutDate, roomType, holidays);
+    if (!selectedRoomType || extraNights <= 0) return null;
+    const { breakdown, total } = calculateTotalRate(previousCheckoutDate, newCheckoutDate, selectedRoomType, holidays);
     return { breakdown, total };
-  }, [roomType, previousCheckoutDate, newCheckoutDate, extraNights, holidays]);
+  }, [selectedRoomType, previousCheckoutDate, newCheckoutDate, extraNights, holidays]);
+
+  // When room type changes and rate hasn't been manually touched, auto-update the rate field
+  useEffect(() => {
+    if (!rateTouched && selectedRoomType) {
+      setRoomRate(String(selectedRoomType.base_rate));
+    }
+  }, [selectedRoomType, rateTouched]);
 
   const manualRate = rateTouched && Number(roomRate) > 0 ? Number(roomRate) : null;
   const additionalCharge = manualRate ? manualRate * extraNights : (rateBreakdown ? rateBreakdown.total : Number(roomRate) * extraNights);
+
+  const handleRoomTypeChange = (rtId: string) => {
+    setNewRoomTypeId(rtId);
+    setNewRoomId('');
+    setRateTouched(false);
+    const rt = allRoomTypes.find(r => r.id === rtId);
+    if (rt) setRoomRate(String(rt.base_rate));
+  };
 
   const handleExtend = async () => {
     if (newCheckoutDate <= previousCheckoutDate) {
@@ -939,16 +1026,21 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
       showToast('No additional nights to charge.', 'error');
       return;
     }
+    if (isRoomTypeUpgraded && !newRoomId) {
+      showToast('Please select a room for the upgraded room type.', 'error');
+      return;
+    }
 
     setSaving(true);
 
     try {
-      // Check room availability for the extended dates
-      if (reservation.room_id) {
+      // Check room availability for the extended dates (or new room)
+      const roomIdToCheck = isRoomChanged ? newRoomId : reservation.room_id;
+      if (roomIdToCheck) {
         const { data: conflicts } = await supabase
           .from('reservations')
           .select('id,reservation_number')
-          .eq('room_id', reservation.room_id)
+          .eq('room_id', roomIdToCheck)
           .in('status', ['confirmed', 'checked_in'])
           .neq('id', reservation.id)
           .lt('check_in_date', newCheckoutDate)
@@ -960,27 +1052,60 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         }
       }
 
-      // Update reservation with new checkout date and num_nights
+      // Determine the effective room and room type
+      const effectiveRoomId = isRoomChanged ? newRoomId : reservation.room_id;
+      const effectiveRoomTypeId = isRoomTypeUpgraded ? newRoomTypeId : reservation.room_type_id;
+
+      // Update reservation with new checkout date, num_nights, and optionally room/room type
       const totalNights = nightsBetween(reservation.check_in_date, newCheckoutDate);
-      const { error: resError } = await supabase.from('reservations').update({
+      const updatePayload: Record<string, unknown> = {
         check_out_date: newCheckoutDate,
         num_nights: totalNights,
-      }).eq('id', reservation.id);
+      };
+
+      if (isRoomTypeUpgraded) {
+        updatePayload.room_type_id = effectiveRoomTypeId;
+        updatePayload.rate = Number(roomRate);
+      }
+      if (isRoomChanged) {
+        updatePayload.room_id = effectiveRoomId;
+      }
+
+      const { error: resError } = await supabase.from('reservations').update(updatePayload).eq('id', reservation.id);
 
       if (resError) throw resError;
 
+      // Handle room status changes for room upgrade/transfer
+      if (isRoomChanged && reservation.room_id) {
+        await supabase.from('rooms').update({ status: 'dirty' }).eq('id', reservation.room_id);
+        await supabase.from('rooms').update({ status: 'occupied' }).eq('id', effectiveRoomId);
+
+        await supabase.from('room_transfers').insert({
+          reservation_id: reservation.id,
+          from_room_id: reservation.room_id,
+          to_room_id: effectiveRoomId,
+          reason: `Room type upgrade during stay extension: ${roomType?.name || ''} → ${selectedRoomType?.name || ''}`,
+          performed_by: user!.id,
+        });
+      }
+
       // Add room charge for extra nights to folio
       if (folio) {
+        const chargeRoomId = isRoomChanged ? effectiveRoomId : reservation.room_id;
+        const chargeDescriptionPrefix = isRoomTypeUpgraded
+          ? `Extended stay (Upgraded to ${selectedRoomType?.name})`
+          : 'Extended stay';
+
         if (!manualRate && rateBreakdown && rateBreakdown.breakdown.length > 0) {
           const items = rateBreakdown.breakdown.map((day) => ({
             folio_id: folio.id,
             branch_id: reservation.branch_id,
             reservation_id: reservation.id,
             guest_id: reservation.primary_guest_id,
-            room_id: reservation.room_id,
+            room_id: chargeRoomId,
             item_type: 'charge' as const,
             category: 'room',
-            description: `Extended stay - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`,
+            description: `${chargeDescriptionPrefix} - ${formatDate(day.date)} (${getRateTypeLabel(day.rateType, 'en')})`,
             quantity: 1,
             unit_amount: day.rate,
             amount: day.rate,
@@ -996,10 +1121,10 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
             branch_id: reservation.branch_id,
             reservation_id: reservation.id,
             guest_id: reservation.primary_guest_id,
-            room_id: reservation.room_id,
+            room_id: chargeRoomId,
             item_type: 'charge',
             category: 'room',
-            description: `Extended stay - ${extraNights} extra night(s) at ${formatIDR(Number(roomRate))}/night`,
+            description: `${chargeDescriptionPrefix} - ${extraNights} extra night(s) at ${formatIDR(Number(roomRate))}/night`,
             quantity: extraNights,
             unit_amount: Number(roomRate),
             amount: additionalCharge,
@@ -1010,14 +1135,78 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         }
 
         await folioService.syncFolioTotals(folio.id);
+
+        // Sync invoice to reflect the new folio charges
+        try {
+          await invoiceService.ensureInvoice({
+            folioId: folio.id,
+            branchId: reservation.branch_id,
+            organizationId: user!.organization_id,
+            reservationId: reservation.id,
+            guestId: reservation.primary_guest_id,
+            userId: user!.id,
+          });
+        } catch (invoiceErr: any) {
+          console.error('Invoice sync during extend stay failed:', invoiceErr);
+          showToast(`Invoice update after extend: ${invoiceErr.message || invoiceErr}`, 'warning');
+        }
       }
 
       // Update reservation_rooms if group
       if (reservation.is_group) {
+        const rrUpdate: Record<string, unknown> = {
+          check_out_date: newCheckoutDate,
+          num_nights: totalNights,
+        };
+        if (isRoomTypeUpgraded) {
+          rrUpdate.room_type_id = effectiveRoomTypeId;
+          rrUpdate.rate = Number(roomRate);
+        }
+        if (isRoomChanged) {
+          rrUpdate.room_id = effectiveRoomId;
+        }
         await supabase.from('reservation_rooms')
-          .update({ check_out_date: newCheckoutDate, num_nights: totalNights })
+          .update(rrUpdate)
           .eq('reservation_id', reservation.id)
           .eq('status', 'active');
+      }
+
+      // Invalidate old guest card and encode new one if room changed
+      if (isRoomChanged) {
+        try {
+          const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
+          const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
+          const provider = getLockProviderByType(lockType);
+          provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
+          await provider.invalidateGuestCard({ cardId: reservation.id });
+
+          const newRoom = availableRooms.find(rm => rm.id === effectiveRoomId);
+          if (newRoom && guest) {
+            await provider.encodeGuestCard({
+              roomId: newRoom.id,
+              roomNumber: newRoom.room_number,
+              guestName: guest.full_name,
+              validFrom: new Date().toISOString(),
+              validUntil: `${newCheckoutDate}T${reservation.check_out_time}:00`,
+            });
+
+            await supabase.from('card_issuances').insert({
+              branch_id: reservation.branch_id,
+              reservation_id: reservation.id,
+              guest_id: guest.id,
+              room_id: newRoom.id,
+              issuance_type: 'replace',
+              card_sequence: 2,
+              valid_from: new Date().toISOString(),
+              valid_until: `${newCheckoutDate}T${reservation.check_out_time}:00`,
+              status: 'success',
+              provider_type: lockType,
+              performed_by: user!.id,
+            });
+          }
+        } catch (e) {
+          console.warn('Card re-encoding during room upgrade failed', e);
+        }
       }
 
       // Audit log
@@ -1028,11 +1217,27 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         action: 'extend_stay',
         object_type: 'reservation',
         object_id: reservation.id,
-        previous_value: { check_out_date: previousCheckoutDate },
-        new_value: { check_out_date: newCheckoutDate, extra_nights: extraNights, additional_charge: additionalCharge, room_rate: Number(roomRate) },
+        previous_value: {
+          check_out_date: previousCheckoutDate,
+          room_id: reservation.room_id,
+          room_type_id: reservation.room_type_id,
+          rate: reservation.rate,
+        },
+        new_value: {
+          check_out_date: newCheckoutDate,
+          extra_nights: extraNights,
+          additional_charge: additionalCharge,
+          room_rate: Number(roomRate),
+          room_type_upgraded: isRoomTypeUpgraded,
+          new_room_type_id: isRoomTypeUpgraded ? effectiveRoomTypeId : null,
+          room_changed: isRoomChanged,
+          new_room_id: isRoomChanged ? effectiveRoomId : null,
+        },
       });
 
-      showToast(`Stay extended by ${extraNights} night(s). Additional charge: ${formatIDR(additionalCharge)}`, 'success');
+      const upgradeMsg = isRoomTypeUpgraded ? ` (Upgraded to ${selectedRoomType?.name})` : '';
+      const roomMsg = isRoomChanged ? ` (Moved to room ${availableRooms.find(rm => rm.id === effectiveRoomId)?.room_number || effectiveRoomId})` : '';
+      showToast(`Stay extended by ${extraNights} night(s). Additional charge: ${formatIDR(additionalCharge)}${upgradeMsg}${roomMsg}`, 'success');
       clearDraft(EXTEND_DRAFT_KEY);
       setSaving(false);
       onClose();
@@ -1046,7 +1251,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
   if (loading) return <Modal open onClose={onClose} title={t('res.extend_stay')}><LoadingPage /></Modal>;
 
   return (
-    <Modal open onClose={onClose} title={t('res.extend_stay')} size="md"
+    <Modal open onClose={onClose} title={t('res.extend_stay')} size="lg"
       footer={<><Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button><Button loading={saving} onClick={handleExtend}><CalendarPlus size={16} />{t('common.confirm')}</Button></>}>
       <div className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -1076,6 +1281,50 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
 
         <Input label={t('res.new_checkout_date')} type="date" value={newCheckoutDate} onChange={e => setNewCheckoutDate(e.target.value)} required />
 
+        {/* Room type upgrade selector */}
+        <div className="space-y-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium text-slate-700">Upgrade Room Type (optional)</label>
+            <select
+              value={newRoomTypeId}
+              onChange={e => handleRoomTypeChange(e.target.value)}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {allRoomTypes.map(rt => (
+                <option key={rt.id} value={rt.id}>
+                  {rt.name} — {formatIDR(rt.base_rate)}/night{rt.id === originalRoomTypeId ? ' (current)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Room selector — only show if room type was upgraded */}
+          {isRoomTypeUpgraded && (
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium text-slate-700">Select New Room ({selectedRoomType?.name})</label>
+              {availableRooms.length === 0 ? (
+                <p className="text-sm text-red-500">No rooms available for the selected dates.</p>
+              ) : (
+                <select
+                  value={newRoomId}
+                  onChange={e => setNewRoomId(e.target.value)}
+                  className="rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Select a room --</option>
+                  {availableRooms.map(r => (
+                    <option key={r.id} value={r.id}>
+                      Room {r.room_number} (Floor {r.floor}) — {t(`room.${r.status}`)}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <p className="text-xs text-amber-600">
+                Upgrading will move the guest to the new room. The old room will be marked dirty and a new key card will be encoded.
+              </p>
+            </div>
+          )}
+        </div>
+
         <Input
           label={t('res.room_rate_per_night')}
           type="number"
@@ -1088,7 +1337,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
         {rateBreakdown && rateBreakdown.breakdown.length > 0 && !manualRate && (
           <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')}{roomType ? ` · ${roomType.name}` : ''}</p>
+              <p className="text-sm font-semibold text-blue-900">{t('room_types.rate_preview')}{selectedRoomType ? ` · ${selectedRoomType.name}` : ''}</p>
               <span className="text-xs text-blue-700">{formatIDR(rateBreakdown.total)} total</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
@@ -1113,6 +1362,12 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
           <div className="flex justify-between"><span className="text-slate-600">{t('res.prev_checkout')}:</span> <span className="font-medium">{formatDate(previousCheckoutDate)} {formatTime(reservation.check_out_time)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('res.new_checkout')}:</span> <span className="font-medium">{formatDate(newCheckoutDate)}</span></div>
           <div className="flex justify-between"><span className="text-slate-600">{t('res.extra_nights')}:</span> <span className="font-bold text-blue-700">{extraNights} {t('common.nights')}</span></div>
+          {isRoomTypeUpgraded && (
+            <div className="flex justify-between"><span className="text-slate-600">Room Type:</span> <span className="font-medium text-blue-700">{roomType?.name} → {selectedRoomType?.name}</span></div>
+          )}
+          {isRoomChanged && (
+            <div className="flex justify-between"><span className="text-slate-600">Room:</span> <span className="font-medium text-blue-700">{room?.room_number} → {availableRooms.find(rm => rm.id === newRoomId)?.room_number || '-'}</span></div>
+          )}
           <div className="pt-2 border-t border-blue-200 flex justify-between"><span className="text-slate-700 font-medium">{t('res.additional_charge')}:</span> <span className="font-bold text-blue-700 text-lg">{formatIDR(additionalCharge)}</span></div>
         </div>
 
