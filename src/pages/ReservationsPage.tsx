@@ -7,7 +7,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Input, Select, Textarea } from '@/components/ui/Form';
+import { Input, Select, Textarea, SearchableSelect } from '@/components/ui/Form';
 import { ResStatusBadge, Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
@@ -917,10 +917,15 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
             <option value="">--</option>
             {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
           </Select>
-          <Select label={t('common.guest')} value={form.guest_id} onChange={e => set('guest_id', e.target.value)}>
-            <option value="">--</option>
-            {guests.map(g => <option key={g.id} value={g.id}>{g.full_name}</option>)}
-          </Select>
+          <SearchableSelect
+            label={t('common.guest')}
+            value={form.guest_id}
+            onChange={v => set('guest_id', v)}
+            options={guests.map(g => ({ value: g.id, label: g.full_name }))}
+            placeholder="--"
+            searchPlaceholder={t('guest.search_guests')}
+            required
+          />
           <Select label={t('common.booking_source')} value={form.booking_source_id} onChange={e => set('booking_source_id', e.target.value)}>
             <option value="">--</option>
             {bookingSources.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
