@@ -50,7 +50,14 @@ interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   hint?: string;
 }
 
-export function Input({ label, error, hint, className = '', ...props }: InputProps) {
+export function Input({ label, error, hint, className = '', onWheel, ...props }: InputProps) {
+  const handleWheel = (e: React.WheelEvent<HTMLInputElement>) => {
+    if (props.type === 'number') {
+      e.currentTarget.blur();
+    }
+    onWheel?.(e);
+  };
+
   return (
     <div className="flex flex-col gap-1">
       {label && <label className="text-sm font-medium text-slate-700">{label}</label>}
@@ -58,6 +65,7 @@ export function Input({ label, error, hint, className = '', ...props }: InputPro
         className={`rounded-lg border px-3 py-2 text-sm outline-none transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
           error ? 'border-red-400' : 'border-slate-300'
         } ${className}`}
+        onWheel={handleWheel}
         {...props}
       />
       {hint && !error && <span className="text-xs text-slate-400">{hint}</span>}
