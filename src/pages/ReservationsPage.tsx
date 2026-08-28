@@ -312,7 +312,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
   const { t } = useI18n();
   const { showToast } = useToast();
   const { user } = useAuth();
-  const canEditRate = user?.role === 'super_admin' || user?.role === 'manager';
+  const canEditRate = user?.role === 'super_admin' || user?.role === 'manager' || user?.role === 'receptionist';
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [occupiedWarning, setOccupiedWarning] = useState<any>(null);
