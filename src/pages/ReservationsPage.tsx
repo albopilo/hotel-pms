@@ -349,7 +349,27 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
         special_requests: reservation.special_requests || '',
         notes: reservation.notes || ''
       });
-      setRoomRows([{ room_type_id: reservation.room_type_id || '', room_id: reservation.room_id || '', rate: String(reservation.rate ?? '') }]);
+      if (reservation.is_group) {
+        (async () => {
+          const { data: rrData } = await supabase
+            .from('reservation_rooms')
+            .select('*')
+            .eq('reservation_id', reservation.id)
+            .eq('status', 'active')
+            .order('created_at');
+          if (rrData && rrData.length > 0) {
+            setRoomRows(rrData.map((rr: any) => ({
+              room_type_id: rr.room_type_id || '',
+              room_id: rr.room_id || '',
+              rate: String(rr.rate ?? '')
+            })));
+          } else {
+            setRoomRows([{ room_type_id: reservation.room_type_id || '', room_id: reservation.room_id || '', rate: String(reservation.rate ?? '') }]);
+          }
+        })();
+      } else {
+        setRoomRows([{ room_type_id: reservation.room_type_id || '', room_id: reservation.room_id || '', rate: String(reservation.rate ?? '') }]);
+      }
     } else if (open) {
       const draft = loadDraft();
       if (draft) {
@@ -889,17 +909,25 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
       const rt = roomTypes.find(r => r.id === row.room_type_id);
       if (!rt) return null;
       const { breakdown } = calculateTotalRate(form.check_in_date, form.check_out_date, rt, holidays);
+      const hasNightOverrides = Object.keys(nightRateOverrides).some(k => k.startsWith(`${idx}:`) && nightRateOverrides[k] !== '');
+      const isCustomFlatRate = rateTouched[idx] && !hasNightOverrides && Number(row.rate) > 0;
       const effectiveBreakdown = breakdown.map(day => {
         const key = `${idx}:${day.date}`;
         const override = nightRateOverrides[key];
         const isOverridden = override !== undefined && override !== '' && Number(override) !== day.rate;
-        return { ...day, rate: isOverridden ? Number(override) : day.rate, isOverridden };
+        if (isOverridden) {
+          return { ...day, rate: Number(override), isOverridden: true };
+        }
+        if (isCustomFlatRate) {
+          return { ...day, rate: Number(row.rate), isOverridden: true };
+        }
+        return { ...day, isOverridden: false };
       });
       const hasOverrides = effectiveBreakdown.some(d => d.isOverridden);
       const total = effectiveBreakdown.reduce((sum, d) => sum + d.rate, 0);
       return { idx, breakdown: effectiveBreakdown, total, hasOverrides, roomType: rt, roomNumber: rooms.find(r => r.id === row.room_id)?.room_number };
     }).filter(Boolean);
-  }, [roomRows, roomTypes, rooms, form.check_in_date, form.check_out_date, holidays, nightRateOverrides]);
+  }, [roomRows, roomTypes, rooms, form.check_in_date, form.check_out_date, holidays, nightRateOverrides, rateTouched]);
 
   const totalRoomCharges = rateBreakdowns.length > 0
     ? rateBreakdowns.reduce((sum, rb) => sum + (rb?.total || 0), 0)
