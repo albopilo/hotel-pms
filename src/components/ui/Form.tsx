@@ -1,6 +1,49 @@
 import { type InputHTMLAttributes, type SelectHTMLAttributes, type TextareaHTMLAttributes, type ReactNode, useState, useRef, useEffect, useMemo } from 'react';
 import { ChevronDown, Search, X } from 'lucide-react';
 
+function formatThousands(value: string): string {
+  const num = parseFloat(value);
+  if (isNaN(num) || value === '') return value;
+  const parts = value.split('.');
+  parts[0] = parseInt(parts[0], 10).toLocaleString('en-US');
+  return parts.join('.');
+}
+
+interface MoneyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value' | 'type'> {
+  label?: string;
+  error?: string;
+  hint?: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+export function MoneyInput({ label, error, hint, value, onChange, className = '', ...props }: MoneyInputProps) {
+  const displayValue = formatThousands(value);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value.replace(/[^0-9.]/g, '');
+    onChange(raw);
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      {label && <label className="text-sm font-medium text-slate-700">{label}</label>}
+      <input
+        type="text"
+        inputMode="numeric"
+        value={displayValue}
+        onChange={handleChange}
+        className={`rounded-lg border px-3 py-2 text-sm outline-none transition-colors focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+          error ? 'border-red-400' : 'border-slate-300'
+        } ${className}`}
+        {...props}
+      />
+      {hint && !error && <span className="text-xs text-slate-400">{hint}</span>}
+      {error && <span className="text-xs text-red-500">{error}</span>}
+    </div>
+  );
+}
+
 interface InputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;

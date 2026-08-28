@@ -7,7 +7,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Input, Select, Textarea } from '@/components/ui/Form';
+import { Input, Select, Textarea, MoneyInput } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
@@ -401,7 +401,7 @@ function AddChargeModal({ folio, reservation, room, chargeCats, userId, orgId, o
         </Select>
         <Input label={t('common.description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
         <div className="grid grid-cols-2 gap-4">
-          <Input label={t('common.amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} />
+          <MoneyInput label={t('common.amount')} value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} />
           <Input label={t('common.quantity')} type="number" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
         </div>
         <Textarea label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
@@ -471,7 +471,7 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
         {selectedMethod?.is_edc && (
           <Input label={t('common.edc_terminal')} value={form.edc_terminal} onChange={(e) => setForm({ ...form, edc_terminal: e.target.value })} />
         )}
-        <Input label={t('common.amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+        <MoneyInput label={t('common.amount')} value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} required />
         <Input label={t('common.reference_number')} value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
         {selectedMethod?.is_edc && <Input label={t('common.approval_code')} value={form.approval_code} onChange={(e) => setForm({ ...form, approval_code: e.target.value })} />}
         <Textarea label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
@@ -600,7 +600,7 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
           {chargeCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
         <Input label={t('common.description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
-        <Input label={t('common.amount')} type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
+        <MoneyInput label={t('common.amount')} value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} required />
         <Textarea label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
       </div>
     </Modal>

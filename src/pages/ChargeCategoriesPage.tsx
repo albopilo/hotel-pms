@@ -6,7 +6,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
-import { Input } from '@/components/ui/Form';
+import { Input, MoneyInput } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Plus, CreditCard as Edit, Tags, Trash2 } from 'lucide-react';
@@ -157,7 +157,7 @@ function CatFormModal({ open, onClose, cat, orgId, onSaved }: {
           <input type="checkbox" checked={form.requires_approval} onChange={(e) => setForm({ ...form, requires_approval: e.target.checked })} />
           Requires Manager Approval
         </label>
-        <Input label={t('settings.damage_threshold')} type="number" value={form.approval_threshold} onChange={(e) => setForm({ ...form, approval_threshold: e.target.value })} />
+        <MoneyInput label={t('settings.damage_threshold')} value={form.approval_threshold} onChange={(v) => setForm({ ...form, approval_threshold: v })} />
         <Input label="Sort Order" type="number" value={form.sort_order} onChange={(e) => setForm({ ...form, sort_order: e.target.value })} />
       </form>
     </Modal>

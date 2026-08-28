@@ -7,7 +7,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
-import { Input, Select, Textarea } from '@/components/ui/Form';
+import { Input, Select, Textarea, MoneyInput } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, formatDate, todayISO, addDays } from '@/lib/format';
@@ -221,9 +221,9 @@ function RoomTypeFormModal({ open, onClose, roomType, branches, holidays, onSave
         {/* Rates section */}
         <div className="space-y-3 rounded-lg border border-slate-200 p-4 bg-slate-50">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Input label={t('rooms.base_rate')} type="number" value={form.base_rate} onChange={(e) => setForm({ ...form, base_rate: e.target.value })} />
-            <Input label={t('room_types.weekday_rate')} type="number" value={form.weekday_rate} onChange={(e) => setForm({ ...form, weekday_rate: e.target.value })} />
-            <Input label={t('room_types.weekend_rate')} type="number" value={form.weekend_rate} onChange={(e) => setForm({ ...form, weekend_rate: e.target.value })} />
+            <MoneyInput label={t('rooms.base_rate')} value={form.base_rate} onChange={(v) => setForm({ ...form, base_rate: v })} />
+            <MoneyInput label={t('room_types.weekday_rate')} value={form.weekday_rate} onChange={(v) => setForm({ ...form, weekday_rate: v })} />
+            <MoneyInput label={t('room_types.weekend_rate')} value={form.weekend_rate} onChange={(v) => setForm({ ...form, weekend_rate: v })} />
           </div>
           <p className="text-xs text-slate-500">{t('room_types.rate_hint')}</p>
           <p className="text-xs text-amber-600">{t('room_types.holiday_rate_note')}</p>

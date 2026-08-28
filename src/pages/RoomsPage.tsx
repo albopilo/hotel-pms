@@ -7,7 +7,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
-import { Input, Select, Textarea } from '@/components/ui/Form';
+import { Input, Select, Textarea, MoneyInput } from '@/components/ui/Form';
 import { RoomStatusBadge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { formatIDR, todayISO, addDays } from '@/lib/format';
@@ -520,7 +520,7 @@ function RoomFormModal({ open, onClose, room, branches, roomTypes, userId, onSav
         <div className="grid grid-cols-2 gap-4">
           <Input label={t('rooms.room_number')} value={form.room_number} onChange={(e) => setForm({ ...form, room_number: e.target.value })} required />
           <Input label={t('common.floor')} type="number" value={form.floor} onChange={(e) => setForm({ ...form, floor: e.target.value })} required />
-          <Input label={t('rooms.base_rate')} type="number" value={form.base_rate} onChange={(e) => setForm({ ...form, base_rate: e.target.value })} />
+          <MoneyInput label={t('rooms.base_rate')} value={form.base_rate} onChange={(v) => setForm({ ...form, base_rate: v })} />
           <Input label={t('common.max_occupancy')} type="number" value={form.max_occupancy} onChange={(e) => setForm({ ...form, max_occupancy: e.target.value })} />
         </div>
         <Select label={t('common.status')} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>

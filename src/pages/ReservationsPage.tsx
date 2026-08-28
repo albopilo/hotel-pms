@@ -7,7 +7,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Input, Select, Textarea, SearchableSelect } from '@/components/ui/Form';
+import { Input, Select, Textarea, SearchableSelect, MoneyInput } from '@/components/ui/Form';
 import { ResStatusBadge, Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
@@ -965,7 +965,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
                 <option value="">--</option>
                 {availableRoomsForRow(idx).map(r => <option key={r.id} value={r.id}>{r.room_number} ({r.status})</option>)}
               </Select>
-              <Input label={`${t('common.rate')} / ${t('common.nights')}`} type="number" value={row.rate} onChange={e => updateRoomRow(idx, 'rate', e.target.value)} hint={rateTouched[idx] ? 'Custom rate (auto-calc overridden)' : undefined} />
+              <MoneyInput label={`${t('common.rate')} / ${t('common.nights')}`} value={row.rate} onChange={v => updateRoomRow(idx, 'rate', v)} hint={rateTouched[idx] ? 'Custom rate (auto-calc overridden)' : undefined} />
               {roomRows.length > 1 && (
                 <Button type="button" size="sm" variant="ghost" onClick={() => removeRoomRow(idx)} className="mb-1">
                   <Trash2 size={16} className="text-red-500" />
@@ -1030,9 +1030,9 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
         )}
 
         <div className="grid md:grid-cols-3 gap-4">
-          <Input label={t('common.discount')} type="number" value={form.discount} onChange={e => set('discount', e.target.value)} />
-          <Input label={t('common.tax')} type="number" value={form.tax} onChange={e => set('tax', e.target.value)} />
-          <Input label={t('common.deposit')} type="number" value={form.deposit} onChange={e => set('deposit', e.target.value)} />
+          <MoneyInput label={t('common.discount')} value={form.discount} onChange={v => set('discount', v)} />
+          <MoneyInput label={t('common.tax')} value={form.tax} onChange={v => set('tax', v)} />
+          <MoneyInput label={t('common.deposit')} value={form.deposit} onChange={v => set('deposit', v)} />
         </div>
 
         <div className="bg-slate-50 rounded-lg p-3 text-sm space-y-1">

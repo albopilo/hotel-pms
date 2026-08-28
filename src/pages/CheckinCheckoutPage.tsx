@@ -8,7 +8,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
-import { Input, Select } from '@/components/ui/Form';
+import { Input, Select, MoneyInput } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Badge } from '@/components/ui/Badge';
 import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, todayInTimezone, nowInTimezone, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
@@ -1332,11 +1332,10 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
           )}
         </div>
 
-        <Input
+        <MoneyInput
           label={t('res.room_rate_per_night')}
-          type="number"
           value={roomRate}
-          onChange={e => { setRoomRate(e.target.value); setRateTouched(true); }}
+          onChange={v => { setRoomRate(v); setRateTouched(true); }}
           hint={rateTouched ? 'Custom rate (auto-calc overridden)' : (rateBreakdown ? 'Auto-calculated from weekday/weekend rates — edit to override' : undefined)}
           required
         />
@@ -1856,11 +1855,10 @@ function UpgradeRoomModal({ reservation, reservationRooms, onClose }: {
           )}
         </div>
 
-        <Input
+        <MoneyInput
           label={t('res.room_rate_per_night')}
-          type="number"
           value={roomRate}
-          onChange={e => { setRoomRate(e.target.value); setRateTouched(true); }}
+          onChange={v => { setRoomRate(v); setRateTouched(true); }}
           hint={rateTouched ? 'Custom rate (auto-calc overridden)' : (rateBreakdown ? 'Auto-calculated from weekday/weekend rates — edit to override' : undefined)}
           required
         />

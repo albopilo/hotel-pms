@@ -5,7 +5,7 @@ import { useI18n } from '@/lib/i18n';
 import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Input, Textarea } from '@/components/ui/Form';
+import { Input, Textarea, MoneyInput } from '@/components/ui/Form';
 import { LoadingPage } from '@/components/ui/States';
 import { Save, Settings } from 'lucide-react';
 import type { Organization, SystemSetting } from '@/types/database';
@@ -136,13 +136,22 @@ export function SystemSettingsPage() {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {SETTING_KEYS.map(({ key, label, type }) => (
-              <Input
-                key={key}
-                label={t(label)}
-                type={type === 'number' ? 'number' : 'text'}
-                value={settingValues[key] || ''}
-                onChange={(e) => setSettingValues({ ...settingValues, [key]: e.target.value })}
-              />
+              type === 'number' ? (
+                <MoneyInput
+                  key={key}
+                  label={t(label)}
+                  value={settingValues[key] || ''}
+                  onChange={(v) => setSettingValues({ ...settingValues, [key]: v })}
+                />
+              ) : (
+                <Input
+                  key={key}
+                  label={t(label)}
+                  type="text"
+                  value={settingValues[key] || ''}
+                  onChange={(e) => setSettingValues({ ...settingValues, [key]: e.target.value })}
+                />
+              )
             ))}
           </div>
           <div className="flex justify-end">
