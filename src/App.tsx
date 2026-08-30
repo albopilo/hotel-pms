@@ -73,7 +73,7 @@ function AuthenticatedApp() {
       case 'dashboard':
         return <DashboardPage />;
       case 'reservations':
-        return <ReservationsPage searchQuery={searchQuery} initialGuestId={newReservationGuestId} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
+        return <ReservationsPage searchQuery={searchQuery} initialGuestId={newReservationGuestId} onInitialGuestIdConsumed={() => setNewReservationGuestId(null)} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
       case 'calendar':
         return <CalendarPage onSelectReservation={handleSelectReservation} />;
       case 'rooms':
