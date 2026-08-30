@@ -71,7 +71,7 @@ function clearDraft() {
   }
 }
 
-export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectReservation, onNavigateToPayment, onNavigateToInvoice }: { searchQuery?: string; initialGuestId?: string | null; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
+export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGuestIdConsumed, onSelectReservation, onNavigateToPayment, onNavigateToInvoice }: { searchQuery?: string; initialGuestId?: string | null; onInitialGuestIdConsumed?: () => void; onSelectReservation?: (id: string) => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
   const { user, branches } = useAuth();
   const { selectedBranchId } = useBranch();
   const { t } = useI18n();
@@ -99,7 +99,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
     setLoading(true);
     const [r, g, ro, rt, bs, hol] = await Promise.all([
       supabase.from('reservations').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }),
-      supabase.from('guests').select('*').limit(500),
+      supabase.from('guests').select('*').order('created_at', { ascending: false }),
       supabase.from('rooms').select('*').in('branch_id', branchIds),
       supabase.from('room_types').select('*').in('branch_id', branchIds),
       supabase.from('booking_sources').select('*').order('sort_order'),
@@ -120,6 +120,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onSelectRes
   useEffect(() => {
     if (initialGuestId && guests.length > 0) {
       setShowForm(true);
+      onInitialGuestIdConsumed?.();
     }
   }, [initialGuestId, guests]);
 
