@@ -221,8 +221,7 @@ export const invoiceService = {
       .from('invoices')
       .select(`*, guests(id,full_name,phone,email),branches(id,name,address),reservations(id,reservation_number,room_id,rooms(id,room_number)),invoice_items(id,description,category,quantity,unit_amount,amount)`)
       .in('branch_id', branchIds)
-      .order('created_at', { ascending: false })
-      .limit(100);
+      .order('created_at', { ascending: false });
     if (error) throw new InvoiceError(error.message);
     return data;
   },

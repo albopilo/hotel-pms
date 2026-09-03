@@ -52,7 +52,7 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase.from('folios').select('*, guest:guests(full_name), reservation:reservations(room:rooms(room_number))').in('branch_id', branchIds).order('created_at', { ascending: false }).limit(100);
+    const { data, error } = await supabase.from('folios').select('*, guest:guests(full_name), reservation:reservations(room:rooms(room_number))').in('branch_id', branchIds).order('created_at', { ascending: false });
     if (error) { setLoading(false); return; }
     setFolios((data as FolioListRow[]) || []);
     setLoading(false);

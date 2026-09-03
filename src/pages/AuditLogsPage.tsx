@@ -106,7 +106,7 @@ export function AuditLogsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('audit_logs').select('*').eq('organization_id', user!.organization_id).gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59').order('created_at', { ascending: false }).limit(500);
+    let query = supabase.from('audit_logs').select('*').eq('organization_id', user!.organization_id).gte('created_at', dateFrom).lte('created_at', dateTo + 'T23:59:59').order('created_at', { ascending: false }).limit(2000);
     if (selectedBranchId) query = query.eq('branch_id', selectedBranchId);
     if (actionFilter !== 'all') query = query.eq('action', actionFilter);
     const { data } = await query;
