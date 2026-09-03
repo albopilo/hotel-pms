@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { invoiceService } from '@/services/invoiceService';
-import type { Invoice, InvoiceItem, Guest, Branch, BookingSource, RoomType, ReservationRoom } from '@/types/database';
+import type { Invoice, InvoiceItem, Guest, Branch, BookingSource, RoomType } from '@/types/database';
 import { formatIDR, formatDateTime, formatDate } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { X } from 'lucide-react';
@@ -45,7 +45,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
         }
         if (res?.is_group) {
           const { data: rrData } = await supabase.from('reservation_rooms')
-            .select('*,room:rooms(*)').eq('reservation_id', res.id).eq('status','active').order('created_at');
+            .select('*,room:rooms(*)').eq('reservation_id', res.id).eq('status', 'active').order('created_at');
           setGroupRooms(rrData || []);
         }
 
@@ -74,16 +74,25 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
     );
   }
 
+  const roomNumbers = groupRooms.length > 1
+    ? groupRooms.map((room) => room.room?.room_number).filter(Boolean).join(', ')
+    : reservation?.rooms?.room_number || '-';
+  const invoiceTitle = reservation?.status === 'checked_out' ? 'Final Check-out Invoice' : 'Invoice';
+  const paymentLabel = invoice.balance > 0 ? 'Balance Due' : 'Paid';
+
   return (
-    <div className="fixed inset-0 z-[60] bg-white overflow-y-auto">
+    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
+        @page { size: A4; margin: 12mm; }
         @media print {
           body { background: white; }
           .no-print { display: none !important; }
+          .invoice-shell { max-width: none !important; min-height: auto !important; box-shadow: none !important; }
+          .invoice-section { break-inside: avoid; }
         }
       `}</style>
 
-      <div className="no-print sticky top-0 bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between z-10">
+      <div className="no-print sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-800">Invoice Preview — {invoice.invoice_number}</h2>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => window.print()}>Print</Button>
@@ -91,82 +100,126 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto p-10 bg-white text-black">
-        <div className="border-b pb-5 mb-6">
-          <h1 className="text-3xl font-bold">{branch?.name || 'Hotel'}</h1>
-          <p>{branch?.address || ''}</p>
-        </div>
-
-        {reservation?.status === 'checked_in' && (
-          <div className="mb-4">
-            <h2 className="text-xl font-bold uppercase tracking-wide text-blue-700">CHECK IN INVOICE</h2>
+      <main className="invoice-shell mx-auto my-6 min-h-[1120px] max-w-[820px] bg-white px-8 py-10 text-[13px] text-slate-900 shadow-xl print:my-0 print:px-0 print:py-0">
+        <header className="text-center">
+          <div className="inline-flex items-center gap-2">
+            <span className="relative flex h-11 w-9 items-center justify-center">
+              <span className="absolute left-0 h-8 w-2 rounded-sm bg-red-500" />
+              <span className="absolute left-2 h-10 w-3 rounded-sm bg-red-500" />
+              <span className="absolute left-5 h-9 w-3 rounded-sm bg-red-500" />
+            </span>
+            <span className="text-3xl font-black tracking-tight text-slate-700">
+              Nusa<span className="text-red-500">PMS</span>
+            </span>
           </div>
-        )}
+          <h1 className="mt-7 text-2xl font-bold">{invoiceTitle}</h1>
+          <p className="mt-1 text-sm text-slate-500">{invoice.invoice_number}</p>
+        </header>
 
-        {reservation?.status === 'checked_out' && (
-          <div className="mb-4">
-            <h2 className="text-xl font-bold uppercase tracking-wide text-emerald-700">FINAL CHECK OUT INVOICE</h2>
+        <section className="invoice-section mt-7 overflow-hidden rounded-sm border-2 border-red-500">
+          <SectionTitle>Guest Information</SectionTitle>
+          <div className="grid grid-cols-1 gap-x-8 gap-y-2 px-4 py-4 sm:grid-cols-2">
+            <InfoRow label="Booking ID" value={reservation?.reservation_number || invoice.invoice_number} />
+            <InfoRow label="Name" value={guest?.full_name || '-'} />
+            <InfoRow label="Email" value={guest?.email || '-'} />
+            <InfoRow label="Phone Number" value={guest?.phone || '-'} />
+            <InfoRow label="Nationality" value={guest?.nationality || '-'} />
           </div>
-        )}
+        </section>
 
-        <div className="grid grid-cols-2 mb-8">
-          <div>
-            <h2 className="font-bold">Bill To</h2>
-            <p>{guest?.full_name || '-'}</p>
+        <section className="invoice-section mt-5 overflow-hidden rounded-sm border-2 border-red-500">
+          <SectionTitle>Booking Details</SectionTitle>
+          <div className="px-4 py-4">
+            <div className="mb-4">
+              <p className="font-bold">{branch?.name || 'Hotel'}</p>
+              {branch?.address && <p className="text-slate-600">{branch.address}</p>}
+            </div>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-2 sm:grid-cols-2">
+              <InfoRow label="Room Type" value={roomType?.name || reservation?.room_types?.name || '-'} />
+              <InfoRow label="Check In Date" value={reservation?.check_in_date ? formatDate(reservation.check_in_date) : '-'} />
+              <InfoRow label="Total Rooms" value={groupRooms.length > 1 ? `${groupRooms.length} Rooms` : '1 Room'} />
+              <InfoRow label="Check Out Date" value={reservation?.check_out_date ? formatDate(reservation.check_out_date) : '-'} />
+              <InfoRow label="Payment Type" value={paymentLabel} />
+              <InfoRow label="Room Number" value={roomNumbers} />
+              <InfoRow label="Nights" value={reservation?.num_nights ? String(reservation.num_nights) : '-'} />
+              {bookingSource && <InfoRow label="Booking Source" value={bookingSource.name} />}
+            </div>
           </div>
-          <div className="text-right">
-            <p>Invoice: <b>{invoice.invoice_number}</b></p>
-            <p>{invoice.issued_at ? formatDateTime(invoice.issued_at) : '-'}</p>
+        </section>
+
+        <section className="invoice-section mt-5 overflow-hidden rounded-sm border-2 border-red-500">
+          <SectionTitle>Booking Transaction</SectionTitle>
+          <div className="px-2 py-3 sm:px-4">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[560px] border-collapse text-left">
+                <thead>
+                  <tr className="border-b border-slate-300 text-xs font-bold">
+                    <th className="px-2 py-2">Date</th>
+                    <th className="px-2 py-2">Items</th>
+                    <th className="px-2 py-2">Description</th>
+                    <th className="px-2 py-2 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item) => (
+                    <tr key={item.id} className="border-b border-slate-200">
+                      <td className="whitespace-nowrap px-2 py-2">{formatDate(item.created_at)}</td>
+                      <td className="px-2 py-2">{item.category || item.description}</td>
+                      <td className="px-2 py-2">{item.description}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">{formatIDR(Math.abs(item.amount))}</td>
+                    </tr>
+                  ))}
+                  {items.length === 0 && (
+                    <tr><td colSpan={4} className="px-2 py-6 text-center text-slate-400">No transaction items</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="mt-5 flex justify-end">
+              <div className="w-full max-w-xs space-y-2 text-sm">
+                <SummaryRow label="Subtotal" value={formatIDR(invoice.subtotal)} />
+                {invoice.discount > 0 && <SummaryRow label="Discount" value={`-${formatIDR(invoice.discount)}`} tone="negative" />}
+                <SummaryRow label="Tax" value={formatIDR(invoice.tax)} />
+                <div className="flex items-center justify-between border-t border-slate-300 pt-3 text-base font-bold">
+                  <span>Total</span><span>{formatIDR(invoice.total)}</span>
+                </div>
+                {invoice.amount_paid > 0 && <SummaryRow label="Paid" value={formatIDR(invoice.amount_paid)} tone="positive" />}
+                <div className={`flex items-center justify-between font-bold ${invoice.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                  <span>{invoice.balance > 0 ? 'Balance Due' : 'Paid'}</span>
+                  <span>{invoice.balance > 0 ? formatIDR(invoice.balance) : formatIDR(invoice.total)}</span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="grid grid-cols-2 gap-4 mb-8 border border-slate-300 rounded-lg p-4 text-sm">
-          <div>
-            <p><span className="font-semibold">Check-in:</span> {reservation?.check_in_date ? formatDate(reservation.check_in_date) : '-'}</p>
-            <p><span className="font-semibold">Check-out:</span> {reservation?.check_out_date ? formatDate(reservation.check_out_date) : '-'}</p>
-            <p><span className="font-semibold">Nights:</span> {reservation?.num_nights || '-'}</p>
-            <p><span className="font-semibold">Adults / Children:</span> {reservation ? `${reservation.adults} / ${reservation.children}` : '-'}</p>
-          </div>
-          <div>
-            <p><span className="font-semibold">Room Number:</span> {groupRooms.length > 1 ? groupRooms.map((rr:any) => rr.room?.room_number).filter(Boolean).join(', ') : (reservation?.rooms?.room_number || '-')}</p>
-            <p><span className="font-semibold">Room Type:</span> {roomType?.name || reservation?.room_types?.name || '-'}</p>
-            {bookingSource && <p><span className="font-semibold">Booking Source:</span> {bookingSource.name}</p>}
-            {reservation?.deposit > 0 && <p><span className="font-semibold">Deposit:</span> {formatIDR(reservation.deposit)}</p>}
-          </div>
-        </div>
+        <footer className="mt-10 text-center text-xs text-slate-500">
+          <p>Issued {invoice.issued_at ? formatDateTime(invoice.issued_at) : '-'}</p>
+          <p className="mt-2 font-medium text-slate-700">Thank you for staying with us.</p>
+        </footer>
+      </main>
+    </div>
+  );
+}
 
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left py-2">Description</th>
-              <th>Qty</th>
-              <th className="text-right">Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map(item => (
-              <tr key={item.id} className="border-b">
-                <td className="py-2">{item.description}</td>
-                <td className="text-center">{item.quantity}</td>
-                <td className="text-right">{formatIDR(item.amount)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+function SectionTitle({ children }: { children: string }) {
+  return <h2 className="border-b border-red-200 px-4 py-2 text-center text-sm font-bold">{children}</h2>;
+}
 
-        <div className="mt-8 text-right space-y-1">
-          <p>Subtotal: {formatIDR(invoice.subtotal)}</p>
-          {invoice.discount > 0 && <p className="text-red-600">Discount: -{formatIDR(invoice.discount)}</p>}
-          <p>Tax: {formatIDR(invoice.tax)}</p>
-          <h2 className="text-xl font-bold mt-2">Total: {formatIDR(invoice.total)}</h2>
-          {invoice.amount_paid > 0 && <p className="text-emerald-600">Paid: {formatIDR(invoice.amount_paid)}</p>}
-          <p className={`font-bold ${invoice.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-            {invoice.balance > 0 ? `Balance Due: ${formatIDR(invoice.balance)}` : 'Fully Paid'}
-          </p>
-        </div>
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid grid-cols-[120px_1fr] gap-2">
+      <span className="font-medium text-slate-600">{label}</span>
+      <span className="break-words"><span className="mr-2">:</span>{value}</span>
+    </div>
+  );
+}
 
-        <div className="mt-12 text-center text-xs">Thank you for staying with us.</div>
-      </div>
+function SummaryRow({ label, value, tone }: { label: string; value: string; tone?: 'negative' | 'positive' }) {
+  return (
+    <div className={`flex items-center justify-between ${tone === 'negative' ? 'text-red-600' : tone === 'positive' ? 'text-emerald-600' : ''}`}>
+      <span>{label}</span><span className="font-medium">{value}</span>
     </div>
   );
 }
