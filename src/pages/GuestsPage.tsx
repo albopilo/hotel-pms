@@ -50,8 +50,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
 
   const load = useCallback(async () => {
     setLoading(true);
-    let query = supabase.from('guests').select('*').order('created_at', { ascending: false }).limit(100);
-    const { data } = await query;
+    const { data } = await supabase.from('guests').select('*').order('full_name', { ascending: true });
     setGuests((data as Guest[]) || []);
     setLoading(false);
   }, []);
