@@ -444,6 +444,22 @@ const translations: Record<string, { en: string; id: string }> = {
   'warning.checkout_time': { en: 'Check-out Time', id: 'Waktu Check-out' },
   'warning.balance': { en: 'Balance', id: 'Saldo' },
   'warning.tooltip': { en: 'Active warnings', id: 'Peringatan aktif' },
+
+  // GRC / Receipt / Charge Summary
+  'grc.title': { en: 'Guest Registration Card', id: 'Kartu Registrasi Tamu' },
+  'grc.guest_info': { en: 'Guest Information', id: 'Informasi Tamu' },
+  'grc.stay_details': { en: 'Stay Details', id: 'Detail Menginap' },
+  'grc.hotel_policies': { en: 'Hotel Policies', id: 'Kebijakan Hotel' },
+  'grc.guest_signature': { en: 'Guest Signature', id: 'Tanda Tangan Tamu' },
+  'grc.receptionist_signature': { en: 'Receptionist Signature', id: 'Tanda Tangan Resepsionis' },
+  'grc.print': { en: 'Print Registration Card', id: 'Cetak Kartu Registrasi' },
+
+  'receipt.title': { en: 'Payment Receipt', id: 'Kuitansi Pembayaran' },
+  'receipt.amount_paid': { en: 'Amount Paid', id: 'Jumlah Dibayar' },
+  'receipt.print': { en: 'Print Receipt', id: 'Cetak Kuitansi' },
+
+  'charge_summary.title': { en: 'Charge Summary', id: 'Ringkasan Biaya' },
+  'charge_summary.print': { en: 'Print Summary', id: 'Cetak Ringkasan' },
 };
 
 interface I18nContextValue {

@@ -183,7 +183,7 @@ export const folioService = {
 };
 
 export const paymentService = {
-  async recordPayment(input: PaymentInput, methods: PaymentMethod[]): Promise<void> {
+  async recordPayment(input: PaymentInput, methods: PaymentMethod[]): Promise<string> {
     assertDefined(input.methodId, 'Payment method');
     assertDefined(input.folioId, 'Folio');
     if (input.amount <= 0) {
@@ -266,6 +266,8 @@ export const paymentService = {
     });
 
     await folioService.syncFolioTotals(input.folioId);
+
+    return payRow.id;
   },
 };
 

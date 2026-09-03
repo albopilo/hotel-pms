@@ -13,6 +13,8 @@ import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
+import { PaymentReceiptPrintPage } from '@/pages/PaymentReceiptPrintPage';
+import { ChargeSummaryPrintPage } from '@/pages/ChargeSummaryPrintPage';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { getLockProviderByType, integrationToConfig } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
@@ -145,6 +147,8 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const [showTransfer, setShowTransfer] = useState(false);
   const [showPostStay, setShowPostStay] = useState(false);
   const [voidTarget, setVoidTarget] = useState<FolioItem | null>(null);
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
+  const [chargeSummaryFolioId, setChargeSummaryFolioId] = useState<string | null>(null);
 
   const isFinalized = folio.status === 'finalized';
   const canVoid = user?.role === 'super_admin' || user?.role === 'manager';
@@ -277,7 +281,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
                 <th className="text-center py-2 px-3">Type</th>
                 <th className="text-right py-2 px-3">{t('common.amount')}</th>
                 <th className="text-left py-2 px-3">{t('common.created_at')}</th>
-                {!isFinalized && <th className="text-right py-2 px-3"></th>}
+                <th className="text-right py-2 px-3"></th>
               </tr>
             </thead>
             <tbody>
@@ -288,8 +292,10 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
                   <td className="text-center py-2 px-3"><Badge color={item.item_type === 'charge' ? 'red' : item.item_type === 'payment' ? 'green' : 'gray'}>{item.item_type}</Badge></td>
                   <td className={`text-right py-2 px-3 font-medium ${item.amount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{item.amount > 0 ? '+' : ''}{formatIDR(item.amount)}</td>
                   <td className="py-2 px-3 text-xs text-slate-400">{formatDateTime(item.created_at)}</td>
-                  {!isFinalized && !item.voided && canVoid && <td className="text-right py-2 px-3"><button onClick={() => setVoidTarget(item)} className="text-xs text-red-500 hover:text-red-700">Void</button></td>}
-                  {!isFinalized && !item.voided && !canVoid && <td></td>}
+                  <td className="text-right py-2 px-3 whitespace-nowrap">
+                    {item.item_type === 'payment' && !item.voided && item.payment_id && <button onClick={() => setReceiptPaymentId(item.payment_id!)} className="text-xs text-blue-600 hover:text-blue-700 mr-3">Receipt</button>}
+                    {!isFinalized && !item.voided && canVoid && <button onClick={() => setVoidTarget(item)} className="text-xs text-red-500 hover:text-red-700">Void</button>}
+                  </td>
                 </tr>
               ))}
               {items.length === 0 && <tr><td colSpan={6} className="text-center py-4 text-slate-400">{t('common.no_data')}</td></tr>}
@@ -331,11 +337,14 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
           {onSelectReservation && folio.reservation_id && (
             <Button size="sm" variant="outline" onClick={() => onSelectReservation(folio.reservation_id)}><FileText size={14} /> {t('nav.checkin_checkout')}</Button>
           )}
+          {folio.reservation_id && (
+            <Button size="sm" variant="outline" onClick={() => setGrcReservationId(folio.reservation_id!)}><FileText size={14} /> GRC</Button>
+          )}
         </div>
       </div>
 
-      {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); }} />}
-      {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async () => { setShowTakePayment(false); await reloadItems(); }} />}
+      {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); setChargeSummaryFolioId(folio.id); }} />}
+      {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async (paymentId?: string) => { setShowTakePayment(false); await reloadItems(); if (paymentId) setReceiptPaymentId(paymentId); }} />}
       {showTransfer && <RoomTransferModal folio={folio} reservation={reservation} currentRoom={room} userId={user!.id} orgId={user!.organization_id} branchId={folio.branch_id} onClose={() => setShowTransfer(false)} onSaved={onClose} />}
       {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); await reloadItems(); }} />}
       <ConfirmModal
@@ -347,6 +356,8 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
         confirmLabel={t('common.void')}
         variant="danger"
       />
+      {receiptPaymentId && <PaymentReceiptPrintPage paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />}
+      {chargeSummaryFolioId && <ChargeSummaryPrintPage folioId={chargeSummaryFolioId} onClose={() => setChargeSummaryFolioId(null)} />}
     </Modal>
   );
 }
@@ -414,7 +425,7 @@ const initialTakePaymentForm = { method_id: '', subtype: '', edc_terminal: '', r
 
 function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, onClose, onSaved }: {
   folio: Folio; reservation: Reservation | null; paymentMethods: PaymentMethod[];
-  userId: string; orgId: string; onClose: () => void; onSaved: () => void;
+  userId: string; orgId: string; onClose: () => void; onSaved: (paymentId?: string) => void;
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -432,7 +443,7 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
     if (!form.method_id || parseFloat(form.amount) <= 0) { showToast('Method and amount required', 'error'); return; }
     setSaving(true);
     try {
-      await paymentService.recordPayment({
+      const paymentId = await paymentService.recordPayment({
         folioId: folio.id, branchId: folio.branch_id, reservationId: folio.reservation_id,
         guestId: folio.guest_id, methodId: form.method_id, amount: parseFloat(form.amount),
         subtype: form.subtype, edcTerminal: form.edc_terminal,
@@ -442,7 +453,7 @@ function TakePaymentModal({ folio, reservation, paymentMethods, userId, orgId, o
       showToast('Payment recorded', 'success');
       clearDraft(TAKE_PAYMENT_DRAFT_KEY);
       setSaving(false);
-      onSaved();
+      onSaved(paymentId);
     } catch (e) {
       const err = e instanceof FinancialError ? e : parseDbError(e as { message?: string });
       showToast(err.message, 'error');

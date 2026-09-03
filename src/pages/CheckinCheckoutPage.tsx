@@ -21,6 +21,8 @@ import { getBusinessDate } from '@/services/businessDateService';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt, CircleArrowUp as ArrowUpCircle } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
+import { GrcPrintPage } from '@/pages/GrcPrintPage';
+import { ChargeSummaryPrintPage } from '@/pages/ChargeSummaryPrintPage';
 
 const CHECKIN_DRAFT_KEY = 'checkin_time_draft';
 const CHECKOUT_DRAFT_KEY = 'checkout_time_draft';
@@ -40,6 +42,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
   const [selected, setSelected] = useState<Reservation | null>(null);
   const [mode, setMode] = useState<'checkin' | 'checkout' | 'extend' | 'split' | 'upgrade' | null>(null);
   const [reservationRooms, setReservationRooms] = useState<ReservationRoom[]>([]);
+  const [grcReservationId, setGrcReservationId] = useState<string | null>(null);
+  const [chargeSummaryFolioId, setChargeSummaryFolioId] = useState<string | null>(null);
   const processedInitialId = useRef<string | null>(null);
 
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
@@ -130,6 +134,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
             <div className="flex gap-1">
                 <Button size="sm" onClick={() => handleSelectReservation(r, 'checkin')}
 ><LogIn size={14}/>{t('action.check_in')}</Button>
+                <Button size="sm" variant="outline" onClick={() => setGrcReservationId(r.id)}><FileText size={14}/>GRC</Button>
                 {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/></Button>}
               </div>
             </div>;
@@ -147,6 +152,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
                 <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {formatDate(r.check_out_date)} {formatTime(r.check_out_time)}</p>
               </div>
             <div className="flex gap-1">
+                <Button size="sm" variant="outline" onClick={() => setGrcReservationId(r.id)}><FileText size={14}/>GRC</Button>
                 <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}
 ><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
                 <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'upgrade')}><ArrowUpCircle size={14}/>Upgrade Room</Button>
@@ -171,6 +177,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
               <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {formatDate(r.check_out_date)} {formatTime(r.check_out_time)}</p>
             </div>
             <div className="flex gap-1">
+              <Button size="sm" variant="outline" onClick={() => setGrcReservationId(r.id)}><FileText size={14}/>GRC</Button>
               <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'extend')}><CalendarPlus size={14}/>{t('res.extend_stay')}</Button>
               <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'upgrade')}><ArrowUpCircle size={14}/>Upgrade Room</Button>
               {r.is_group && <Button size="sm" variant="outline" onClick={() => handleSelectReservation(r, 'split')}><Split size={14}/>{t('res.split_room')}</Button>}
@@ -192,6 +199,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
               <p className="text-xs text-slate-500">{r.reservation_number} · {rm?.room_number || '-'} · {r.actual_check_out ? formatDateTime(r.actual_check_out) : `${formatDate(r.check_out_date)} ${formatTime(r.check_out_time)}`}</p>
             </div>
             <div className="flex items-center gap-1">
+              <Button size="sm" variant="outline" onClick={() => setGrcReservationId(r.id)}><FileText size={14}/>GRC</Button>
               {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
               {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(r.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
               <Badge color="gray">{t('res.checked_out')}</Badge>
@@ -200,16 +208,18 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
         })}</div>}
       </Card>
 
-      {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
-      {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
-      {selected && mode === 'extend' && <ExtendStayModal reservation={selected} onClose={handleCloseModal} />}
+      {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onShowGrc={(resId) => setGrcReservationId(resId)} />}
+      {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onShowGrc={(resId) => setGrcReservationId(resId)} />}
+      {selected && mode === 'extend' && <ExtendStayModal reservation={selected} onClose={handleCloseModal} onChargeSummary={(folioId) => setChargeSummaryFolioId(folioId)} />}
       {selected && mode === 'split' && <SplitRoomModal reservation={selected} reservationRooms={reservationRooms} rooms={rooms} onClose={handleCloseModal} />}
-      {selected && mode === 'upgrade' && <UpgradeRoomModal reservation={selected} reservationRooms={reservationRooms} onClose={handleCloseModal} />}
+      {selected && mode === 'upgrade' && <UpgradeRoomModal reservation={selected} reservationRooms={reservationRooms} onClose={handleCloseModal} onChargeSummary={(folioId) => setChargeSummaryFolioId(folioId)} />}
+      {grcReservationId && <GrcPrintPage reservationId={grcReservationId} onClose={() => setGrcReservationId(null)} />}
+      {chargeSummaryFolioId && <ChargeSummaryPrintPage folioId={chargeSummaryFolioId} title="Charge Summary" onClose={() => setChargeSummaryFolioId(null)} />}
     </div>
   );
 }
 
-function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToInvoice }: { reservation: Reservation; onClose: () => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
+function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToInvoice, onShowGrc }: { reservation: Reservation; onClose: () => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void; onShowGrc?: (reservationId: string) => void }) {
   const { user, branches } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -427,19 +437,6 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
 
     if (room) await supabase.from('rooms').update({status:'occupied'}).eq('id',room.id);
 
-    if (folio) {
-      try {
-        await invoiceService.ensureInvoice({
-          folioId: folio.id, branchId: reservation.branch_id,
-          organizationId: user!.organization_id, reservationId: reservation.id,
-          guestId: reservation.primary_guest_id, userId: user!.id,
-        });
-      } catch (err: any) {
-        console.error('Invoice creation at check-in failed:', err);
-        showToast(`Invoice creation failed: ${err.message || err}`, 'error');
-      }
-    }
-
     await supabase.from('audit_logs').insert({
       organization_id:user!.organization_id, branch_id:reservation.branch_id, user_id:user!.id,
       action:'check_in', object_type:'reservation', object_id:reservation.id, new_value:{checkin_time:checkinTime}
@@ -448,6 +445,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
     showToast(t('checkin.complete'),'success');
     clearDraft(CHECKIN_DRAFT_KEY);
     setCompleting(false);
+    onShowGrc?.(reservation.id);
     onClose();
   };
 
@@ -557,6 +555,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
         </div>
 
         <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => onShowGrc?.(reservation.id)}><FileText size={14}/>GRC</Button>
           {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
           {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
@@ -567,7 +566,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
   );
 }
 
-function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateToInvoice }: { reservation: Reservation; onClose: () => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void }) {
+function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateToInvoice, onShowGrc }: { reservation: Reservation; onClose: () => void; onNavigateToPayment?: (id: string) => void; onNavigateToInvoice?: (id: string) => void; onShowGrc?: (reservationId: string) => void }) {
   const { user, branches } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -833,6 +832,7 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
         )}
 
         <div className="flex justify-end gap-2">
+          <Button size="sm" variant="outline" onClick={() => onShowGrc?.(reservation.id)}><FileText size={14}/>GRC</Button>
           {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
           {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
@@ -859,7 +859,7 @@ interface ExtendDraft {
   newRoomId: string;
 }
 
-function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; onClose: () => void }) {
+function ExtendStayModal({ reservation, onClose, onChargeSummary }: { reservation: Reservation; onClose: () => void; onChargeSummary?: (folioId: string) => void }) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -1247,6 +1247,7 @@ function ExtendStayModal({ reservation, onClose }: { reservation: Reservation; o
       showToast(`Stay extended by ${extraNights} night(s). Additional charge: ${formatIDR(additionalCharge)}${upgradeMsg}${roomMsg}`, 'success');
       clearDraft(EXTEND_DRAFT_KEY);
       setSaving(false);
+      if (folio) onChargeSummary?.(folio.id);
       onClose();
     } catch (err: any) {
       console.error('Extend stay error:', err);
@@ -1396,10 +1397,11 @@ interface UpgradeDraft {
   selectedRoomIdForGroup: string;
 }
 
-function UpgradeRoomModal({ reservation, reservationRooms, onClose }: {
+function UpgradeRoomModal({ reservation, reservationRooms, onClose, onChargeSummary }: {
   reservation: Reservation;
   reservationRooms: ReservationRoom[];
   onClose: () => void;
+  onChargeSummary?: (folioId: string) => void;
 }) {
   const { user } = useAuth();
   const { t } = useI18n();
@@ -1759,6 +1761,7 @@ function UpgradeRoomModal({ reservation, reservationRooms, onClose }: {
       showToast(`Room upgraded to ${selectedRoomType?.name}${roomMsg}. Charge: ${formatIDR(upgradeCharge)} for ${remainingNights} night(s).`, 'success');
       clearDraft(UPGRADE_DRAFT_KEY);
       setSaving(false);
+      if (folio) onChargeSummary?.(folio.id);
       onClose();
     } catch (err: any) {
       console.error('Room upgrade error:', err);
