@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { invoiceService } from '@/services/invoiceService';
-import type { Invoice, InvoiceItem, Guest, Branch, BookingSource, RoomType } from '@/types/database';
-import { formatIDR, formatDateTime, formatDate } from '@/lib/format';
+import type { Branch, BookingSource, FolioItem, Guest, Invoice, InvoiceItem, RoomType } from '@/types/database';
+import { formatIDR, formatDate, formatDateTime } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { X } from 'lucide-react';
 
@@ -11,15 +11,40 @@ interface Props {
   onClose: () => void;
 }
 
+interface GroupRoom {
+  id: string;
+  rate: number;
+  num_nights: number;
+  room?: { room_number: string } | null;
+  room_type?: { name: string } | null;
+}
+
+interface PaymentSummary {
+  label: string;
+  amount: number;
+  count: number;
+}
+
+function paymentLabel(item: FolioItem): string {
+  const description = item.description.replace(/^payment:\s*/i, '').trim();
+  const withoutSubtype = description.replace(/\s*\((debit|credit|qris)\)\s*$/i, '').trim();
+  return withoutSubtype || item.category || 'Payment';
+}
+
+function isTaxItem(item: InvoiceItem): boolean {
+  return item.category?.toLowerCase() === 'tax' || item.description.toLowerCase().includes('tax');
+}
+
 export function InvoicePrintPage({ invoiceId, onClose }: Props) {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [payments, setPayments] = useState<FolioItem[]>([]);
   const [guest, setGuest] = useState<Guest | null>(null);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [reservation, setReservation] = useState<any>(null);
   const [bookingSource, setBookingSource] = useState<BookingSource | null>(null);
   const [roomType, setRoomType] = useState<RoomType | null>(null);
-  const [groupRooms, setGroupRooms] = useState<any[]>([]);
+  const [groupRooms, setGroupRooms] = useState<GroupRoom[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -28,25 +53,38 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
       try {
         const detail = await invoiceService.getInvoiceDetail(invoiceId);
         if (cancelled) return;
-        setInvoice(detail);
+
+        setInvoice(detail as Invoice);
         setItems(detail.invoice_items || []);
         setGuest(detail.guests || null);
         setBranch(detail.branches || null);
         setReservation(detail.reservations || null);
 
         const res = detail.reservations;
-        if (res?.booking_source_id) {
-          const { data: bsData } = await supabase.from('booking_sources').select('*').eq('id', res.booking_source_id).maybeSingle();
-          setBookingSource(bsData as BookingSource | null);
-        }
-        if (res?.room_type_id) {
-          const { data: rtData } = await supabase.from('room_types').select('*').eq('id', res.room_type_id).maybeSingle();
-          setRoomType(rtData as RoomType | null);
-        }
+        const [{ data: folioItems }, { data: bookingSourceData }, { data: roomTypeData }] = await Promise.all([
+          detail.folio_id
+            ? supabase.from('folio_items').select('*').eq('folio_id', detail.folio_id).eq('voided', false).eq('item_type', 'payment')
+            : Promise.resolve({ data: [] as FolioItem[] }),
+          res?.booking_source_id
+            ? supabase.from('booking_sources').select('*').eq('id', res.booking_source_id).maybeSingle()
+            : Promise.resolve({ data: null }),
+          res?.room_type_id
+            ? supabase.from('room_types').select('*').eq('id', res.room_type_id).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+
+        setPayments((folioItems as FolioItem[]) || []);
+        setBookingSource(bookingSourceData as BookingSource | null);
+        setRoomType(roomTypeData as RoomType | null);
+
         if (res?.is_group) {
-          const { data: rrData } = await supabase.from('reservation_rooms')
-            .select('*,room:rooms(*)').eq('reservation_id', res.id).eq('status', 'active').order('created_at');
-          setGroupRooms(rrData || []);
+          const { data: groupRoomData } = await supabase
+            .from('reservation_rooms')
+            .select('id, rate, num_nights, room:rooms(room_number), room_type:room_types(name)')
+            .eq('reservation_id', res.id)
+            .eq('status', 'active')
+            .order('created_at');
+          setGroupRooms((groupRoomData as GroupRoom[]) || []);
         }
 
         setLoading(false);
@@ -56,6 +94,21 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
     })();
     return () => { cancelled = true; };
   }, [invoiceId]);
+
+  const paymentSummaries = useMemo<PaymentSummary[]>(() => {
+    const grouped = new Map<string, PaymentSummary>();
+    payments.forEach((item) => {
+      const label = paymentLabel(item);
+      const existing = grouped.get(label);
+      if (existing) {
+        existing.amount += Math.abs(item.amount);
+        existing.count += 1;
+      } else {
+        grouped.set(label, { label, amount: Math.abs(item.amount), count: 1 });
+      }
+    });
+    return Array.from(grouped.values());
+  }, [payments]);
 
   if (loading) {
     return (
@@ -74,11 +127,14 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
     );
   }
 
-  const roomNumbers = groupRooms.length > 1
+  const roomNumbers = groupRooms.length > 0
     ? groupRooms.map((room) => room.room?.room_number).filter(Boolean).join(', ')
     : reservation?.rooms?.room_number || '-';
   const invoiceTitle = reservation?.status === 'checked_out' ? 'Final Check-out Invoice' : 'Invoice';
-  const paymentLabel = invoice.balance > 0 ? 'Balance Due' : 'Paid';
+  const transactionItems = items.filter((item) => !isTaxItem(item));
+  const paymentTotal = paymentSummaries.reduce((sum, payment) => sum + payment.amount, 0);
+  const subtotal = Math.max(0, invoice.subtotal - invoice.discount);
+  const total = Math.max(0, subtotal - paymentTotal);
 
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
@@ -102,17 +158,8 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
 
       <main className="invoice-shell mx-auto my-6 min-h-[1120px] max-w-[820px] bg-white px-8 py-10 text-[13px] text-slate-900 shadow-xl print:my-0 print:px-0 print:py-0">
         <header className="text-center">
-          <div className="inline-flex items-center gap-2">
-            <span className="relative flex h-11 w-9 items-center justify-center">
-              <span className="absolute left-0 h-8 w-2 rounded-sm bg-red-500" />
-              <span className="absolute left-2 h-10 w-3 rounded-sm bg-red-500" />
-              <span className="absolute left-5 h-9 w-3 rounded-sm bg-red-500" />
-            </span>
-            <span className="text-3xl font-black tracking-tight text-slate-700">
-              Nusa<span className="text-red-500">PMS</span>
-            </span>
-          </div>
-          <h1 className="mt-7 text-2xl font-bold">{invoiceTitle}</h1>
+          <h1 className="text-2xl font-bold">{branch?.name || 'Hotel'}</h1>
+          <p className="mt-1 text-sm text-slate-500">{invoiceTitle}</p>
           <p className="mt-1 text-sm text-slate-500">{invoice.invoice_number}</p>
         </header>
 
@@ -121,6 +168,8 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           <div className="grid grid-cols-1 gap-x-8 gap-y-2 px-4 py-4 sm:grid-cols-2">
             <InfoRow label="Booking ID" value={reservation?.reservation_number || invoice.invoice_number} />
             <InfoRow label="Name" value={guest?.full_name || '-'} />
+            <InfoRow label="ID Type" value={guest?.id_type || '-'} />
+            <InfoRow label="ID Number" value={guest?.id_number || '-'} />
             <InfoRow label="Email" value={guest?.email || '-'} />
             <InfoRow label="Phone Number" value={guest?.phone || '-'} />
             <InfoRow label="Nationality" value={guest?.nationality || '-'} />
@@ -139,11 +188,36 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
               <InfoRow label="Check In Date" value={reservation?.check_in_date ? formatDate(reservation.check_in_date) : '-'} />
               <InfoRow label="Total Rooms" value={groupRooms.length > 1 ? `${groupRooms.length} Rooms` : '1 Room'} />
               <InfoRow label="Check Out Date" value={reservation?.check_out_date ? formatDate(reservation.check_out_date) : '-'} />
-              <InfoRow label="Payment Type" value={paymentLabel} />
               <InfoRow label="Room Number" value={roomNumbers} />
               <InfoRow label="Nights" value={reservation?.num_nights ? String(reservation.num_nights) : '-'} />
               {bookingSource && <InfoRow label="Booking Source" value={bookingSource.name} />}
             </div>
+
+            {groupRooms.length > 1 && (
+              <div className="mt-4 overflow-hidden rounded border border-slate-200">
+                <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-bold">Group Room Breakdown</div>
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-slate-500">
+                      <th className="px-3 py-2">Room</th>
+                      <th className="px-3 py-2">Room Type</th>
+                      <th className="px-3 py-2 text-center">Nights</th>
+                      <th className="px-3 py-2 text-right">Rate</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupRooms.map((room) => (
+                      <tr key={room.id} className="border-b border-slate-100 last:border-0">
+                        <td className="px-3 py-2">{room.room?.room_number || 'Unassigned'}</td>
+                        <td className="px-3 py-2">{room.room_type?.name || roomType?.name || '-'}</td>
+                        <td className="px-3 py-2 text-center">{room.num_nights}</td>
+                        <td className="px-3 py-2 text-right">{formatIDR(room.rate)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </section>
 
@@ -161,7 +235,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map((item) => (
+                  {transactionItems.map((item) => (
                     <tr key={item.id} className="border-b border-slate-200">
                       <td className="whitespace-nowrap px-2 py-2">{formatDate(item.created_at)}</td>
                       <td className="px-2 py-2">{item.category || item.description}</td>
@@ -169,7 +243,15 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
                       <td className="whitespace-nowrap px-2 py-2 text-right">{formatIDR(Math.abs(item.amount))}</td>
                     </tr>
                   ))}
-                  {items.length === 0 && (
+                  {paymentSummaries.map((payment) => (
+                    <tr key={`payment-${payment.label}`} className="border-b border-slate-200">
+                      <td className="whitespace-nowrap px-2 py-2">-</td>
+                      <td className="px-2 py-2">Payment</td>
+                      <td className="px-2 py-2">{payment.label}{payment.count > 1 ? ` (${payment.count} transactions)` : ''}</td>
+                      <td className="whitespace-nowrap px-2 py-2 text-right">{formatIDR(payment.amount)}</td>
+                    </tr>
+                  ))}
+                  {transactionItems.length === 0 && paymentSummaries.length === 0 && (
                     <tr><td colSpan={4} className="px-2 py-6 text-center text-slate-400">No transaction items</td></tr>
                   )}
                 </tbody>
@@ -178,16 +260,10 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
 
             <div className="mt-5 flex justify-end">
               <div className="w-full max-w-xs space-y-2 text-sm">
-                <SummaryRow label="Subtotal" value={formatIDR(invoice.subtotal)} />
-                {invoice.discount > 0 && <SummaryRow label="Discount" value={`-${formatIDR(invoice.discount)}`} tone="negative" />}
-                <SummaryRow label="Tax" value={formatIDR(invoice.tax)} />
+                <SummaryRow label="Subtotal" value={formatIDR(subtotal)} />
+                <SummaryRow label="Payments" value={formatIDR(paymentTotal)} tone="positive" />
                 <div className="flex items-center justify-between border-t border-slate-300 pt-3 text-base font-bold">
-                  <span>Total</span><span>{formatIDR(invoice.total)}</span>
-                </div>
-                {invoice.amount_paid > 0 && <SummaryRow label="Paid" value={formatIDR(invoice.amount_paid)} tone="positive" />}
-                <div className={`flex items-center justify-between font-bold ${invoice.balance > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
-                  <span>{invoice.balance > 0 ? 'Balance Due' : 'Paid'}</span>
-                  <span>{invoice.balance > 0 ? formatIDR(invoice.balance) : formatIDR(invoice.total)}</span>
+                  <span>Total</span><span>{formatIDR(total)}</span>
                 </div>
               </div>
             </div>
