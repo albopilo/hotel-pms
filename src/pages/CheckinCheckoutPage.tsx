@@ -44,6 +44,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
   const [reservationRooms, setReservationRooms] = useState<ReservationRoom[]>([]);
   const [grcReservationId, setGrcReservationId] = useState<string | null>(null);
   const [chargeSummaryFolioId, setChargeSummaryFolioId] = useState<string | null>(null);
+  const [invoiceReservationIds, setInvoiceReservationIds] = useState<Set<string>>(new Set());
   const processedInitialId = useRef<string | null>(null);
 
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
@@ -63,6 +64,15 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
     setCheckedOut((co as Reservation[]) || []);
     setGuests((g as Guest[]) || []);
     setRooms((r as Room[]) || []);
+
+    const coIds = ((co as Reservation[]) || []).map(r => r.id).filter(Boolean);
+    if (coIds.length > 0) {
+      const { data: invs } = await supabase.from('invoices').select('reservation_id').in('reservation_id', coIds).not('reservation_id', 'is', null);
+      setInvoiceReservationIds(new Set((invs || []).map((i: any) => i.reservation_id)));
+    } else {
+      setInvoiceReservationIds(new Set());
+    }
+
     setLoading(false);
   }, [branchIds]);
 
@@ -71,13 +81,13 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
   useEffect(() => {
     if (!initialReservationId) return;
     if (processedInitialId.current === initialReservationId) return;
-    const r = reservations.find(x => x.id === initialReservationId);
+    const r = reservations.find(x => x.id === initialReservationId) || checkedOut.find(x => x.id === initialReservationId);
     if (r) {
       processedInitialId.current = initialReservationId;
       setSelected(r);
       setMode(r.status === 'checked_in' ? 'checkout' : 'checkin');
     }
-  }, [initialReservationId, reservations]);
+  }, [initialReservationId, reservations, checkedOut]);
 
   const guestMap = useMemo(() => new Map(guests.map(g => [g.id, g])), [guests]);
   const roomMap = useMemo(() => new Map(rooms.map(r => [r.id, r])), [rooms]);
@@ -201,7 +211,7 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
             <div className="flex items-center gap-1">
               <Button size="sm" variant="outline" onClick={() => setGrcReservationId(r.id)}><FileText size={14}/>GRC</Button>
               {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(r.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
-              {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(r.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
+              {onNavigateToInvoice && invoiceReservationIds.has(r.id) && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(r.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
               <Badge color="gray">{t('res.checked_out')}</Badge>
             </div>
           </div>;
@@ -240,6 +250,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
   const [cardMessage, setCardMessage] = useState('');
   const [completing, setCompleting] = useState(false);
   const [lockIntegration, setLockIntegration] = useState<HotelLockIntegration | null>(null);
+  const [hasInvoice, setHasInvoice] = useState(false);
 
   const lockProviderType = lockIntegration?.provider_type || 'mock';
   const isProductionLock = lockProviderType === 'production';
@@ -279,6 +290,11 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
 
       const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
       setLockIntegration(lockInteg as HotelLockIntegration | null);
+
+      if (f) {
+        const { data: inv } = await supabase.from('invoices').select('id').eq('folio_id', f.id).maybeSingle();
+        setHasInvoice(!!inv);
+      }
 
       setLoading(false);
     })();
@@ -557,7 +573,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => onShowGrc?.(reservation.id)}><FileText size={14}/>GRC</Button>
           {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
-          {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
+          {onNavigateToInvoice && hasInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
           <Button loading={completing} onClick={completeCheckin}><LogIn size={16}/>{t('checkin.complete')}</Button>
         </div>
@@ -834,7 +850,7 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
         <div className="flex justify-end gap-2">
           <Button size="sm" variant="outline" onClick={() => onShowGrc?.(reservation.id)}><FileText size={14}/>GRC</Button>
           {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
-          {onNavigateToInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
+          {onNavigateToInvoice && hasInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
           <Button loading={completing} variant={hasUnpaid?'danger':'success'} onClick={completeCheckout}><LogOut size={16}/>{t('checkout.complete')}</Button>
         </div>

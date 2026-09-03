@@ -15,6 +15,7 @@ import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format'
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
 import { PaymentReceiptPrintPage } from '@/pages/PaymentReceiptPrintPage';
 import { ChargeSummaryPrintPage } from '@/pages/ChargeSummaryPrintPage';
+import { GrcPrintPage } from '@/pages/GrcPrintPage';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { getLockProviderByType, integrationToConfig } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
@@ -149,6 +150,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const [voidTarget, setVoidTarget] = useState<FolioItem | null>(null);
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
   const [chargeSummaryFolioId, setChargeSummaryFolioId] = useState<string | null>(null);
+  const [grcReservationId, setGrcReservationId] = useState<string | null>(null);
 
   const isFinalized = folio.status === 'finalized';
   const canVoid = user?.role === 'super_admin' || user?.role === 'manager';
@@ -358,6 +360,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       />
       {receiptPaymentId && <PaymentReceiptPrintPage paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />}
       {chargeSummaryFolioId && <ChargeSummaryPrintPage folioId={chargeSummaryFolioId} onClose={() => setChargeSummaryFolioId(null)} />}
+      {grcReservationId && <GrcPrintPage reservationId={grcReservationId} onClose={() => setGrcReservationId(null)} />}
     </Modal>
   );
 }

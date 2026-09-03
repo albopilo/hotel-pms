@@ -32,12 +32,13 @@ export function GrcPrintPage({ reservationId, onClose }: Props) {
     let cancelled = false;
     (async () => {
       try {
-        const { data: res } = await supabase
+        const { data: res, error } = await supabase
           .from('reservations')
           .select('*, primary_guest:guests(*), room:rooms(*), room_type:room_types(*)')
           .eq('id', reservationId)
           .maybeSingle();
-        if (cancelled || !res) return;
+        if (cancelled) return;
+        if (error || !res) { if (!cancelled) setLoading(false); return; }
 
         const r = res as any;
         setReservation(r);
