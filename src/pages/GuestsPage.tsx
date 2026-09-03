@@ -6,7 +6,7 @@ import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
-import { Input, Select, Textarea } from '@/components/ui/Form';
+import { Input, Select, Textarea, SearchableSelect } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
@@ -16,6 +16,7 @@ import type { Guest, Reservation } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { findSimilarGuests, findDuplicateGuestPairs, type SimilarGuestMatch, type DuplicatePair } from '@/lib/guest-similarity';
 import { guestMergeService, type MergePreview } from '@/services/guestMergeService';
+import { NATIONALITIES } from '@/lib/nationalities';
 
 const GUEST_DRAFT_KEY = 'guest_form_draft';
 
@@ -399,7 +400,7 @@ function GuestFormModal({ open, onClose, guest, allGuests, orgId, onSaved }: {
             {ID_TYPES.map((id) => <option key={id} value={id}>{id}</option>)}
           </Select>
           <Input label={t('common.id_number')} value={form.id_number} onChange={(e) => { setForm({ ...form, id_number: e.target.value }); if (errors.id_number) setErrors({ ...errors, id_number: '' }); }} required error={errors.id_number} />
-          <Input label={t('common.nationality')} value={form.nationality} onChange={(e) => setForm({ ...form, nationality: e.target.value })} />
+          <SearchableSelect label={t('common.nationality')} value={form.nationality} onChange={(v) => setForm({ ...form, nationality: v })} options={NATIONALITIES.map((n) => ({ value: n.name, label: n.name }))} placeholder="--" searchPlaceholder="Search nationality..." />
           <Select label={t('common.gender')} value={form.gender} onChange={(e) => setForm({ ...form, gender: e.target.value })}>
             <option value="">--</option>
             <option value="male">Male</option>
