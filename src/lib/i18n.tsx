@@ -445,15 +445,7 @@ const translations: Record<string, { en: string; id: string }> = {
   'warning.balance': { en: 'Balance', id: 'Saldo' },
   'warning.tooltip': { en: 'Active warnings', id: 'Peringatan aktif' },
 
-  // GRC / Receipt / Charge Summary
-  'grc.title': { en: 'Guest Registration Card', id: 'Kartu Registrasi Tamu' },
-  'grc.guest_info': { en: 'Guest Information', id: 'Informasi Tamu' },
-  'grc.stay_details': { en: 'Stay Details', id: 'Detail Menginap' },
-  'grc.hotel_policies': { en: 'Hotel Policies', id: 'Kebijakan Hotel' },
-  'grc.guest_signature': { en: 'Guest Signature', id: 'Tanda Tangan Tamu' },
-  'grc.receptionist_signature': { en: 'Receptionist Signature', id: 'Tanda Tangan Resepsionis' },
-  'grc.print': { en: 'Print Registration Card', id: 'Cetak Kartu Registrasi' },
-
+  // Receipt / Charge Summary
   'receipt.title': { en: 'Payment Receipt', id: 'Kuitansi Pembayaran' },
   'receipt.amount_paid': { en: 'Amount Paid', id: 'Jumlah Dibayar' },
   'receipt.print': { en: 'Print Receipt', id: 'Cetak Kuitansi' },
@@ -697,12 +689,6 @@ const translations: Record<string, { en: string; id: string }> = {
   'invoice.fully_paid': { en: 'Fully Paid', id: 'Lunas' },
   'invoice.balance_due': { en: 'Balance Due', id: 'Saldo Belum Dibayar' },
   'invoice.issued_by': { en: 'Issued by', id: 'Diterbitkan oleh' },
-
-  // GRC additional
-  'grc.loading': { en: 'Loading registration card...', id: 'Memuat kartu registrasi...' },
-  'grc.not_found': { en: 'Reservation not found.', id: 'Reservasi tidak ditemukan.' },
-  'grc.group_room_breakdown': { en: 'Group Room Breakdown', id: 'Rincian Kamar Grup' },
-  'grc.printed': { en: 'Printed', id: 'Dicetak' },
 
   // Charge summary additional
   'charge_summary.loading': { en: 'Loading charge summary...', id: 'Memuat ringkasan biaya...' },
