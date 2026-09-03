@@ -460,6 +460,288 @@ const translations: Record<string, { en: string; id: string }> = {
 
   'charge_summary.title': { en: 'Charge Summary', id: 'Ringkasan Biaya' },
   'charge_summary.print': { en: 'Print Summary', id: 'Cetak Ringkasan' },
+
+  // Common additional
+  'common.group': { en: 'Group', id: 'Grup' },
+  'common.ota': { en: 'OTA', id: 'OTA' },
+  'common.damage': { en: 'Damage', id: 'Kerusakan' },
+  'common.time': { en: 'Time', id: 'Waktu' },
+  'common.code': { en: 'Code', id: 'Kode' },
+  'common.legal_name': { en: 'Legal Name', id: 'Nama Legal' },
+  'common.tax_id': { en: 'Tax ID', id: 'NPWP' },
+  'common.currency': { en: 'Currency', id: 'Mata Uang' },
+  'common.sort_order': { en: 'Sort Order', id: 'Urutan' },
+  'common.subtype': { en: 'Subtype', id: 'Subjenis' },
+  'common.yes_short': { en: 'Yes', id: 'Ya' },
+  'common.no_short': { en: 'No', id: 'Tidak' },
+  'common.select_room': { en: 'Select a room', id: 'Pilih kamar' },
+  'common.current': { en: 'current', id: 'saat ini' },
+  'common.per_night': { en: 'night', id: 'malam' },
+  'common.settled': { en: 'settled', id: 'lunas' },
+  'common.due': { en: 'due', id: 'belum dibayar' },
+
+  // Reservations additional
+  'res.upgrade_room': { en: 'Upgrade Room', id: 'Upgrade Kamar' },
+  'res.select_room_upgrade': { en: 'Select Room to Upgrade', id: 'Pilih Kamar untuk Upgrade' },
+  'res.new_room_type': { en: 'New Room Type', id: 'Jenis Kamar Baru' },
+  'res.select_new_room': { en: 'Select New Room', id: 'Pilih Kamar Baru' },
+  'res.remaining_nights': { en: 'Remaining Nights', id: 'Malam Tersisa' },
+  'res.upgrade_charge': { en: 'Upgrade Charge', id: 'Biaya Upgrade' },
+  'res.no_rooms_available': { en: 'No rooms available for the selected dates.', id: 'Tidak ada kamar tersedia untuk tanggal terpilih.' },
+  'res.no_rooms_available_type': { en: 'No rooms available for the selected room type.', id: 'Tidak ada kamar tersedia untuk jenis kamar terpilih.' },
+  'res.upgrade_will_move': { en: 'Upgrading will move the guest to the new room. The old room will be marked dirty and a new key card will be encoded.', id: 'Upgrade akan memindahkan tamu ke kamar baru. Kamar lama akan ditandai kotor dan kartu kunci baru akan dienkoded.' },
+  'res.no_remaining_nights': { en: "No remaining nights — the guest's check-out date has passed. The room type will still be updated but no charge will be applied.", id: 'Tidak ada malam tersisa — tanggal check-out tamu telah lewat. Jenis kamar masih akan diperbarui tetapi tidak ada biaya yang akan dikenakan.' },
+  'res.room_split_success': { en: 'Room split into new reservation', id: 'Kamar dipisah menjadi reservasi baru' },
+  'res.room_split_failed': { en: 'Failed to split room', id: 'Gagal memisah kamar' },
+  'res.select_room_split': { en: 'Please select a room to split.', id: 'Silakan pilih kamar untuk dipisah.' },
+  'res.room_not_in_reservation': { en: 'Selected room not found in this reservation.', id: 'Kamar terpilih tidak ditemukan dalam reservasi ini.' },
+
+  // Check-in additional
+  'checkin.checking_encoder': { en: 'Checking encoder', id: 'Memeriksa enkoder' },
+  'checkin.waiting_for_card': { en: 'Waiting for card', id: 'Menunggu kartu' },
+  'checkin.completed': { en: 'Completed', id: 'Selesai' },
+  'checkin.retry_encoding': { en: 'Retry encoding', id: 'Coba enkoded lagi' },
+  'checkin.encoder_unavailable': { en: 'Encoder unavailable', id: 'Enkoder tidak tersedia' },
+
+  // Guests additional
+  'guest.merge_duplicates': { en: 'Merge Duplicates', id: 'Gabung Duplikat' },
+  'guest.no_duplicates': { en: 'No duplicate guests found', id: 'Tidak ada tamu duplikat' },
+  'guest.no_duplicates_desc': { en: 'All guests appear to be unique based on name, phone, ID, and address similarity.', id: 'Semua tamu tampak unik berdasarkan kemiripan nama, telepon, ID, dan alamat.' },
+  'guest.similarity': { en: 'Similarity', id: 'Kemiripan' },
+  'guest.matched_fields': { en: 'Matched fields', id: 'Bidang cocok' },
+  'guest.keep_primary': { en: 'Keep (Primary)', id: 'Simpan (Utama)' },
+  'guest.delete_duplicate': { en: 'Delete (Duplicate)', id: 'Hapus (Duplikat)' },
+  'guest.merge_delete': { en: 'Merge & Delete Duplicate', id: 'Gabung & Hapus Duplikat' },
+  'guest.skip': { en: 'Skip', id: 'Lewati' },
+  'guest.records_reassign': { en: 'Records to be reassigned from the duplicate to the primary guest:', id: 'Catatan yang akan dipindahkan dari tamu duplikat ke tamu utama:' },
+  'guest.reservations': { en: 'Reservations', id: 'Reservasi' },
+  'guest.folios': { en: 'Folios', id: 'Folio' },
+  'guest.folio_items': { en: 'Folio Items', id: 'Item Folio' },
+  'guest.invoices': { en: 'Invoices', id: 'Faktur' },
+  'guest.card_issuances': { en: 'Card Issuances', id: 'Penerbitan Kartu' },
+  'guest.duplicate_deleted_warning': { en: 'The duplicate guest record will be permanently deleted after all records are reassigned.', id: 'Catatan tamu duplikat akan dihapus permanen setelah semua catatan dipindahkan.' },
+  'guest.merged_success': { en: 'Guests merged successfully', id: 'Tamu berhasil digabung' },
+  'guest.merge_failed': { en: 'Merge failed', id: 'Penggabungan gagal' },
+
+  // Receipt additional
+  'receipt.payment_history': { en: 'Payment History', id: 'Riwayat Pembayaran' },
+  'receipt.no_payments': { en: 'No payments recorded', id: 'Tidak ada pembayaran tercatat' },
+  'receipt.total_paid': { en: 'Total Paid', id: 'Total Dibayar' },
+  'receipt.folio': { en: 'Folio', id: 'Folio' },
+  'receipt.reference_no': { en: 'Reference No.', id: 'No. Referensi' },
+  'receipt.thank_you': { en: 'Thank you for your payment.', id: 'Terima kasih atas pembayaran Anda.' },
+  'receipt.payment_number': { en: 'Payment #', id: 'Pembayaran #' },
+  'receipt.loading_receipt': { en: 'Loading receipt...', id: 'Memuat kuitansi...' },
+  'receipt.not_found': { en: 'Folio not found.', id: 'Folio tidak ditemukan.' },
+
+  // Hotel Lock additional
+  'lock.production_mode': { en: 'PRODUCTION MODE', id: 'MODE PRODUKSI' },
+  'lock.dll_status': { en: 'DLL Status', id: 'Status DLL' },
+  'lock.dll_detected': { en: 'Detected', id: 'Terdeteksi' },
+  'lock.dll_not_detected': { en: 'Not detected', id: 'Tidak terdeteksi' },
+  'lock.last_successful_connection': { en: 'Last Successful Connection', id: 'Koneksi Terakhir Berhasil' },
+  'lock.bridge_encoder_settings': { en: 'Bridge & Encoder Settings', id: 'Pengaturan Bridge & Enkoder' },
+  'lock.bridge_url': { en: 'Bridge URL', id: 'URL Bridge' },
+  'lock.bridge_token': { en: 'Bridge Token', id: 'Token Bridge' },
+  'lock.encoder_com_port': { en: 'Encoder COM Port', id: 'Port COM Enkoder' },
+  'lock.dll_path': { en: 'DLL Path', id: 'Path DLL' },
+  'lock.hotel_identifier': { en: 'Hotel Identifier', id: 'Identifier Hotel' },
+  'lock.encoding_profile': { en: 'Encoding Profile', id: 'Profil Enkoding' },
+  'lock.auto_poll_encoder': { en: 'Auto Poll Encoder', id: 'Auto Poll Enkoder' },
+  'lock.integration_enabled': { en: 'Integration Enabled', id: 'Integrasi Diaktifkan' },
+  'lock.integration_configuration': { en: 'Integration Configuration', id: 'Konfigurasi Integrasi' },
+  'lock.integration_details': { en: 'Integration Details', id: 'Detail Integrasi' },
+  'lock.diagnostics': { en: 'Diagnostics', id: 'Diagnostik' },
+  'lock.initialize': { en: 'Initialize', id: 'Inisialisasi' },
+  'lock.recent_card_issuances': { en: 'Recent Card Issuances', id: 'Penerbitan Kartu Terbaru' },
+  'lock.integration_logs': { en: 'Integration Logs', id: 'Log Integrasi' },
+  'lock.provider': { en: 'Provider', id: 'Provider' },
+  'lock.auto_poll': { en: 'Auto Poll', id: 'Auto Poll' },
+  'lock.enabled': { en: 'Enabled', id: 'Diaktifkan' },
+  'lock.initialization': { en: 'Initialization', id: 'Inisialisasi' },
+  'lock.configuration_saved': { en: 'Configuration saved', id: 'Konfigurasi disimpan' },
+  'lock.bridge_connected_mock': { en: 'Bridge connected (mock mode)', id: 'Bridge terhubung (mode mock)' },
+  'lock.bridge_connected_prod': { en: 'Bridge connected', id: 'Bridge terhubung' },
+  'lock.bridge_offline': { en: 'Bridge offline — connection failed', id: 'Bridge offline — koneksi gagal' },
+  'lock.connection_success_mock': { en: 'Test connection successful (mock)', id: 'Tes koneksi berhasil (mock)' },
+  'lock.connection_success_prod': { en: 'Test connection successful', id: 'Tes koneksi berhasil' },
+  'lock.connection_failed': { en: 'Connection failed — bridge offline', id: 'Koneksi gagal — bridge offline' },
+  'lock.encoder_test': { en: 'Encoder test:', id: 'Tes enkoder:' },
+  'lock.no_folios': { en: 'No folios found', id: 'Tidak ada folio' },
+  'lock.no_payments': { en: 'No payments recorded', id: 'Tidak ada pembayaran tercatat' },
+  'lock.no_remaining_nights': { en: 'No remaining nights', id: 'Tidak ada malam tersisa' },
+
+  // Users additional
+  'users.deactivate': { en: 'Deactivate User', id: 'Nonaktifkan Pengguna' },
+  'users.deactivate_confirm': { en: 'Deactivate', id: 'Nonaktifkan' },
+  'users.deactivated_success': { en: 'User deactivated', id: 'Pengguna dinonaktifkan' },
+  'users.name_email_password_required': { en: 'Name, email and password required', id: 'Nama, email, dan kata sandi wajib diisi' },
+  'users.branch_access': { en: 'Branch Access', id: 'Akses Cabang' },
+  'users.saved': { en: 'Saved', id: 'Disimpan' },
+  'users.failed': { en: 'Failed', id: 'Gagal' },
+  'users.password': { en: 'Password', id: 'Kata Sandi' },
+
+  // Branches additional
+  'branches.deactivate': { en: 'Deactivate Branch', id: 'Nonaktifkan Cabang' },
+  'branches.deactivate_confirm': { en: 'Deactivate', id: 'Nonaktifkan' },
+  'branches.deactivate_message': { en: 'This will hide it from active operations.', id: 'Ini akan menyembunyikannya dari operasi aktif.' },
+  'branches.deactivated_success': { en: 'Branch deactivated', id: 'Cabang dinonaktifkan' },
+  'branches.name_code_required': { en: 'Name and code required', id: 'Nama dan kode wajib diisi' },
+  'branches.saved': { en: 'Saved', id: 'Disimpan' },
+
+  // Charge categories additional
+  'charge_cat.damage_category': { en: 'Damage Category', id: 'Kategori Kerusakan' },
+  'charge_cat.requires_approval': { en: 'Requires Manager Approval', id: 'Memerlukan Persetujuan Manajer' },
+  'charge_cat.delete_title': { en: 'Delete Category', id: 'Hapus Kategori' },
+  'charge_cat.name_code_required': { en: 'Name and code required', id: 'Nama dan kode wajib diisi' },
+  'charge_cat.saved': { en: 'Saved', id: 'Disimpan' },
+  'charge_cat.deleted': { en: 'Deleted', id: 'Dihapus' },
+
+  // Payment settings additional
+  'pay_settings.delete_title': { en: 'Delete Payment Method', id: 'Hapus Metode Pembayaran' },
+  'pay_settings.name_code_required': { en: 'Name and code required', id: 'Nama dan kode wajib diisi' },
+  'pay_settings.saved': { en: 'Saved', id: 'Disimpan' },
+  'pay_settings.deleted': { en: 'Deleted', id: 'Dihapus' },
+
+  // Booking sources additional
+  'sources.ota_source': { en: 'OTA Source', id: 'Sumber OTA' },
+  'sources.delete_title': { en: 'Delete Booking Source', id: 'Hapus Sumber Pemesanan' },
+  'sources.name_code_required': { en: 'Name and code required', id: 'Nama dan kode wajib diisi' },
+  'sources.saved': { en: 'Saved', id: 'Disimpan' },
+  'sources.deleted': { en: 'Deleted', id: 'Dihapus' },
+
+  // System settings additional
+  'sys_settings.org_saved': { en: 'Organization saved', id: 'Organisasi disimpan' },
+  'sys_settings.settings_saved': { en: 'Settings saved', id: 'Pengaturan disimpan' },
+  'sys_settings.operational_settings': { en: 'Operational Settings', id: 'Pengaturan Operasional' },
+  'sys_settings.organization': { en: 'Organization', id: 'Organisasi' },
+
+  // Room types additional
+  'room_types.delete_title': { en: 'Delete Room Type', id: 'Hapus Jenis Kamar' },
+  'room_types.delete_confirm': { en: 'This cannot be undone.', id: 'Ini tidak dapat dibatalkan.' },
+  'room_types.saved': { en: 'Saved', id: 'Disimpan' },
+  'room_types.deleted': { en: 'Deleted', id: 'Dihapus' },
+  'room_types.required_fields_missing': { en: 'Required fields missing', id: 'Kolom wajib belum diisi' },
+  'room_types.tax_rate': { en: 'Tax Rate (%)', id: 'Tarif Pajak (%)' },
+
+  // Rooms additional
+  'rooms.saved': { en: 'Saved', id: 'Disimpan' },
+  'rooms.required_fields_missing': { en: 'Required fields missing', id: 'Kolom wajib belum diisi' },
+  'rooms.new_room': { en: 'New Room', id: 'Kamar Baru' },
+  'rooms.other': { en: 'Other', id: 'Lainnya' },
+
+  // Night audit additional
+  'night_audit.auto_generated': { en: 'Auto-generated', id: 'Otomatis dibuat' },
+  'night_audit.recent_audits': { en: 'Recent Night Audits', id: 'Audit Malam Terbaru' },
+  'night_audit.no_audits_yet': { en: 'The night audit runs automatically. Results will appear here once the business day closes.', id: 'Audit malam berjalan otomatis. Hasil akan muncul di sini setelah hari bisnis ditutup.' },
+  'night_audit.financial_summary': { en: 'Financial Summary', id: 'Ringkasan Keuangan' },
+  'night_audit.no_shows': { en: 'No Shows', id: 'Tidak Hadir' },
+
+  // Folio additional
+  'folio.void_payment': { en: 'Void Payment', id: 'Batalkan Pembayaran' },
+  'folio.void_charge': { en: 'Void Charge', id: 'Batalkan Biaya' },
+  'folio.void_confirm': { en: 'This will remove it from the folio and mark the underlying', id: 'Ini akan menghapusnya dari folio dan menandai' },
+  'folio.finalized_warning': { en: 'This folio is finalized. Use post-stay charges or adjustments instead of editing.', id: 'Folio ini sudah difinalisasi. Gunakan biaya pasca-menginap atau penyesuaian alih-alih mengubah langsung.' },
+  'folio.post_stay_added': { en: 'Post-stay charge added', id: 'Biaya pasca-menginap ditambahkan' },
+  'folio.charge_added': { en: 'Charge added', id: 'Biaya ditambahkan' },
+  'folio.payment_recorded': { en: 'Payment recorded', id: 'Pembayaran dicatat' },
+  'folio.room_transferred': { en: 'Room transferred', id: 'Kamar dipindahkan' },
+  'folio.desc_amount_required': { en: 'Description and amount required', id: 'Deskripsi dan jumlah wajib diisi' },
+  'folio.method_amount_required': { en: 'Method and amount required', id: 'Metode dan jumlah wajib diisi' },
+  'folio.select_room': { en: 'Select a room', id: 'Pilih kamar' },
+  'folio.post_stay_desc': { en: 'This charge will be added as a post-stay additional charge. The original finalized invoice will not be modified.', id: 'Biaya ini akan ditambahkan sebagai biaya tambahan pasca-menginap. Faktur asli yang sudah difinalisasi tidak akan diubah.' },
+  'folio.void_payment_desc': { en: 'payment', id: 'pembayaran' },
+  'folio.void_charge_desc': { en: 'charge', id: 'biaya' },
+  'folio.void_item_message': { en: 'record as voided.', id: 'catatan sebagai dibatalkan.' },
+
+  // Reservations additional
+  'res.saved': { en: 'Saved', id: 'Disimpan' },
+  'res.required_fields_missing': { en: 'Required fields missing', id: 'Kolom wajib belum diisi' },
+  'res.branch_required': { en: 'Branch is required.', id: 'Cabang wajib diisi.' },
+  'res.guest_required': { en: 'Guest is required.', id: 'Tamu wajib diisi.' },
+  'res.booking_source_required': { en: 'Booking source is required.', id: 'Sumber pemesanan wajib diisi.' },
+  'res.checkin_date_required': { en: 'Check-in date is required.', id: 'Tanggal check-in wajib diisi.' },
+  'res.checkout_date_required': { en: 'Check-out date is required.', id: 'Tanggal check-out wajib diisi.' },
+  'res.checkout_after_checkin': { en: 'Check-out must be after check-in.', id: 'Check-out harus setelah check-in.' },
+  'res.deposit_required': { en: 'Please enter a deposit amount. Enter Rp0 if no deposit is required.', id: 'Silakan masukkan jumlah deposit. Masukkan Rp0 jika tidak diperlukan deposit.' },
+  'res.room_type_required': { en: 'Room type is required.', id: 'Jenis kamar wajib diisi.' },
+  'res.room_required': { en: 'Assigned room is required.', id: 'Kamar wajib ditetapkan.' },
+  'res.rate_required': { en: 'Room rate is required.', id: 'Tarif kamar wajib diisi.' },
+  'res.voiding_warning': { en: 'Voiding this reservation will also void its folio and invoice. This action cannot be undone.', id: 'Membatalkan reservasi ini juga akan membatalkan folio dan faktur. Tindakan ini tidak dapat dibatalkan.' },
+  'res.enter_void_reason': { en: 'Enter reason for voiding...', id: 'Masukkan alasan pembatalan...' },
+  'res.voided_success': { en: 'Reservation voided successfully', id: 'Reservasi berhasil dibatalkan' },
+  'res.override_applied': { en: 'Override applied — checkout will proceed with unpaid balance (logged to audit).', id: 'Lewati diterapkan — check-out akan dilanjutkan dengan saldo belum dibayar (dicatat di audit).' },
+  'res.room': { en: 'Room', id: 'Kamar' },
+  'res.stay': { en: 'Stay', id: 'Menginap' },
+  'res.total_rooms': { en: 'Total Rooms', id: 'Total Kamar' },
+
+  // Checkin additional
+  'checkin.early_charge_added': { en: 'Early check-in charge added:', id: 'Biaya check-in awal ditambahkan:' },
+  'checkin.no_early_charge': { en: 'No early check-in charge configured', id: 'Tidak ada biaya check-in awal dikonfigurasi' },
+  'checkin.continued_no_charge': { en: 'Continued without charge (logged)', id: 'Dilanjutkan tanpa biaya (dicatat)' },
+  'checkin.late_charge_added': { en: 'Late checkout charge added:', id: 'Biaya check-out terlambat ditambahkan:' },
+  'checkin.no_late_charge': { en: 'No late checkout charge configured', id: 'Tidak ada biaya check-out terlambat dikonfigurasi' },
+
+  // Invoice additional
+  'invoice.no_folio_found': { en: 'No folio found for this reservation.', id: 'Tidak ada folio untuk reservasi ini.' },
+  'invoice.loading_invoice': { en: 'Loading invoice...', id: 'Memuat faktur...' },
+  'invoice.not_found': { en: 'Invoice not found.', id: 'Faktur tidak ditemukan.' },
+  'invoice.preview': { en: 'Invoice Preview', id: 'Pratinjau Faktur' },
+  'invoice.guest_information': { en: 'Guest Information', id: 'Informasi Tamu' },
+  'invoice.booking_details': { en: 'Booking Details', id: 'Detail Pemesanan' },
+  'invoice.booking_transaction': { en: 'Booking Transaction', id: 'Transaksi Pemesanan' },
+  'invoice.no_transaction_items': { en: 'No transaction items', id: 'Tidak ada item transaksi' },
+  'invoice.final_checkout_invoice': { en: 'Final Check-out Invoice', id: 'Faktur Check-out Final' },
+  'invoice.issued': { en: 'Issued', id: 'Diterbitkan' },
+  'invoice.thank_you': { en: 'Thank you for staying with us.', id: 'Terima kasih telah menginap bersama kami.' },
+  'invoice.fully_paid': { en: 'Fully Paid', id: 'Lunas' },
+  'invoice.balance_due': { en: 'Balance Due', id: 'Saldo Belum Dibayar' },
+  'invoice.issued_by': { en: 'Issued by', id: 'Diterbitkan oleh' },
+
+  // GRC additional
+  'grc.loading': { en: 'Loading registration card...', id: 'Memuat kartu registrasi...' },
+  'grc.not_found': { en: 'Reservation not found.', id: 'Reservasi tidak ditemukan.' },
+  'grc.group_room_breakdown': { en: 'Group Room Breakdown', id: 'Rincian Kamar Grup' },
+  'grc.printed': { en: 'Printed', id: 'Dicetak' },
+
+  // Charge summary additional
+  'charge_summary.loading': { en: 'Loading charge summary...', id: 'Memuat ringkasan biaya...' },
+  'charge_summary.not_found': { en: 'Folio not found.', id: 'Folio tidak ditemukan.' },
+  'charge_summary.no_charges': { en: 'No charges', id: 'Tidak ada biaya' },
+  'charge_summary.total_charges': { en: 'Total Charges', id: 'Total Biaya' },
+  'charge_summary.total_paid': { en: 'Total Paid', id: 'Total Dibayar' },
+  'charge_summary.balance': { en: 'Balance', id: 'Saldo' },
+  'charge_summary.printed': { en: 'Printed', id: 'Dicetak' },
+
+  // Calendar additional
+  'calendar.occupancy': { en: 'Occupancy', id: 'Hunian' },
+
+  // Dashboard additional
+  'dash.all_branches_occupancy': { en: 'All Branches — Occupancy Rate', id: 'Semua Cabang — Tingkat Hunian' },
+
+  // Reports additional
+  'reports.payments_by_method': { en: 'Payments by Method', id: 'Pembayaran per Metode' },
+  'reports.charges_by_category': { en: 'Charges by Category', id: 'Biaya per Kategori' },
+  'reports.total_payments': { en: 'Total Payments', id: 'Total Pembayaran' },
+  'reports.total_charges_excl': { en: 'Total Charges (excl. deposits)', id: 'Total Biaya (tidak termasuk deposit)' },
+  'reports.net_income': { en: 'Net Income', id: 'Pendapatan Bersih' },
+  'reports.no_payments': { en: 'No payments', id: 'Tidak ada pembayaran' },
+  'reports.no_charges': { en: 'No charges', id: 'Tidak ada biaya' },
+  'reports.showing_rows': { en: 'Showing 50 of', id: 'Menampilkan 50 dari' },
+  'reports.rows': { en: 'rows', id: 'baris' },
+
+  // Audit logs additional
+  'audit.entry': { en: 'entry', id: 'catatan' },
+  'audit.entries': { en: 'entries', id: 'catatan' },
+  'audit.reason_label': { en: 'Reason:', id: 'Alasan:' },
+  'audit.previous': { en: 'Previous', id: 'Sebelumnya' },
+  'audit.new': { en: 'New', id: 'Baru' },
+  'audit.reference': { en: 'Reference', id: 'Referensi' },
+  'audit.details': { en: 'Details', id: 'Detail' },
+
+  // Warning modal additional
+  'warning.payment_voided': { en: 'Payment voided', id: 'Pembayaran dibatalkan' },
+  'warning.item_voided': { en: 'Item voided', id: 'Item dibatalkan' },
 };
 
 interface I18nContextValue {
