@@ -86,7 +86,7 @@ export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onCl
   const balance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   return (
-    <div className="min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="print-overlay min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: A5; margin: 10mm; }
         @media print {

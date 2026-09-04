@@ -128,7 +128,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose, autoPrint }: Props
   const balance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   return (
-    <div className="receipt-print-root min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="print-overlay receipt-print-root min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: 210mm 330mm; margin: 10mm; }
         .receipt-paper {
@@ -168,7 +168,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose, autoPrint }: Props
           }
           table { page-break-inside: auto; }
           thead { display: table-header-group; }
-          tfoot { display: table-footer-group; }
+          tfoot { display: table-row-group; }
           tr { break-inside: avoid; page-break-inside: avoid; }
           .receipt-summary, .receipt-footer { break-inside: avoid; page-break-inside: avoid; }
         }
