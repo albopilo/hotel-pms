@@ -122,26 +122,11 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
-        @page { size: 210mm 165mm; margin: 0; }
-        .receipt-paper {
-          width: 210mm;
-          min-height: 165mm;
-          background: white;
-          box-sizing: border-box;
-          padding: 8mm;
-          display: flex;
-          flex-direction: column;
-        }
-        @media screen {
-          .receipt-paper {
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-            margin: 24px auto;
-          }
-        }
+        @page { size: A5; margin: 10mm; }
         @media print {
-          body { background: white; margin: 0; padding: 0; }
+          body { background: white; }
           .no-print { display: none !important; }
-          .receipt-paper { box-shadow: none !important; margin: 0 !important; width: 210mm; min-height: 165mm; }
+          .receipt-shell { max-width: none !important; min-height: auto !important; box-shadow: none !important; }
         }
       `}</style>
 
@@ -153,7 +138,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         </div>
       </div>
 
-      <div className="receipt-paper">
+      <main className="receipt-shell mx-auto my-6 min-h-[500px] max-w-[480px] bg-white px-6 py-8 text-[13px] text-slate-900 shadow-xl print:my-0 print:px-0 print:py-0">
           <header className="text-center">
             <h1 className="text-xl font-bold">{branch?.name || 'Hotel'}</h1>
             {branch?.address && <p className="mt-0.5 text-xs text-slate-500">{branch.address}</p>}
@@ -267,7 +252,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
             <p>{t('receipt.thank_you')}</p>
             <p className="mt-1">{t('common.printed')} {formatDateTime(new Date().toISOString())}</p>
           </footer>
-      </div>
+      </main>
     </div>
   );
 }
