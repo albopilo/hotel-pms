@@ -123,19 +123,8 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         @page { size: 210mm 165mm; margin: 0; }
         .receipt-paper {
           width: 210mm;
-          height: 165mm;
-          position: relative;
-          overflow: hidden;
+          min-height: 165mm;
           background: white;
-        }
-        .receipt-rotate {
-          position: absolute;
-          top: 0;
-          left: 0;
-          width: 165mm;
-          height: 210mm;
-          transform: translateX(210mm) rotate(90deg);
-          transform-origin: top left;
           box-sizing: border-box;
           padding: 8mm;
           display: flex;
@@ -148,9 +137,9 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
           }
         }
         @media print {
-          body { background: white; }
+          body { background: white; margin: 0; padding: 0; }
           .no-print { display: none !important; }
-          .receipt-paper { box-shadow: none !important; margin: 0 !important; }
+          .receipt-paper { box-shadow: none !important; margin: 0 !important; width: 210mm; min-height: 165mm; }
         }
       `}</style>
 
@@ -163,7 +152,6 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
       </div>
 
       <div className="receipt-paper">
-        <div className="receipt-rotate">
           <header className="text-center">
             <h1 className="text-xl font-bold">{branch?.name || 'Hotel'}</h1>
             {branch?.address && <p className="mt-0.5 text-xs text-slate-500">{branch.address}</p>}
@@ -277,7 +265,6 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
             <p>Thank you for your payment.</p>
             <p className="mt-1">Printed {formatDateTime(new Date().toISOString())}</p>
           </footer>
-        </div>
       </div>
     </div>
   );
