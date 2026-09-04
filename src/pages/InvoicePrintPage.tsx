@@ -147,6 +147,9 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           .no-print { display: none !important; }
           .invoice-shell { max-width: none !important; min-height: auto !important; box-shadow: none !important; }
           .invoice-section { break-inside: avoid; }
+          .invoice-transaction { break-inside: auto; page-break-inside: auto; }
+          .invoice-transaction thead { display: table-header-group; }
+          .invoice-transaction tbody tr { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
@@ -223,7 +226,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
           </div>
         </section>
 
-        <section className="invoice-section mt-5 overflow-hidden rounded-sm border-2 border-red-500">
+        <section className="invoice-transaction mt-5 overflow-hidden rounded-sm border-2 border-red-500">
           <SectionTitle>{t('invoice.booking_transaction')}</SectionTitle>
           <div className="px-2 py-3 sm:px-4">
             <div className="overflow-x-auto">
