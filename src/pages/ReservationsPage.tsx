@@ -83,6 +83,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
   const [bookingSources, setBookingSources] = useState<BookingSource[]>([]);
   const [holidays, setHolidays] = useState<IndonesianHoliday[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editingReservation, setEditingReservation] = useState<Reservation | null>(null);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -91,28 +92,74 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
   const [voidReason, setVoidReason] = useState('');
   const [voiding, setVoiding] = useState(false);
   const [page, setPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const [loadedCount, setLoadedCount] = useState(0);
+  const [allLoaded, setAllLoaded] = useState(false);
   const PAGE_SIZE = 20;
+  const PREFETCH_PAGES = 3;
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
+
+  const buildQuery = useCallback((opts: { all?: boolean; limit?: number } = {}) => {
+    let q = supabase.from('reservations').select('*', { count: 'exact' }).in('branch_id', branchIds).order('created_at', { ascending: false });
+    if (statusFilter !== 'all') q = q.eq('status', statusFilter);
+    if (opts.all) {
+      // no limit — load everything
+    } else if (opts.limit) {
+      q = q.limit(opts.limit);
+    } else {
+      q = q.limit(PAGE_SIZE * PREFETCH_PAGES);
+    }
+    return q;
+  }, [branchIds, statusFilter]);
 
   const load = useCallback(async () => {
     if (!branchIds.length) { setLoading(false); return; }
     setLoading(true);
+    setAllLoaded(false);
     const [r, g, ro, rt, bs, hol] = await Promise.all([
-      supabase.from('reservations').select('*').in('branch_id', branchIds).order('created_at', { ascending: false }),
+      buildQuery(),
       supabase.from('guests').select('*').order('created_at', { ascending: false }),
       supabase.from('rooms').select('*').in('branch_id', branchIds),
       supabase.from('room_types').select('*').in('branch_id', branchIds),
       supabase.from('booking_sources').select('*').order('sort_order'),
       supabase.from('indonesian_holidays').select('*').eq('organization_id', user!.organization_id).order('holiday_date')
     ]);
-    setReservations((r.data || []).map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status })));
+    const resData = (r.data || []).map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status }));
+    setReservations(resData);
+    setTotalCount(r.count || 0);
+    setLoadedCount(resData.length);
     setGuests(g.data || []);
     setRooms(ro.data || []);
     setRoomTypes(rt.data || []);
     setBookingSources(bs.data || []);
     setHolidays((hol.data as IndonesianHoliday[]) || []);
     setLoading(false);
-  }, [branchIds, user]);
+  }, [branchIds, user, buildQuery]);
+
+  const loadAll = useCallback(async () => {
+    if (!branchIds.length || allLoaded) return;
+    setLoadingMore(true);
+    const r = await buildQuery({ all: true });
+    const resData = (r.data || []).map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status }));
+    setReservations(resData);
+    setLoadedCount(resData.length);
+    setAllLoaded(true);
+    setLoadingMore(false);
+  }, [branchIds, allLoaded, buildQuery]);
+
+  const loadMore = useCallback(async () => {
+    if (!branchIds.length || allLoaded || loadingMore) return;
+    if (loadedCount >= totalCount) { setAllLoaded(true); return; }
+    // Load next batch of PREFETCH_PAGES
+    const nextLimit = loadedCount + PAGE_SIZE * PREFETCH_PAGES;
+    setLoadingMore(true);
+    const r = await buildQuery({ limit: nextLimit });
+    const resData = (r.data || []).map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status }));
+    setReservations(resData);
+    setLoadedCount(resData.length);
+    if (resData.length >= (r.count || 0)) setAllLoaded(true);
+    setLoadingMore(false);
+  }, [branchIds, allLoaded, loadingMore, loadedCount, totalCount, buildQuery]);
 
   useEffect(() => { load(); }, [load]);
   useEffect(() => { if (searchQuery !== localSearch) setLocalSearch(searchQuery); }, [searchQuery]);
@@ -123,6 +170,25 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
       onInitialGuestIdConsumed?.();
     }
   }, [initialGuestId, guests]);
+
+  // When user searches, load all reservations for client-side filtering
+  const isSearching = localSearch.trim().length > 0;
+  useEffect(() => {
+    if (isSearching && !allLoaded && !loading) {
+      loadAll();
+    }
+  }, [isSearching, allLoaded, loading, loadAll]);
+
+  // When user paginates near the edge of loaded data, fetch next batch
+  useEffect(() => {
+    if (!isSearching && !loading && !allLoaded) {
+      const loadedPages = Math.ceil(loadedCount / PAGE_SIZE);
+      // Trigger load when user is on the last loaded page
+      if (page >= loadedPages) {
+        loadMore();
+      }
+    }
+  }, [page, isSearching, loading, allLoaded, loadedCount, loadMore]);
 
   const guestMap = new Map(guests.map(x => [x.id, x]));
   const roomMap = new Map(rooms.map(x => [x.id, x]));
@@ -240,7 +306,13 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
               </tbody>
             </table>
           </div>
-          <Pagination page={page} pageSize={PAGE_SIZE} total={filtered.length} onPageChange={setPage} />
+          <Pagination page={page} pageSize={PAGE_SIZE} total={isSearching ? filtered.length : totalCount} onPageChange={setPage} />
+          {loadingMore && (
+            <div className="flex items-center justify-center py-2 text-sm text-slate-400">
+              <div className="animate-spin h-4 w-4 border-2 border-slate-300 border-t-blue-600 rounded-full mr-2" />
+              Loading more reservations...
+            </div>
+          )}
         </Card>
       )}
 
