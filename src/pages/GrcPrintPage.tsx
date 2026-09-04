@@ -8,7 +8,6 @@ import type { Branch, Guest, Reservation, Room, RoomType, BookingSource, Reserva
 interface Props {
   reservationId: string;
   onClose: () => void;
-  autoPrint?: boolean;
 }
 
 interface GroupRoom {
@@ -19,7 +18,7 @@ interface GroupRoom {
   room_type?: { name: string } | null;
 }
 
-export function GrcPrintPage({ reservationId, onClose, autoPrint }: Props) {
+export function GrcPrintPage({ reservationId, onClose }: Props) {
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [guest, setGuest] = useState<Guest | null>(null);
   const [branch, setBranch] = useState<Branch | null>(null);
@@ -72,13 +71,6 @@ export function GrcPrintPage({ reservationId, onClose, autoPrint }: Props) {
     })();
     return () => { cancelled = true; };
   }, [reservationId]);
-
-  useEffect(() => {
-    if (autoPrint && !loading && reservation) {
-      const timer = setTimeout(() => window.print(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [autoPrint, loading, reservation]);
 
   if (loading) {
     return (

@@ -10,7 +10,6 @@ import { X } from 'lucide-react';
 interface Props {
   invoiceId: string;
   onClose: () => void;
-  autoPrint?: boolean;
 }
 
 interface GroupRoom {
@@ -37,7 +36,7 @@ function isTaxItem(item: InvoiceItem): boolean {
   return item.category?.toLowerCase() === 'tax' || item.description.toLowerCase().includes('tax');
 }
 
-export function InvoicePrintPage({ invoiceId, onClose, autoPrint }: Props) {
+export function InvoicePrintPage({ invoiceId, onClose }: Props) {
   const { t } = useI18n();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -97,13 +96,6 @@ export function InvoicePrintPage({ invoiceId, onClose, autoPrint }: Props) {
     })();
     return () => { cancelled = true; };
   }, [invoiceId]);
-
-  useEffect(() => {
-    if (autoPrint && !loading && invoice) {
-      const timer = setTimeout(() => window.print(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [autoPrint, loading, invoice]);
 
   const paymentSummaries = useMemo<PaymentSummary[]>(() => {
     const grouped = new Map<string, PaymentSummary>();

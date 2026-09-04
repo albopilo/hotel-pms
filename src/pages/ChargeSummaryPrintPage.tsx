@@ -9,10 +9,9 @@ interface Props {
   folioId: string;
   title?: string;
   onClose: () => void;
-  autoPrint?: boolean;
 }
 
-export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onClose, autoPrint }: Props) {
+export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onClose }: Props) {
   const [folio, setFolio] = useState<Folio | null>(null);
   const [items, setItems] = useState<FolioItem[]>([]);
   const [guest, setGuest] = useState<Guest | null>(null);
@@ -50,13 +49,6 @@ export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onCl
     })();
     return () => { cancelled = true; };
   }, [folioId]);
-
-  useEffect(() => {
-    if (autoPrint && !loading && folio) {
-      const timer = setTimeout(() => window.print(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [autoPrint, loading, folio]);
 
   if (loading) {
     return (

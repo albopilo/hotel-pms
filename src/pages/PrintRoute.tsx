@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { parsePrintHash, type PrintParams } from '@/lib/printRoute';
-import { PaymentReceiptPrintPage } from '@/pages/PaymentReceiptPrintPage';
-import { ChargeSummaryPrintPage } from '@/pages/ChargeSummaryPrintPage';
-import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
-import { GrcPrintPage } from '@/pages/GrcPrintPage';
+
+const PaymentReceiptPrintPage = lazy(() => import('@/pages/PaymentReceiptPrintPage').then(m => ({ default: m.PaymentReceiptPrintPage })));
+const ChargeSummaryPrintPage = lazy(() => import('@/pages/ChargeSummaryPrintPage').then(m => ({ default: m.ChargeSummaryPrintPage })));
+const InvoicePrintPage = lazy(() => import('@/pages/InvoicePrintPage').then(m => ({ default: m.InvoicePrintPage })));
+const GrcPrintPage = lazy(() => import('@/pages/GrcPrintPage').then(m => ({ default: m.GrcPrintPage })));
 
 export function PrintRoute() {
   const [params, setParams] = useState<PrintParams | null>(null);
@@ -18,16 +19,12 @@ export function PrintRoute() {
 
   const handleClose = () => window.close();
 
-  switch (params.type) {
-    case 'receipt':
-      return <PaymentReceiptPrintPage paymentId={params.paymentId!} onClose={handleClose} autoPrint />;
-    case 'charge-summary':
-      return <ChargeSummaryPrintPage folioId={params.folioId!} title={params.title || 'Charge Summary'} onClose={handleClose} autoPrint />;
-    case 'invoice':
-      return <InvoicePrintPage invoiceId={params.invoiceId!} onClose={handleClose} autoPrint />;
-    case 'grc':
-      return <GrcPrintPage reservationId={params.reservationId!} onClose={handleClose} autoPrint />;
-    default:
-      return <div className="min-h-screen flex items-center justify-center text-slate-400">Unknown print type</div>;
-  }
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-slate-400">Loading...</div>}>
+      {params.type === 'receipt' && <PaymentReceiptPrintPage paymentId={params.paymentId!} onClose={handleClose} />}
+      {params.type === 'charge-summary' && <ChargeSummaryPrintPage folioId={params.folioId!} title={params.title || 'Charge Summary'} onClose={handleClose} />}
+      {params.type === 'invoice' && <InvoicePrintPage invoiceId={params.invoiceId!} onClose={handleClose} />}
+      {params.type === 'grc' && <GrcPrintPage reservationId={params.reservationId!} onClose={handleClose} />}
+    </Suspense>
+  );
 }

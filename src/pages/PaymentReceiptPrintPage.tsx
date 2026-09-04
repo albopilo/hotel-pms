@@ -9,7 +9,6 @@ import type { Branch, Guest, Reservation, Room, Folio, FolioItem } from '@/types
 interface Props {
   paymentId: string;
   onClose: () => void;
-  autoPrint?: boolean;
 }
 
 interface PaymentRow {
@@ -25,7 +24,7 @@ interface PaymentRow {
   notes: string | null;
 }
 
-export function PaymentReceiptPrintPage({ paymentId, onClose, autoPrint }: Props) {
+export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   const { t } = useI18n();
   const [payment, setPayment] = useState<any>(null);
   const [allPayments, setAllPayments] = useState<PaymentRow[]>([]);
@@ -94,13 +93,6 @@ export function PaymentReceiptPrintPage({ paymentId, onClose, autoPrint }: Props
     return () => { cancelled = true; };
   }, [paymentId]);
 
-  useEffect(() => {
-    if (autoPrint && !loading && payment) {
-      const timer = setTimeout(() => window.print(), 300);
-      return () => clearTimeout(timer);
-    }
-  }, [autoPrint, loading, payment]);
-
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -168,7 +160,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose, autoPrint }: Props
           }
           table { page-break-inside: auto; }
           thead { display: table-header-group; }
-          tfoot { display: table-row-group; }
+          tfoot { display: table-footer-group; }
           tr { break-inside: avoid; page-break-inside: avoid; }
           .receipt-summary, .receipt-footer { break-inside: avoid; page-break-inside: avoid; }
         }
