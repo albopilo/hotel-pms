@@ -126,6 +126,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         .receipt-paper {
           width: 200mm;
           min-height: 155mm;
+          max-height: 155mm;
           background: white;
           box-sizing: border-box;
           padding: 6mm;
@@ -137,11 +138,20 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
             box-shadow: 0 10px 30px rgba(0,0,0,0.15);
             margin: 24px auto;
           }
+          .receipt-body { overflow-y: auto; }
         }
         @media print {
           body { background: white; margin: 0; padding: 0; }
           .no-print { display: none !important; }
-          .receipt-paper { box-shadow: none !important; margin: 0 !important; width: 200mm; min-height: 155mm; }
+          .receipt-paper {
+            box-shadow: none !important;
+            margin: 0 !important;
+            width: 200mm;
+            min-height: auto !important;
+            max-height: none !important;
+          }
+          .receipt-body { overflow: visible !important; }
+          tr { break-inside: avoid; }
         }
       `}</style>
 
@@ -155,7 +165,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
 
       <div className="receipt-paper">
         {/* Header — compact, two columns: hotel info left, receipt title right */}
-        <header className="flex items-start justify-between border-b border-slate-300 pb-2">
+        <header className="flex-shrink-0 flex items-start justify-between border-b border-slate-300 pb-2">
           <div>
             <h1 className="text-lg font-bold leading-tight">{branch?.name || 'Hotel'}</h1>
             {branch?.address && <p className="text-[10px] text-slate-500 leading-tight">{branch.address}</p>}
@@ -169,7 +179,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         </header>
 
         {/* Guest info — compact column layout instead of row-by-row */}
-        <section className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+        <section className="flex-shrink-0 mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
           <InfoCol label={t('common.date')} value={formatDate(new Date().toISOString())} />
           <InfoCol label={t('common.guest')} value={guest?.full_name || '-'} />
           <InfoCol label={t('common.room')} value={room?.room_number || '-'} />
@@ -188,6 +198,8 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
           ) : null}
         </section>
 
+        {/* Scrollable body — tables fill remaining space on screen, flow naturally on print */}
+        <div className="receipt-body flex-1 min-h-0">
         {/* Charges table — compact */}
         <section className="mt-2">
           <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">{t('common.charges')}</p>
@@ -273,16 +285,18 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
           </table>
         </section>
 
-        {/* Balance summary — compact inline */}
-        <section className="mt-2 border-t border-slate-300 pt-1">
+        </div>
+
+        {/* Balance summary — pinned at bottom */}
+        <section className="flex-shrink-0 mt-2 border-t border-slate-300 pt-1">
           <div className="flex items-center justify-between text-sm font-bold">
             <span>{t('common.balance')}</span>
             <span className={balance > 0 ? 'text-red-600' : 'text-emerald-600'}>{formatIDR(Math.abs(balance))}{balance > 0 ? ` ${t('receipt.balance_due')}` : ` ${t('receipt.balance_settled')}`}</span>
           </div>
         </section>
 
-        {/* Footer — minimal */}
-        <footer className="mt-auto pt-3 text-center text-[10px] text-slate-400">
+        {/* Footer — pinned at bottom */}
+        <footer className="flex-shrink-0 pt-2 text-center text-[10px] text-slate-400">
           <p>{t('receipt.thank_you')}</p>
           <p className="mt-0.5">{t('common.printed')} {formatDateTime(new Date().toISOString())}</p>
         </footer>
