@@ -120,15 +120,15 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   const balance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="receipt-print-root fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
-        @page { size: 210mm 165mm; margin: 5mm; }
+        @page { size: 210mm 330mm; margin: 10mm; }
         .receipt-paper {
-          width: 200mm;
-          min-height: 155mm;
+          width: auto;
+          min-height: 0;
           background: white;
           box-sizing: border-box;
-          padding: 6mm;
+          padding: 8mm;
         }
         @media screen {
           .receipt-paper {
@@ -138,15 +138,31 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         }
         @media print {
           body { background: white; margin: 0; padding: 0; }
+          .receipt-print-root {
+            position: static !important;
+            inset: auto !important;
+            z-index: auto !important;
+            overflow: visible !important;
+            height: auto !important;
+            min-height: 0 !important;
+          }
           .no-print { display: none !important; }
           .receipt-paper {
             box-shadow: none !important;
             margin: 0 !important;
-            width: 200mm;
-            min-height: auto !important;
+            width: auto !important;
+            min-height: 0 !important;
+            padding: 0 !important;
           }
-          tr { break-inside: avoid; }
-          .receipt-summary, .receipt-footer { break-inside: avoid; }
+          .receipt-paper, .receipt-paper * {
+            overflow: visible !important;
+            max-height: none !important;
+          }
+          table { page-break-inside: auto; }
+          thead { display: table-header-group; }
+          tfoot { display: table-footer-group; }
+          tr { break-inside: avoid; page-break-inside: avoid; }
+          .receipt-summary, .receipt-footer { break-inside: avoid; page-break-inside: avoid; }
         }
       `}</style>
 
