@@ -699,6 +699,29 @@ const translations: Record<string, { en: string; id: string }> = {
   'charge_summary.balance': { en: 'Balance', id: 'Saldo' },
   'charge_summary.printed': { en: 'Printed', id: 'Dicetak' },
 
+  // Invoice print additional
+  'invoice.invoice_label': { en: 'Invoice', id: 'Faktur' },
+  'invoice.booking_id': { en: 'Booking ID', id: 'ID Pemesanan' },
+  'invoice.group_room_breakdown': { en: 'Group Room Breakdown', id: 'Rincian Kamar Grup' },
+  'invoice.transactions': { en: 'transactions', id: 'transaksi' },
+  'invoice.subtotal': { en: 'Subtotal', id: 'Subtotal' },
+  'invoice.payment_not_found': { en: 'Payment not found.', id: 'Pembayaran tidak ditemukan.' },
+
+  // Receipt print additional
+  'receipt.no_charges': { en: 'No charges', id: 'Tidak ada biaya' },
+  'receipt.total_charges': { en: 'Total Charges', id: 'Total Biaya' },
+  'receipt.balance_due': { en: 'due', id: 'belum dibayar' },
+  'receipt.balance_settled': { en: 'settled', id: 'lunas' },
+
+  // Common print additional
+  'common.phone_number': { en: 'Phone Number', id: 'Nomor Telepon' },
+  'common.unassigned': { en: 'Unassigned', id: 'Belum Ditetapkan' },
+  'common.payment': { en: 'Payment', id: 'Pembayaran' },
+  'common.method': { en: 'Method', id: 'Metode' },
+  'common.items': { en: 'Items', id: 'Item' },
+  'common.printed': { en: 'Printed', id: 'Dicetak' },
+  'common.tel': { en: 'Tel', id: 'Telp' },
+
   // Calendar additional
   'calendar.occupancy': { en: 'Occupancy', id: 'Hunian' },
 
