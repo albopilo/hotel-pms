@@ -9,6 +9,7 @@ import type { Branch, Guest, Reservation, Room, Folio, FolioItem } from '@/types
 interface Props {
   paymentId: string;
   onClose: () => void;
+  autoPrint?: boolean;
 }
 
 interface PaymentRow {
@@ -24,7 +25,7 @@ interface PaymentRow {
   notes: string | null;
 }
 
-export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
+export function PaymentReceiptPrintPage({ paymentId, onClose, autoPrint }: Props) {
   const { t } = useI18n();
   const [payment, setPayment] = useState<any>(null);
   const [allPayments, setAllPayments] = useState<PaymentRow[]>([]);
@@ -93,9 +94,16 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
     return () => { cancelled = true; };
   }, [paymentId]);
 
+  useEffect(() => {
+    if (autoPrint && !loading && payment) {
+      const timer = setTimeout(() => window.print(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, loading, payment]);
+
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="text-slate-500">{t('receipt.loading_receipt')}</p>
       </div>
     );
@@ -103,7 +111,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
 
   if (!payment) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
         <p className="text-slate-500">{t('invoice.payment_not_found')}</p>
         <Button variant="outline" onClick={onClose}>{t('common.close')}</Button>
       </div>
@@ -120,7 +128,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   const balance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   return (
-    <div className="print-overlay receipt-print-root fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="receipt-print-root min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: 210mm 330mm; margin: 10mm; }
         .receipt-paper {

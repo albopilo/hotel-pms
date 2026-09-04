@@ -10,6 +10,7 @@ import { X } from 'lucide-react';
 interface Props {
   invoiceId: string;
   onClose: () => void;
+  autoPrint?: boolean;
 }
 
 interface GroupRoom {
@@ -36,7 +37,7 @@ function isTaxItem(item: InvoiceItem): boolean {
   return item.category?.toLowerCase() === 'tax' || item.description.toLowerCase().includes('tax');
 }
 
-export function InvoicePrintPage({ invoiceId, onClose }: Props) {
+export function InvoicePrintPage({ invoiceId, onClose, autoPrint }: Props) {
   const { t } = useI18n();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [items, setItems] = useState<InvoiceItem[]>([]);
@@ -97,6 +98,13 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
     return () => { cancelled = true; };
   }, [invoiceId]);
 
+  useEffect(() => {
+    if (autoPrint && !loading && invoice) {
+      const timer = setTimeout(() => window.print(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, loading, invoice]);
+
   const paymentSummaries = useMemo<PaymentSummary[]>(() => {
     const grouped = new Map<string, PaymentSummary>();
     payments.forEach((item) => {
@@ -114,7 +122,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
 
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="text-slate-500">{t('invoice.loading_invoice')}</p>
       </div>
     );
@@ -122,7 +130,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
 
   if (!invoice) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
         <p className="text-slate-500">{t('invoice.not_found')}</p>
         <Button variant="outline" onClick={onClose}>{t('common.close')}</Button>
       </div>
@@ -139,7 +147,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
   const total = Math.max(0, subtotal - paymentTotal);
 
   return (
-    <div className="print-overlay fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: A4; margin: 12mm; }
         @media print {

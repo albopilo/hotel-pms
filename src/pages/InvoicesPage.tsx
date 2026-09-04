@@ -14,7 +14,7 @@ import { formatIDR,formatDate,formatDateTime,formatTime } from '@/lib/format';
 import { Receipt,Search,Printer,FileText,User as UserIcon } from 'lucide-react';
 import type { Invoice,InvoiceItem,Guest,Branch,Folio,Reservation,BookingSource,RoomType,ReservationRoom } from '@/types/database';
 import { invoiceService } from '@/services/invoiceService';
-import { InvoicePrintPage } from '@/pages/InvoicePrintPage';
+import { openPrintTab } from '@/lib/printRoute';
 
 export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNavigateToGuest}:{searchQuery?:string;reservationId?:string|null;onNavigateToPayment?:(id:string)=>void;onNavigateToGuest?:(id:string)=>void}) {
   const {branches}=useAuth();
@@ -24,7 +24,6 @@ export function InvoicesPage({searchQuery,reservationId,onNavigateToPayment,onNa
   const [invoices,setInvoices]=useState<Invoice[]>([]);
   const [loading,setLoading]=useState(true);
   const [selected,setSelected]=useState<Invoice|null>(null);
-  const [printInvoiceId,setPrintInvoiceId]=useState<string|null>(null);
   const [page,setPage]=useState(1);
   const PAGE_SIZE=20;
   const [localSearch,setLocalSearch]=useState(searchQuery||'');
@@ -133,18 +132,12 @@ setInvoices(data || []);
           setSelected(null);
           load();
         }}
-        onPrint={() => setPrintInvoiceId(selected.id)}
+        onPrint={() => openPrintTab({ type: 'invoice', invoiceId: selected.id })}
         onNavigateToPayment={onNavigateToPayment}
         onNavigateToGuest={onNavigateToGuest}
       />
     )}
 
-    {printInvoiceId && (
-      <InvoicePrintPage
-        invoiceId={printInvoiceId}
-        onClose={() => setPrintInvoiceId(null)}
-      />
-    )}
   </div>
 );
 }

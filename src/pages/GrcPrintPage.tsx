@@ -8,6 +8,7 @@ import type { Branch, Guest, Reservation, Room, RoomType, BookingSource, Reserva
 interface Props {
   reservationId: string;
   onClose: () => void;
+  autoPrint?: boolean;
 }
 
 interface GroupRoom {
@@ -18,7 +19,7 @@ interface GroupRoom {
   room_type?: { name: string } | null;
 }
 
-export function GrcPrintPage({ reservationId, onClose }: Props) {
+export function GrcPrintPage({ reservationId, onClose, autoPrint }: Props) {
   const [reservation, setReservation] = useState<Reservation | null>(null);
   const [guest, setGuest] = useState<Guest | null>(null);
   const [branch, setBranch] = useState<Branch | null>(null);
@@ -72,9 +73,16 @@ export function GrcPrintPage({ reservationId, onClose }: Props) {
     return () => { cancelled = true; };
   }, [reservationId]);
 
+  useEffect(() => {
+    if (autoPrint && !loading && reservation) {
+      const timer = setTimeout(() => window.print(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, loading, reservation]);
+
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="text-slate-500">Loading registration card...</p>
       </div>
     );
@@ -82,7 +90,7 @@ export function GrcPrintPage({ reservationId, onClose }: Props) {
 
   if (!reservation) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
         <p className="text-slate-500">Reservation not found.</p>
         <Button variant="outline" onClick={onClose}>Close</Button>
       </div>
@@ -94,7 +102,7 @@ export function GrcPrintPage({ reservationId, onClose }: Props) {
     : room?.room_number || '-';
 
   return (
-    <div className="print-overlay fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: A4; margin: 12mm; }
         @media print {

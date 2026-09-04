@@ -9,9 +9,10 @@ interface Props {
   folioId: string;
   title?: string;
   onClose: () => void;
+  autoPrint?: boolean;
 }
 
-export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onClose }: Props) {
+export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onClose, autoPrint }: Props) {
   const [folio, setFolio] = useState<Folio | null>(null);
   const [items, setItems] = useState<FolioItem[]>([]);
   const [guest, setGuest] = useState<Guest | null>(null);
@@ -50,9 +51,16 @@ export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onCl
     return () => { cancelled = true; };
   }, [folioId]);
 
+  useEffect(() => {
+    if (autoPrint && !loading && folio) {
+      const timer = setTimeout(() => window.print(), 300);
+      return () => clearTimeout(timer);
+    }
+  }, [autoPrint, loading, folio]);
+
   if (loading) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex items-center justify-center">
+      <div className="min-h-screen bg-white flex items-center justify-center">
         <p className="text-slate-500">Loading charge summary...</p>
       </div>
     );
@@ -60,7 +68,7 @@ export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onCl
 
   if (!folio) {
     return (
-      <div className="fixed inset-0 z-[60] bg-white flex flex-col items-center justify-center gap-4">
+      <div className="min-h-screen bg-white flex flex-col items-center justify-center gap-4">
         <p className="text-slate-500">Folio not found.</p>
         <Button variant="outline" onClick={onClose}>Close</Button>
       </div>
@@ -78,7 +86,7 @@ export function ChargeSummaryPrintPage({ folioId, title = 'Charge Summary', onCl
   const balance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   return (
-    <div className="print-overlay fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="min-h-screen overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: A5; margin: 10mm; }
         @media print {

@@ -21,7 +21,7 @@ import { getBusinessDate } from '@/services/businessDateService';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt, CircleArrowUp as ArrowUpCircle } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
-import { ChargeSummaryPrintPage } from '@/pages/ChargeSummaryPrintPage';
+import { openPrintTab } from '@/lib/printRoute';
 
 const CHECKIN_DRAFT_KEY = 'checkin_time_draft';
 const CHECKOUT_DRAFT_KEY = 'checkout_time_draft';
@@ -41,7 +41,6 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
   const [selected, setSelected] = useState<Reservation | null>(null);
   const [mode, setMode] = useState<'checkin' | 'checkout' | 'extend' | 'split' | 'upgrade' | null>(null);
   const [reservationRooms, setReservationRooms] = useState<ReservationRoom[]>([]);
-  const [chargeSummaryFolioId, setChargeSummaryFolioId] = useState<string | null>(null);
   const [invoiceReservationIds, setInvoiceReservationIds] = useState<Set<string>>(new Set());
   const processedInitialId = useRef<string | null>(null);
 
@@ -214,10 +213,9 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
 
       {selected && mode === 'checkin' && <CheckinModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
       {selected && mode === 'checkout' && <CheckoutModal reservation={selected} onClose={handleCloseModal} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} />}
-      {selected && mode === 'extend' && <ExtendStayModal reservation={selected} onClose={handleCloseModal} onChargeSummary={(folioId) => setChargeSummaryFolioId(folioId)} />}
+      {selected && mode === 'extend' && <ExtendStayModal reservation={selected} onClose={handleCloseModal} onChargeSummary={(folioId) => openPrintTab({ type: 'charge-summary', folioId, title: 'Charge Summary' })} />}
       {selected && mode === 'split' && <SplitRoomModal reservation={selected} reservationRooms={reservationRooms} rooms={rooms} onClose={handleCloseModal} />}
-      {selected && mode === 'upgrade' && <UpgradeRoomModal reservation={selected} reservationRooms={reservationRooms} onClose={handleCloseModal} onChargeSummary={(folioId) => setChargeSummaryFolioId(folioId)} />}
-      {chargeSummaryFolioId && <ChargeSummaryPrintPage folioId={chargeSummaryFolioId} title="Charge Summary" onClose={() => setChargeSummaryFolioId(null)} />}
+      {selected && mode === 'upgrade' && <UpgradeRoomModal reservation={selected} reservationRooms={reservationRooms} onClose={handleCloseModal} onChargeSummary={(folioId) => openPrintTab({ type: 'charge-summary', folioId, title: 'Charge Summary' })} />}
     </div>
   );
 }

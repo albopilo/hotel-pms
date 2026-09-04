@@ -4,6 +4,8 @@ import { ToastProvider } from '@/lib/toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { BranchProvider, useBranch } from '@/lib/branch-context';
 import { AppLayout, type PageKey } from '@/components/AppLayout';
+import { parsePrintHash } from '@/lib/printRoute';
+import { PrintRoute } from '@/pages/PrintRoute';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ReservationsPage } from '@/pages/ReservationsPage';
@@ -150,6 +152,13 @@ function AppInner() {
 }
 
 export default function App() {
+  if (parsePrintHash(window.location.hash)) {
+    return (
+      <I18nProvider>
+        <PrintRoute />
+      </I18nProvider>
+    );
+  }
   return (
     <I18nProvider>
       <ToastProvider>
