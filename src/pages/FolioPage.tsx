@@ -235,8 +235,9 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   if (loading) return <Modal open onClose={onClose} title={t('folio.title')}><LoadingPage /></Modal>;
 
   return (
-    <Modal open onClose={onClose} title={`${t('folio.title')} — ${folio.folio_number}`} size="xl">
-      <div className="space-y-4">
+    <>
+      <Modal open onClose={onClose} title={`${t('folio.title')} — ${folio.folio_number}`} size="xl">
+        <div className="space-y-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
           <div><span className="text-slate-500">{t('common.guest')}:</span> {onNavigateToGuest && folio.guest_id ? <button onClick={() => onNavigateToGuest(folio.guest_id!)} className="font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"><UserIcon size={12} />{guest?.full_name || '-'}</button> : <span className="font-medium">{guest?.full_name || '-'}</span>}</div>
           <div><span className="text-slate-500">{t('common.room')}:</span> <span className="font-medium">{room?.room_number || '-'}</span></div>
@@ -338,7 +339,8 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
             <Button size="sm" variant="outline" onClick={() => onSelectReservation(folio.reservation_id)}><FileText size={14} /> {t('nav.checkin_checkout')}</Button>
           )}
         </div>
-      </div>
+        </div>
+      </Modal>
 
       {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); setChargeSummaryFolioId(folio.id); }} />}
       {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async (paymentId?: string) => { setShowTakePayment(false); await reloadItems(); if (paymentId) setReceiptPaymentId(paymentId); }} />}
@@ -355,7 +357,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       />
       {receiptPaymentId && <PaymentReceiptPrintPage paymentId={receiptPaymentId} onClose={() => setReceiptPaymentId(null)} />}
       {chargeSummaryFolioId && <ChargeSummaryPrintPage folioId={chargeSummaryFolioId} onClose={() => setChargeSummaryFolioId(null)} />}
-    </Modal>
+    </>
   );
 }
 

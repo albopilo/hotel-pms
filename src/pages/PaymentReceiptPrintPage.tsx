@@ -120,7 +120,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   const balance = totalCharges + totalTax - totalDiscounts - totalPayments;
 
   return (
-    <div className="receipt-print-root fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="print-overlay receipt-print-root fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: 210mm 330mm; margin: 10mm; }
         .receipt-paper {

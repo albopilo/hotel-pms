@@ -139,7 +139,7 @@ export function InvoicePrintPage({ invoiceId, onClose }: Props) {
   const total = Math.max(0, subtotal - paymentTotal);
 
   return (
-    <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
+    <div className="print-overlay fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
         @page { size: A4; margin: 12mm; }
         @media print {
