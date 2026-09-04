@@ -121,11 +121,11 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
-        @page { size: A5; margin: 10mm; }
+        @page { size: 165mm 210mm; margin: 8mm; }
         @media print {
           body { background: white; }
           .no-print { display: none !important; }
-          .receipt-shell { max-width: none !important; min-height: auto !important; box-shadow: none !important; }
+          .receipt-shell { max-width: none !important; box-shadow: none !important; }
         }
       `}</style>
 
@@ -137,7 +137,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         </div>
       </div>
 
-      <main className="receipt-shell mx-auto my-6 min-h-[500px] max-w-[480px] bg-white px-6 py-8 text-[13px] text-slate-900 shadow-xl print:my-0 print:px-0 print:py-0">
+      <main className="receipt-shell mx-auto my-6 max-w-[563px] bg-white px-8 py-10 text-[14px] text-slate-900 shadow-xl print:my-0 print:px-0 print:py-0">
         <header className="text-center">
           <h1 className="text-xl font-bold">{branch?.name || 'Hotel'}</h1>
           {branch?.address && <p className="mt-0.5 text-xs text-slate-500">{branch.address}</p>}
@@ -157,11 +157,11 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         {/* Charges table */}
         <section className="mt-4 border-t border-slate-200 pt-3">
           <p className="mb-2 text-xs font-bold uppercase text-slate-500">Charges</p>
-          <table className="w-full text-xs">
+          <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-200 text-slate-500">
-                <th className="text-left py-1.5 pr-2">Date</th>
-                <th className="text-left py-1.5 pr-2">Description</th>
+                <th className="text-left py-1.5 pr-3">Date</th>
+                <th className="text-left py-1.5 pr-3">Description</th>
                 <th className="text-right py-1.5">Amount</th>
               </tr>
             </thead>
@@ -170,22 +170,22 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
                 <tr><td colSpan={3} className="py-2 text-center text-slate-400">No charges</td></tr>
               ) : charges.map((c) => (
                 <tr key={c.id} className="border-b border-slate-100">
-                  <td className="py-1.5 pr-2 whitespace-nowrap">{formatDate(c.created_at)}</td>
-                  <td className="py-1.5 pr-2">{c.description}</td>
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{formatDate(c.created_at)}</td>
+                  <td className="py-1.5 pr-3">{c.description}</td>
                   <td className="py-1.5 text-right font-medium">{formatIDR(c.amount)}</td>
                 </tr>
               ))}
               {totalTax > 0 && (
                 <tr className="border-b border-slate-100">
-                  <td className="py-1.5 pr-2"></td>
-                  <td className="py-1.5 pr-2">Tax</td>
+                  <td className="py-1.5 pr-3"></td>
+                  <td className="py-1.5 pr-3">Tax</td>
                   <td className="py-1.5 text-right font-medium">{formatIDR(totalTax)}</td>
                 </tr>
               )}
               {totalDiscounts > 0 && (
                 <tr className="border-b border-slate-100">
-                  <td className="py-1.5 pr-2"></td>
-                  <td className="py-1.5 pr-2 text-red-600">Discount</td>
+                  <td className="py-1.5 pr-3"></td>
+                  <td className="py-1.5 pr-3 text-red-600">Discount</td>
                   <td className="py-1.5 text-right font-medium text-red-600">-{formatIDR(totalDiscounts)}</td>
                 </tr>
               )}
@@ -204,12 +204,12 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         {/* All payments table */}
         <section className="mt-4 border-t border-slate-200 pt-3">
           <p className="mb-2 text-xs font-bold uppercase text-slate-500">Payments</p>
-          <table className="w-full text-xs">
+          <table className="w-full text-[13px]">
             <thead>
               <tr className="border-b border-slate-200 text-slate-500">
-                <th className="text-left py-1.5 pr-2">Date</th>
-                <th className="text-left py-1.5 pr-2">Method</th>
-                <th className="text-left py-1.5 pr-2">Ref No.</th>
+                <th className="text-left py-1.5 pr-3">Date</th>
+                <th className="text-left py-1.5 pr-3">Method</th>
+                <th className="text-left py-1.5 pr-3">Ref No.</th>
                 <th className="text-right py-1.5">Amount</th>
               </tr>
             </thead>
@@ -218,12 +218,12 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
                 <tr><td colSpan={4} className="py-2 text-center text-slate-400">No payments</td></tr>
               ) : allPayments.map((p) => (
                 <tr key={p.payment_number} className="border-b border-slate-100">
-                  <td className="py-1.5 pr-2 whitespace-nowrap">{formatDate(p.created_at)}</td>
-                  <td className="py-1.5 pr-2">
+                  <td className="py-1.5 pr-3 whitespace-nowrap">{formatDate(p.created_at)}</td>
+                  <td className="py-1.5 pr-3">
                     {p.method_name}
                     {p.subtype && <span className="text-slate-400"> ({p.subtype})</span>}
                   </td>
-                  <td className="py-1.5 pr-2 text-slate-500">{p.reference_number || '-'}</td>
+                  <td className="py-1.5 pr-3 text-slate-500">{p.reference_number || '-'}</td>
                   <td className="py-1.5 text-right font-medium text-emerald-700">{formatIDR(p.amount)}</td>
                 </tr>
               ))}
