@@ -57,13 +57,22 @@ function assertDefined(value: unknown, field: string): asserts value is string {
 export const folioService = {
   async syncFolioTotals(folioId: string): Promise<FolioTotals> {
     const totals = await this.getTotals(folioId);
-    await supabase.from('folios').update({
+    const { error, count } = await supabase.from('folios').update({
       total_charges: totals.totalCharges,
       total_payments: totals.totalPayments,
       total_discounts: totals.totalDiscounts,
       total_tax: totals.totalTax,
       balance: totals.netBalance,
     }).eq('id', folioId);
+    if (error) {
+      if (error.message.includes('row-level security')) {
+        throw new FinancialError('You do not have permission to update this folio.', 'permission_denied');
+      }
+      throw new FinancialError(error.message, 'db_error');
+    }
+    if (count === 0) {
+      throw new FinancialError('Failed to update folio totals — the folio may be finalized or you lack access.', 'permission_denied');
+    }
     return totals;
   },
 
