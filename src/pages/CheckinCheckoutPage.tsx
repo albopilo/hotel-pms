@@ -1055,7 +1055,7 @@ function ExtendStayModal({ reservation, onClose, onChargeSummary }: { reservatio
           .from('reservations')
           .select('id,reservation_number')
           .eq('room_id', roomIdToCheck)
-          .in('status', ['confirmed', 'checked_in'])
+          .in('status', ['confirmed', 'checked_in', 'tentative'])
           .neq('id', reservation.id)
           .lt('check_in_date', newCheckoutDate)
           .gt('check_out_date', previousCheckoutDate);
@@ -1260,7 +1260,12 @@ function ExtendStayModal({ reservation, onClose, onChargeSummary }: { reservatio
       onClose();
     } catch (err: any) {
       console.error('Extend stay error:', err);
-      showToast(err.message || 'Failed to extend stay', 'error');
+      const msg = err?.message || '';
+      if (msg.includes('reservations_no_overlap') || msg.includes('exclusion constraint')) {
+        showToast('This room is already booked for the extended dates. Please choose a different room or date.', 'error');
+      } else {
+        showToast(err.message || 'Failed to extend stay', 'error');
+      }
       setSaving(false);
     }
   };
@@ -1585,7 +1590,7 @@ function UpgradeRoomModal({ reservation, reservationRooms, onClose, onChargeSumm
           .from('reservations')
           .select('id,reservation_number')
           .eq('room_id', newRoomId)
-          .in('status', ['confirmed', 'checked_in'])
+          .in('status', ['confirmed', 'checked_in', 'tentative'])
           .neq('id', reservation.id)
           .lt('check_in_date', reservation.check_out_date)
           .gt('check_out_date', reservation.check_in_date);

@@ -532,7 +532,7 @@ export function ReservationFormModal({ open, onClose, onCancel, branches, rooms,
       .from('reservations')
       .select('id,check_in_date,check_out_date,status,primary_guest_id')
       .eq('room_id', roomId)
-      .in('status', ['confirmed', 'checked_in'])
+      .in('status', ['confirmed', 'checked_in', 'tentative'])
       .lt('check_in_date', form.check_out_date)
       .gt('check_out_date', form.check_in_date);
     if (excludeId) query = query.neq('id', excludeId);
