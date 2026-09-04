@@ -134,7 +134,7 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
           left: 0;
           width: 165mm;
           height: 210mm;
-          transform: rotate(-90deg) translateX(-165mm);
+          transform: translateX(210mm) rotate(90deg);
           transform-origin: top left;
           box-sizing: border-box;
           padding: 8mm;
