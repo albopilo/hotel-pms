@@ -122,11 +122,26 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
   return (
     <div className="fixed inset-0 z-[60] overflow-y-auto bg-slate-200 print:bg-white">
       <style>{`
-        @page { size: A5; margin: 10mm; }
+        @page { size: 210mm 165mm; margin: 5mm; }
+        .receipt-paper {
+          width: 200mm;
+          min-height: 155mm;
+          background: white;
+          box-sizing: border-box;
+          padding: 6mm;
+          display: flex;
+          flex-direction: column;
+        }
+        @media screen {
+          .receipt-paper {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            margin: 24px auto;
+          }
+        }
         @media print {
-          body { background: white; }
+          body { background: white; margin: 0; padding: 0; }
           .no-print { display: none !important; }
-          .receipt-shell { max-width: none !important; min-height: auto !important; box-shadow: none !important; }
+          .receipt-paper { box-shadow: none !important; margin: 0 !important; width: 200mm; min-height: 155mm; }
         }
       `}</style>
 
@@ -138,130 +153,149 @@ export function PaymentReceiptPrintPage({ paymentId, onClose }: Props) {
         </div>
       </div>
 
-      <main className="receipt-shell mx-auto my-6 min-h-[500px] max-w-[480px] bg-white px-6 py-8 text-[13px] text-slate-900 shadow-xl print:my-0 print:px-0 print:py-0">
-          <header className="text-center">
-            <h1 className="text-xl font-bold">{branch?.name || 'Hotel'}</h1>
-            {branch?.address && <p className="mt-0.5 text-xs text-slate-500">{branch.address}</p>}
-            {branch?.phone && <p className="text-xs text-slate-500">{t('common.tel')}: {branch.phone}</p>}
-            <h2 className="mt-3 text-sm font-semibold tracking-wide uppercase">{t('receipt.title')}</h2>
-            {folio && <p className="text-xs text-slate-500">{folio.folio_number}</p>}
-          </header>
+      <div className="receipt-paper">
+        {/* Header — compact, two columns: hotel info left, receipt title right */}
+        <header className="flex items-start justify-between border-b border-slate-300 pb-2">
+          <div>
+            <h1 className="text-lg font-bold leading-tight">{branch?.name || 'Hotel'}</h1>
+            {branch?.address && <p className="text-[10px] text-slate-500 leading-tight">{branch.address}</p>}
+            {branch?.phone && <p className="text-[10px] text-slate-500 leading-tight">{t('common.tel')}: {branch.phone}</p>}
+          </div>
+          <div className="text-right">
+            <h2 className="text-sm font-bold uppercase tracking-wide">{t('receipt.title')}</h2>
+            {folio && <p className="text-[10px] text-slate-500">{folio.folio_number}</p>}
+            <p className="text-[10px] text-slate-400">{formatDate(new Date().toISOString())}</p>
+          </div>
+        </header>
 
-          <section className="mt-5 space-y-1.5 text-sm">
-            <Row label={t('common.date')} value={formatDateTime(new Date().toISOString())} />
-            <Row label={t('common.guest')} value={guest?.full_name || '-'} />
-            <Row label={t('common.room')} value={room?.room_number || '-'} />
-            {reservation && <Row label={t('common.reservation')} value={reservation.reservation_number} />}
-            {reservation && <Row label={t('res.stay')} value={`${formatDate(reservation.check_in_date)} — ${formatDate(reservation.check_out_date)}`} />}
-          </section>
+        {/* Guest info — compact column layout instead of row-by-row */}
+        <section className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px]">
+          <InfoCol label={t('common.date')} value={formatDate(new Date().toISOString())} />
+          <InfoCol label={t('common.guest')} value={guest?.full_name || '-'} />
+          <InfoCol label={t('common.room')} value={room?.room_number || '-'} />
+          {reservation ? (
+            <InfoCol label={t('common.reservation')} value={reservation.reservation_number} />
+          ) : (
+            <InfoCol label={t('common.reservation')} value="-" />
+          )}
+          {reservation ? (
+            <InfoCol label={t('res.stay')} value={`${formatDate(reservation.check_in_date)} — ${formatDate(reservation.check_out_date)}`} />
+          ) : (
+            <InfoCol label={t('res.stay')} value="-" />
+          )}
+          {guest?.phone ? (
+            <InfoCol label={t('common.phone')} value={guest.phone} />
+          ) : null}
+        </section>
 
-          {/* Charges table */}
-          <section className="mt-4 border-t border-slate-200 pt-3">
-            <p className="mb-2 text-xs font-bold uppercase text-slate-500">{t('common.charges')}</p>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="text-left py-1.5 pr-3">{t('common.date')}</th>
-                  <th className="text-left py-1.5 pr-3">{t('common.description')}</th>
-                  <th className="text-right py-1.5">{t('common.amount')}</th>
+        {/* Charges table — compact */}
+        <section className="mt-2">
+          <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">{t('common.charges')}</p>
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="border-b border-slate-300 text-slate-500">
+                <th className="text-left py-1 pr-2 font-medium">{t('common.date')}</th>
+                <th className="text-left py-1 pr-2 font-medium">{t('common.description')}</th>
+                <th className="text-right py-1 font-medium">{t('common.amount')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {charges.length === 0 ? (
+                <tr><td colSpan={3} className="py-1 text-center text-slate-400 text-[10px]">{t('receipt.no_charges')}</td></tr>
+              ) : charges.map((c) => (
+                <tr key={c.id} className="border-b border-slate-100">
+                  <td className="py-0.5 pr-2 whitespace-nowrap text-slate-500">{formatDate(c.created_at)}</td>
+                  <td className="py-0.5 pr-2">{c.description}</td>
+                  <td className="py-0.5 text-right font-medium">{formatIDR(c.amount)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {charges.length === 0 ? (
-                  <tr><td colSpan={3} className="py-2 text-center text-slate-400">{t('receipt.no_charges')}</td></tr>
-                ) : charges.map((c) => (
-                  <tr key={c.id} className="border-b border-slate-100">
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{formatDate(c.created_at)}</td>
-                    <td className="py-1.5 pr-3">{c.description}</td>
-                    <td className="py-1.5 text-right font-medium">{formatIDR(c.amount)}</td>
-                  </tr>
-                ))}
-                {totalTax > 0 && (
-                  <tr className="border-b border-slate-100">
-                    <td className="py-1.5 pr-3"></td>
-                    <td className="py-1.5 pr-3">{t('common.tax')}</td>
-                    <td className="py-1.5 text-right font-medium">{formatIDR(totalTax)}</td>
-                  </tr>
-                )}
-                {totalDiscounts > 0 && (
-                  <tr className="border-b border-slate-100">
-                    <td className="py-1.5 pr-3"></td>
-                    <td className="py-1.5 pr-3 text-red-600">{t('common.discount')}</td>
-                    <td className="py-1.5 text-right font-medium text-red-600">-{formatIDR(totalDiscounts)}</td>
-                  </tr>
-                )}
-              </tbody>
-              {charges.length > 0 && (
-                <tfoot>
-                  <tr className="border-t border-slate-300 font-bold">
-                    <td colSpan={2} className="py-2">{t('receipt.total_charges')}</td>
-                    <td className="py-2 text-right">{formatIDR(totalCharges + totalTax - totalDiscounts)}</td>
-                  </tr>
-                </tfoot>
-              )}
-            </table>
-          </section>
-
-          {/* All payments table */}
-          <section className="mt-4 border-t border-slate-200 pt-3">
-            <p className="mb-2 text-xs font-bold uppercase text-slate-500">{t('common.payments')}</p>
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-200 text-slate-500">
-                  <th className="text-left py-1.5 pr-3">{t('common.date')}</th>
-                  <th className="text-left py-1.5 pr-3">{t('common.method')}</th>
-                  <th className="text-left py-1.5 pr-3">{t('receipt.reference_no')}</th>
-                  <th className="text-right py-1.5">{t('common.amount')}</th>
+              ))}
+              {totalTax > 0 && (
+                <tr className="border-b border-slate-100">
+                  <td className="py-0.5 pr-2"></td>
+                  <td className="py-0.5 pr-2">{t('common.tax')}</td>
+                  <td className="py-0.5 text-right font-medium">{formatIDR(totalTax)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {allPayments.length === 0 ? (
-                  <tr><td colSpan={4} className="py-2 text-center text-slate-400">{t('receipt.no_payments')}</td></tr>
-                ) : allPayments.map((p) => (
-                  <tr key={p.payment_number} className="border-b border-slate-100">
-                    <td className="py-1.5 pr-3 whitespace-nowrap">{formatDate(p.created_at)}</td>
-                    <td className="py-1.5 pr-3">
-                      {p.method_name}
-                      {p.subtype && <span className="text-slate-400"> ({p.subtype})</span>}
-                    </td>
-                    <td className="py-1.5 pr-3 text-slate-500">{p.reference_number || '-'}</td>
-                    <td className="py-1.5 text-right font-medium text-emerald-700">{formatIDR(p.amount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-              {allPayments.length > 0 && (
-                <tfoot>
-                  <tr className="border-t border-slate-300 font-bold">
-                    <td colSpan={3} className="py-2">{t('receipt.total_paid')}</td>
-                    <td className="py-2 text-right text-emerald-700">{formatIDR(totalPayments)}</td>
-                  </tr>
-                </tfoot>
               )}
-            </table>
-          </section>
+              {totalDiscounts > 0 && (
+                <tr className="border-b border-slate-100">
+                  <td className="py-0.5 pr-2"></td>
+                  <td className="py-0.5 pr-2 text-red-600">{t('common.discount')}</td>
+                  <td className="py-0.5 text-right font-medium text-red-600">-{formatIDR(totalDiscounts)}</td>
+                </tr>
+              )}
+            </tbody>
+            {charges.length > 0 && (
+              <tfoot>
+                <tr className="border-t border-slate-300 font-bold">
+                  <td colSpan={2} className="py-1">{t('receipt.total_charges')}</td>
+                  <td className="py-1 text-right">{formatIDR(totalCharges + totalTax - totalDiscounts)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </section>
 
-          {/* Balance summary */}
-          <section className="mt-4 border-t-2 border-slate-300 pt-3">
-            <div className="flex items-center justify-between text-base font-bold">
-              <span>{t('common.balance')}</span>
-              <span className={balance > 0 ? 'text-red-600' : 'text-emerald-600'}>{formatIDR(Math.abs(balance))}{balance > 0 ? ` ${t('receipt.balance_due')}` : ` ${t('receipt.balance_settled')}`}</span>
-            </div>
-          </section>
+        {/* Payments table — compact */}
+        <section className="mt-2">
+          <p className="mb-1 text-[10px] font-bold uppercase text-slate-500">{t('common.payments')}</p>
+          <table className="w-full text-[11px]">
+            <thead>
+              <tr className="border-b border-slate-300 text-slate-500">
+                <th className="text-left py-1 pr-2 font-medium">{t('common.date')}</th>
+                <th className="text-left py-1 pr-2 font-medium">{t('common.method')}</th>
+                <th className="text-left py-1 pr-2 font-medium">{t('receipt.reference_no')}</th>
+                <th className="text-right py-1 font-medium">{t('common.amount')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allPayments.length === 0 ? (
+                <tr><td colSpan={4} className="py-1 text-center text-slate-400 text-[10px]">{t('receipt.no_payments')}</td></tr>
+              ) : allPayments.map((p) => (
+                <tr key={p.payment_number} className="border-b border-slate-100">
+                  <td className="py-0.5 pr-2 whitespace-nowrap text-slate-500">{formatDate(p.created_at)}</td>
+                  <td className="py-0.5 pr-2">
+                    {p.method_name}
+                    {p.subtype && <span className="text-slate-400"> ({p.subtype})</span>}
+                  </td>
+                  <td className="py-0.5 pr-2 text-slate-500">{p.reference_number || '-'}</td>
+                  <td className="py-0.5 text-right font-medium text-emerald-700">{formatIDR(p.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            {allPayments.length > 0 && (
+              <tfoot>
+                <tr className="border-t border-slate-300 font-bold">
+                  <td colSpan={3} className="py-1">{t('receipt.total_paid')}</td>
+                  <td className="py-1 text-right text-emerald-700">{formatIDR(totalPayments)}</td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </section>
 
-          <footer className="mt-auto pt-6 text-center text-xs text-slate-500">
-            <p>{t('receipt.thank_you')}</p>
-            <p className="mt-1">{t('common.printed')} {formatDateTime(new Date().toISOString())}</p>
-          </footer>
-      </main>
+        {/* Balance summary — compact inline */}
+        <section className="mt-2 border-t border-slate-300 pt-1">
+          <div className="flex items-center justify-between text-sm font-bold">
+            <span>{t('common.balance')}</span>
+            <span className={balance > 0 ? 'text-red-600' : 'text-emerald-600'}>{formatIDR(Math.abs(balance))}{balance > 0 ? ` ${t('receipt.balance_due')}` : ` ${t('receipt.balance_settled')}`}</span>
+          </div>
+        </section>
+
+        {/* Footer — minimal */}
+        <footer className="mt-auto pt-3 text-center text-[10px] text-slate-400">
+          <p>{t('receipt.thank_you')}</p>
+          <p className="mt-0.5">{t('common.printed')} {formatDateTime(new Date().toISOString())}</p>
+        </footer>
+      </div>
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function InfoCol({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-slate-500">{label}</span>
-      <span className="font-medium text-slate-800">{value}</span>
+    <div className="flex items-baseline gap-1.5">
+      <span className="text-slate-500 whitespace-nowrap">{label}:</span>
+      <span className="font-medium text-slate-800 truncate">{value}</span>
     </div>
   );
 }
