@@ -116,6 +116,12 @@ const REPORTS: ReportDef[] = [
     { key: 'reason', label: 'Reason' },
     { key: 'created_at', label: 'Date', type: 'date' },
   ]},
+  { key: 'cashier_shift_report', labelKey: 'reports.cashier_shift_report', category: 'financial', fields: [
+    { key: 'type', label: 'Type' },
+    { key: 'description', label: 'Description' },
+    { key: 'amount', label: 'Amount', type: 'money' },
+    { key: 'posted_at', label: 'Posted At', type: 'date' },
+  ]},
   { key: 'daily_income_report', labelKey: 'reports.daily_income_report', category: 'financial', fields: [
     { key: 'category', label: 'Category' },
     { key: 'amount', label: 'Amount', type: 'money' }
@@ -247,6 +253,8 @@ const FRONT_OFFICE_REPORT_KEYS = new Set([
   'room_transfer_report',
 ]);
 
+const CASHIER_REPORT_KEY = 'cashier_shift_report';
+
 // ── Detailed row types for the expandable daily income report ──────────────
 
 interface PaymentDetailRow {
@@ -283,6 +291,30 @@ interface ChargeBlockRow {
   details: ChargeDetailRow[];
 }
 
+// ── Cashier Shift Report types ──────────────────────────────────────────────
+
+interface CashierDetailRow {
+  description: string;
+  amount: number;
+  reservation_id: string;
+  folio_id: string;
+  guest_name: string;
+  room_number: string;
+  posted_at: string;
+  business_date: string;
+}
+
+interface CashierBlockRow {
+  label: string;
+  amount: number;
+  details: CashierDetailRow[];
+}
+
+interface CashierShiftBlocks {
+  payments: CashierBlockRow[];
+  charges: CashierBlockRow[];
+}
+
 // ── Date presets ────────────────────────────────────────────────────────────
 
 interface DatePreset {
@@ -317,7 +349,7 @@ export function ReportsPage() {
 
   // Receptionists get front office operational reports + daily income
   const accessibleReports = isReceptionist
-    ? REPORTS.filter(r => r.key === 'daily_income_report' || FRONT_OFFICE_REPORT_KEYS.has(r.key))
+    ? REPORTS.filter(r => r.key === 'daily_income_report' || r.key === CASHIER_REPORT_KEY || FRONT_OFFICE_REPORT_KEYS.has(r.key))
     : REPORTS;
 
   // Resolve the current business date on mount and use it as the default date range
@@ -349,7 +381,7 @@ export function ReportsPage() {
       if (found) { setActiveReport(found); return; }
     }
     if (isReceptionist) {
-      const found = accessibleReports.find(r => r.key === 'daily_income_report');
+      const found = accessibleReports.find(r => r.key === CASHIER_REPORT_KEY);
       if (found) setActiveReport(found);
       return;
     }
@@ -360,6 +392,7 @@ export function ReportsPage() {
   const [data, setData] = useState<any[]>([]);
   const [summary, setSummary] = useState<any>(null);
   const [dailyBlocks, setDailyBlocks] = useState<{ payments: PaymentBlockRow[]; charges: ChargeBlockRow[] } | null>(null);
+  const [cashierBlocks, setCashierBlocks] = useState<CashierShiftBlocks | null>(null);
   const [kpiBlocks, setKpiBlocks] = useState<any>(null);
   const [loading, setLoading] = useState(false);
 
@@ -422,6 +455,7 @@ export function ReportsPage() {
     setData([]);
     setSummary(null);
     setDailyBlocks(null);
+    setCashierBlocks(null);
     setKpiBlocks(null);
 
     if (report.category === 'front_office') {
@@ -519,7 +553,126 @@ export function ReportsPage() {
     } else if (report.category === 'financial') {
       const { fi, pay } = await fetchFinancialData();
 
-      if (report.key === 'daily_income_report') {
+      if (report.key === CASHIER_REPORT_KEY) {
+        // Fetch by created_at (actual transaction time), adjusted for the branch's
+        // business day cutoff so e.g. a 01:00 AM transaction on Sep 19 counts as Sep 18.
+        const branchIdForCutoff = selectedBranchId || branches[0]?.id;
+        let cutoffTime = '00:00:00';
+        let timezone = 'Asia/Jakarta';
+        if (branchIdForCutoff) {
+          const { data: branchInfo } = await supabase
+            .from('branches').select('business_day_cutoff, timezone').eq('id', branchIdForCutoff).maybeSingle();
+          if (branchInfo) {
+            cutoffTime = branchInfo.business_day_cutoff || '04:30:00';
+            timezone = branchInfo.timezone || 'Asia/Jakarta';
+          }
+        }
+
+        // The cutoff defines when a business date starts. For dateFrom, the window
+        // opens at cutoff time on the previous calendar day. For dateTo, it closes
+        // at cutoff time on that calendar day (exclusive — so we use the end of
+        // the previous second, i.e. cutoff - 1 sec, but simpler: use lte cutoff
+        // on dateTo which is exclusive in practice because the next day starts there).
+        // Business date D starts at cutoff on calendar day D-1 and ends just before cutoff on calendar day D.
+        const fromTs = addDays(dateFrom, -1) + 'T' + cutoffTime;
+        const toTs = dateTo + 'T' + cutoffTime;
+
+        const { data: itemsByTime } = await supabase.from('folio_items').select('*')
+          .in('branch_id', branchIds).eq('voided', false)
+          .gte('created_at', fromTs).lt('created_at', toTs)
+          .order('created_at', { ascending: false });
+
+        const { data: paymentsByTime } = await supabase.from('payments').select('*')
+          .in('branch_id', branchIds).eq('voided', false)
+          .gte('created_at', fromTs).lt('created_at', toTs)
+          .order('created_at', { ascending: false });
+
+        const { data: voidedFolios } = await supabase
+          .from('folios').select('id').in('branch_id', branchIds).eq('status', 'void');
+        const voidedFolioIds = new Set((voidedFolios || []).map((f: any) => f.id));
+        const { data: cancelledRes } = await supabase
+          .from('reservations').select('id').in('branch_id', branchIds).eq('status', 'cancelled');
+        const cancelledResIds = new Set((cancelledRes || []).map((r: any) => r.id));
+
+        const timeFi = ((itemsByTime || []) as any[]).filter(
+          (x) => !voidedFolioIds.has(x.folio_id) && !cancelledResIds.has(x.reservation_id)
+        );
+        const timePay = ((paymentsByTime || []) as any[]).filter(
+          (x) => !voidedFolioIds.has(x.folio_id) && !cancelledResIds.has(x.reservation_id)
+        );
+
+        // Build reservation map for guest/room info
+        const resIds = new Set<string>();
+        timePay.forEach((p) => { if (p.reservation_id) resIds.add(p.reservation_id); });
+        timeFi.forEach((x) => { if (x.reservation_id) resIds.add(x.reservation_id); });
+        let resMap: Record<string, any> = {};
+        if (resIds.size > 0) {
+          const { data: resData } = await supabase
+            .from('reservations')
+            .select('*,primary_guest:guests(full_name),room:rooms(room_number)')
+            .in('id', Array.from(resIds));
+          (resData || []).forEach((r: any) => { resMap[r.id] = r; });
+        }
+
+        // Group payments by method
+        const payByMethod: Record<string, { amount: number; details: CashierDetailRow[] }> = {};
+        timePay.forEach((p) => {
+          const code = (p.payment_method_code || 'OTHER').toUpperCase();
+          const label = p.is_ota ? 'OTA / Xendit' : code === 'CASH' ? 'Cash' : code === 'EDC' ? 'EDC' : code;
+          if (!payByMethod[label]) payByMethod[label] = { amount: 0, details: [] };
+          payByMethod[label].amount += Number(p.amount);
+          const res = p.reservation_id ? resMap[p.reservation_id] : null;
+          payByMethod[label].details.push({
+            description: `Payment ${p.payment_number || ''}`.trim(),
+            amount: Number(p.amount),
+            reservation_id: p.reservation_id || '',
+            folio_id: p.folio_id || '',
+            guest_name: res?.primary_guest?.full_name || '-',
+            room_number: res?.room?.room_number || '-',
+            posted_at: p.created_at,
+            business_date: p.business_date,
+          });
+        });
+        const paymentRows: CashierBlockRow[] = Object.entries(payByMethod).map(([label, val]) => ({
+          label, amount: val.amount, details: val.details,
+        }));
+        const totalPayments = paymentRows.reduce((s, r) => s + r.amount, 0);
+
+        // Group charges by category (only charges posted during this time, regardless of business_date)
+        const chargeItems = timeFi.filter((x) => x.item_type === 'charge' && x.amount > 0 && x.category !== DEPOSIT_CATEGORY);
+        const chargeByCat: Record<string, { amount: number; details: CashierDetailRow[] }> = {};
+        chargeItems.forEach((x) => {
+          const cat = x.category || 'miscellaneous';
+          const label = cat === 'room' ? 'Room Charges' : cat === 'early_checkin' ? 'Early Check-in' : cat === 'late_checkout' ? 'Late Check-out' : cat === 'amenity' ? 'Amenities' : cat === 'damage' ? 'Damage' : cat.charAt(0).toUpperCase() + cat.slice(1);
+          if (!chargeByCat[label]) chargeByCat[label] = { amount: 0, details: [] };
+          chargeByCat[label].amount += Number(x.amount);
+          const res = x.reservation_id ? resMap[x.reservation_id] : null;
+          chargeByCat[label].details.push({
+            description: x.description,
+            amount: Number(x.amount),
+            reservation_id: x.reservation_id || '',
+            folio_id: x.folio_id || '',
+            guest_name: res?.primary_guest?.full_name || '-',
+            room_number: res?.room?.room_number || '-',
+            posted_at: x.created_at,
+            business_date: x.business_date,
+          });
+        });
+        const chargeRows: CashierBlockRow[] = Object.entries(chargeByCat).map(([label, val]) => ({
+          label, amount: val.amount, details: val.details,
+        }));
+        const totalCharges = chargeRows.reduce((s, r) => s + r.amount, 0);
+
+        setCashierBlocks({ payments: paymentRows, charges: chargeRows });
+        setData([]);
+        setSummary({
+          totalPayments,
+          totalCharges,
+          netCash: totalPayments - totalCharges,
+        });
+      }
+
+      else if (report.key === 'daily_income_report') {
         const resIds = new Set<string>();
         pay.forEach((p) => { if (p.reservation_id) resIds.add(p.reservation_id); if (p.folio_id) resIds.add(p.folio_id); });
         fi.forEach((x) => { if (x.reservation_id) resIds.add(x.reservation_id); if (x.folio_id) resIds.add(x.folio_id); });
@@ -940,6 +1093,17 @@ export function ReportsPage() {
     csv += `# Branch: ${branchLabel}\n`;
     csv += `# Generated: ${new Date().toISOString()}\n\n`;
 
+    if (cashierBlocks) {
+      csv += 'PAYMENTS RECEIVED (by posted time)\n';
+      csv += 'Method,Amount\n';
+      cashierBlocks.payments.forEach(r => { csv += `${r.label},${r.amount}\n`; });
+      csv += `Total,${cashierBlocks.payments.reduce((s, r) => s + r.amount, 0)}\n\n`;
+      csv += 'CHARGES POSTED (by posted time)\n';
+      csv += 'Category,Amount\n';
+      cashierBlocks.charges.forEach(r => { csv += `${r.label},${r.amount}\n`; });
+      csv += `Total,${cashierBlocks.charges.reduce((s, r) => s + r.amount, 0)}\n\n`;
+    }
+
     if (dailyBlocks) {
       csv += 'PAYMENTS\n';
       csv += 'Category,Amount\n';
@@ -992,7 +1156,11 @@ export function ReportsPage() {
   };
 
   const groups = isReceptionist
-    ? { front_office: accessibleReports.filter(r => r.category === 'front_office'), daily_income: accessibleReports.filter(r => r.key === 'daily_income_report') }
+    ? {
+        cashier: accessibleReports.filter(r => r.key === CASHIER_REPORT_KEY),
+        daily_income: accessibleReports.filter(r => r.key === 'daily_income_report'),
+        front_office: accessibleReports.filter(r => r.category === 'front_office'),
+      }
     : {
         front_office: accessibleReports.filter(r => r.category === 'front_office'),
         financial: accessibleReports.filter(r => r.category === 'financial'),
@@ -1045,7 +1213,9 @@ export function ReportsPage() {
               </div>
 
               {loading ? <LoadingPage /> :
-                dailyBlocks ? (
+                cashierBlocks ? (
+                  <CashierShiftReport blocks={cashierBlocks} summary={summary} />
+                ) : dailyBlocks ? (
                   <DailyIncomeReport blocks={dailyBlocks} summary={summary} />
                 ) : isKpiReport && kpiBlocks ? (
                   <KpiSummaryReport kpiBlocks={kpiBlocks} />
@@ -1078,6 +1248,190 @@ export function ReportsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Cashier Shift Report — transactions by actual posted time (created_at)
+// ════════════════════════════════════════════════════════════════════════════
+
+function CashierShiftReport({ blocks, summary }: { blocks: CashierShiftBlocks; summary: any }) {
+  const totalPayments = blocks.payments.reduce((s, r) => s + r.amount, 0);
+  const totalCharges = blocks.charges.reduce((s, r) => s + r.amount, 0);
+  const [expandedPayments, setExpandedPayments] = useState<Set<string>>(new Set());
+  const [expandedCharges, setExpandedCharges] = useState<Set<string>>(new Set());
+  const [folioReservationId, setFolioReservationId] = useState<string | null>(null);
+
+  const togglePayment = (label: string) => {
+    setExpandedPayments((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  const toggleCharge = (label: string) => {
+    setExpandedCharges((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+        This report shows transactions by the actual date and time they were posted, using the branch's business day cutoff. Transactions after midnight but before the cutoff still count as the previous business day — matching what the cashier physically received.
+      </div>
+
+      {/* Payments Block */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-2 pb-2 border-b border-slate-200">Payments Received by Method</h3>
+        <div className="overflow-x-auto border border-slate-200 rounded-lg">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <th className="text-left py-2 px-3 w-8"></th>
+                <th className="text-left py-2 px-3">Payment Method</th>
+                <th className="text-right py-2 px-3">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {blocks.payments.length === 0 ? (
+                <tr><td colSpan={3} className="text-center py-4 text-slate-400">No payments</td></tr>
+              ) : blocks.payments.map((r) => {
+                const isOpen = expandedPayments.has(r.label);
+                return (
+                  <CashierRowGroup key={r.label} row={r} isOpen={isOpen} onToggle={() => togglePayment(r.label)} onViewFolio={(resId) => setFolioReservationId(resId)} isPayment />
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-emerald-50 font-bold">
+                <td colSpan={2} className="py-2 px-3">Total Payments Received</td>
+                <td className="text-right py-2 px-3 text-emerald-700">{formatIDR(totalPayments)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Charges Block */}
+      <div>
+        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-wide mb-2 pb-2 border-b border-slate-200">Charges Posted by Category</h3>
+        <div className="overflow-x-auto border border-slate-200 rounded-lg">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50 text-slate-500">
+                <th className="text-left py-2 px-3 w-8"></th>
+                <th className="text-left py-2 px-3">Charge Category</th>
+                <th className="text-right py-2 px-3">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {blocks.charges.length === 0 ? (
+                <tr><td colSpan={3} className="text-center py-4 text-slate-400">No charges</td></tr>
+              ) : blocks.charges.map((r) => {
+                const isOpen = expandedCharges.has(r.label);
+                return (
+                  <CashierRowGroup key={r.label} row={r} isOpen={isOpen} onToggle={() => toggleCharge(r.label)} onViewFolio={(resId) => setFolioReservationId(resId)} />
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="bg-blue-50 font-bold">
+                <td colSpan={2} className="py-2 px-3">Total Charges Posted</td>
+                <td className="text-right py-2 px-3 text-blue-700">{formatIDR(totalCharges)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Net cash summary */}
+      {summary && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div className="bg-emerald-50 rounded-lg p-3">
+            <p className="text-xs text-slate-500">Total Payments Received</p>
+            <p className="text-lg font-bold text-emerald-700">{formatIDR(summary.totalPayments)}</p>
+          </div>
+          <div className="bg-blue-50 rounded-lg p-3">
+            <p className="text-xs text-slate-500">Total Charges Posted</p>
+            <p className="text-lg font-bold text-blue-700">{formatIDR(summary.totalCharges)}</p>
+          </div>
+          <div className="bg-slate-100 rounded-lg p-3 border border-slate-300">
+            <p className="text-xs text-slate-500">Net Cash Position (Received - Posted)</p>
+            <p className={`text-lg font-bold ${summary.netCash >= 0 ? 'text-slate-900' : 'text-red-600'}`}>
+              {summary.netCash >= 0 ? '+' : ''}{formatIDR(summary.netCash)}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {folioReservationId && (
+        <FolioDetailModal reservationId={folioReservationId} onClose={() => setFolioReservationId(null)} />
+      )}
+    </div>
+  );
+}
+
+function CashierRowGroup({ row, isOpen, onToggle, onViewFolio, isPayment }: {
+  row: CashierBlockRow;
+  isOpen: boolean;
+  onToggle: () => void;
+  onViewFolio: (reservationId: string) => void;
+  isPayment?: boolean;
+}) {
+  return (
+    <>
+      <tr className="border-b border-slate-100 cursor-pointer hover:bg-slate-50" onClick={onToggle}>
+        <td className="py-2 px-3 text-slate-400">{isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</td>
+        <td className="py-2 px-3 font-medium text-slate-700">{row.label}</td>
+        <td className={`text-right py-2 px-3 font-medium ${isPayment ? 'text-emerald-700' : 'text-blue-700'}`}>{formatIDR(row.amount)}</td>
+      </tr>
+      {isOpen && row.details.length > 0 && (
+        <tr className="bg-slate-50/50">
+          <td colSpan={3} className="px-3 pb-3 pt-1">
+            <div className="overflow-x-auto border border-slate-200 rounded-lg">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-white text-slate-500">
+                    <th className="text-left py-1.5 px-3">Description</th>
+                    <th className="text-left py-1.5 px-3">Guest</th>
+                    <th className="text-left py-1.5 px-3">Room</th>
+                    <th className="text-right py-1.5 px-3">Amount</th>
+                    <th className="text-left py-1.5 px-3">Posted At</th>
+                    <th className="text-left py-1.5 px-3">Business Date</th>
+                    <th className="text-center py-1.5 px-3">Folio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {row.details.map((d, i) => (
+                    <tr key={i} className="border-b border-slate-100 hover:bg-blue-50/50">
+                      <td className="py-1.5 px-3 text-slate-700">{d.description}</td>
+                      <td className="py-1.5 px-3 text-slate-700">{d.guest_name}</td>
+                      <td className="py-1.5 px-3 text-slate-600">{d.room_number}</td>
+                      <td className={`text-right py-1.5 px-3 font-medium ${isPayment ? 'text-emerald-700' : 'text-blue-700'}`}>{formatIDR(d.amount)}</td>
+                      <td className="py-1.5 px-3 text-slate-500">{formatDateTime(d.posted_at)}</td>
+                      <td className="py-1.5 px-3 text-slate-400">{formatDate(d.business_date)}</td>
+                      <td className="text-center py-1.5 px-3">
+                        {d.reservation_id && (
+                          <button onClick={(e) => { e.stopPropagation(); onViewFolio(d.reservation_id); }} className="text-blue-600 hover:text-blue-700 font-medium inline-flex items-center gap-1">
+                            <FileText size={12} /> View
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
@@ -1594,7 +1948,8 @@ function ReportGroup({ title, reports, activeKey, onSelect, t }: {
     front_office: 'Front Office',
     financial: 'Financial',
     management: 'Management',
-    daily_income: 'Daily Income'
+    daily_income: 'Daily Income',
+    cashier: 'Cashier'
   };
   return (
     <div>

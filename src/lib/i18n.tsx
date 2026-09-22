@@ -285,6 +285,7 @@ const translations: Record<string, { en: string; id: string }> = {
   'reports.noshow_report': { en: 'No-Show Report', id: 'Laporan Tidak Hadir' },
   'reports.room_transfer_report': { en: 'Room Transfer Report', id: 'Laporan Pindah Kamar' },
   'reports.daily_income_report': { en: 'Daily Income Report', id: 'Laporan Pendapatan Harian' },
+  'reports.cashier_shift_report': { en: 'Cashier Shift Report', id: 'Laporan Shift Kasir' },
   'reports.monthly_income_report': { en: 'Monthly Income Report', id: 'Laporan Pendapatan Bulanan' },
   'reports.revenue_by_branch': { en: 'Revenue by Branch', id: 'Pendapatan per Cabang' },
   'reports.revenue_by_room_type': { en: 'Revenue by Room Type', id: 'Pendapatan per Jenis Kamar' },
