@@ -27,47 +27,39 @@ export async function getBusinessDate(
     branch.business_day_cutoff || '04:30:00';
 
 
-  const jakarta =
-    new Date(
-      new Date().toLocaleString(
-        'en-US',
-        {
-          timeZone: timezone
-        }
-      )
-    );
+  const nowParts = new Date().toLocaleString('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).split(/[-, :]+/);
 
+  const jakartaYear = Number(nowParts[0]);
+  const jakartaMonth = Number(nowParts[1]);
+  const jakartaDay = Number(nowParts[2]);
+  const jakartaHour = Number(nowParts[3]);
+  const jakartaMinute = Number(nowParts[4]);
 
-  const [
-    cutoffHour,
-    cutoffMinute
-  ] =
-    cutoff
-      .split(':')
-      .map(Number);
+  const [cutoffHour, cutoffMinute] = cutoff.split(':').map(Number);
 
+  const currentMinutes = jakartaHour * 60 + jakartaMinute;
+  const cutoffMinutes = cutoffHour * 60 + cutoffMinute;
 
-  const currentMinutes =
-    jakarta.getHours() * 60 +
-    jakarta.getMinutes();
+  let businessDay = jakartaDay;
+  let businessMonth = jakartaMonth;
+  let businessYear = jakartaYear;
 
-
-  const cutoffMinutes =
-    cutoffHour * 60 +
-    cutoffMinute;
-
-
-  if(currentMinutes < cutoffMinutes){
-
-    jakarta.setDate(
-      jakarta.getDate() - 1
-    );
-
+  if (currentMinutes < cutoffMinutes) {
+    const d = new Date(jakartaYear, jakartaMonth - 1, jakartaDay);
+    d.setDate(d.getDate() - 1);
+    businessDay = d.getDate();
+    businessMonth = d.getMonth() + 1;
+    businessYear = d.getFullYear();
   }
 
-
-  return jakarta
-    .toISOString()
-    .slice(0,10);
+  return `${businessYear}-${String(businessMonth).padStart(2, '0')}-${String(businessDay).padStart(2, '0')}`;
 
 }

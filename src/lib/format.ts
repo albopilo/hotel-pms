@@ -13,6 +13,7 @@ export function formatDate(date: string | Date): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Jakarta',
   });
 }
 
@@ -22,9 +23,11 @@ export function formatDateTime(date: string | Date): string {
     day: '2-digit',
     month: 'short',
     year: 'numeric',
+    timeZone: 'Asia/Jakarta',
   }) + ' ' + d.toLocaleTimeString('en-GB', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Asia/Jakarta',
   });
 }
 
@@ -34,14 +37,16 @@ export function formatTime(time: string): string {
 }
 
 export function nightsBetween(checkIn: string, checkOut: string): number {
-  const ci = new Date(checkIn);
-  const co = new Date(checkOut);
+  const [cy, cm, cd] = checkIn.slice(0, 10).split('-').map(Number);
+  const [oy, om, od] = checkOut.slice(0, 10).split('-').map(Number);
+  const ci = new Date(cy, cm - 1, cd);
+  const co = new Date(oy, om - 1, od);
   const diff = co.getTime() - ci.getTime();
   return Math.max(1, Math.round(diff / (1000 * 60 * 60 * 24)));
 }
 
 export function todayISO(): string {
-  return new Date().toISOString().split('T')[0];
+  return todayInTimezone('Asia/Jakarta');
 }
 
 export function todayInTimezone(timezone: string = 'Asia/Jakarta'): string {
@@ -55,10 +60,27 @@ export function nowInTimezone(timezone: string = 'Asia/Jakarta'): string {
   return now.toLocaleTimeString('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false });
 }
 
+export function jakartaYear(timezone: string = 'Asia/Jakarta'): number {
+  const now = new Date();
+  return Number(now.toLocaleString('en-CA', { timeZone: timezone, year: 'numeric' }));
+}
+
+export function jakartaTodayWithOffset(timezone: string = 'Asia/Jakarta'): string {
+  return todayInTimezone(timezone) + 'T00:00:00+07:00';
+}
+
+export function jakartaEndOfDayWithOffset(dateStr: string): string {
+  return dateStr + 'T23:59:59+07:00';
+}
+
 export function addDays(dateStr: string, days: number): string {
-  const d = new Date(dateStr);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().split('T')[0];
+  const [y, m, d] = dateStr.slice(0, 10).split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const yy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
 }
 
 export function calcTax(amount: number, taxRate: number): number {

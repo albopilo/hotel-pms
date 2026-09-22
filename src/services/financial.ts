@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import type { Folio, FolioItem, PaymentMethod, ChargeCategory } from '@/types/database';
 import { getBusinessDate } from '@/services/businessDateService';
+import { todayISO, jakartaYear } from '@/lib/format';
 
 export interface FolioTotals {
   totalCharges: number;
@@ -202,7 +203,7 @@ export const paymentService = {
     const method = methods.find((m) => m.id === input.methodId);
     if (!method) throw new FinancialError('Invalid payment method', 'invalid_method');
 
-    const payNum = `PAY-${new Date().getFullYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
+    const payNum = `PAY-${jakartaYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
 
     const { data: payRow, error: payErr } = await supabase.from('payments').insert({
       branch_id: input.branchId,

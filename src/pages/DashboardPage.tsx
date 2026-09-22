@@ -5,7 +5,7 @@ import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
 import { Card, StatCard } from '@/components/ui/Card';
 import { LoadingPage } from '@/components/ui/States';
-import { formatIDR } from '@/lib/format';
+import { formatIDR, todayISO } from '@/lib/format';
 import { BedDouble, CircleCheck as CheckCircle2, LogIn, LogOut, Users, Wallet, TrendingUp, CircleAlert as AlertCircle } from 'lucide-react';
 
 interface DashboardStats {
@@ -54,7 +54,7 @@ export function DashboardPage() {
       .in('branch_id', branchIds)
       .eq('is_active', true);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = todayISO();
 
     // Get arrivals today
     const { count: arrivals } = await supabase

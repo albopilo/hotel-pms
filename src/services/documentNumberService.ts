@@ -1,12 +1,12 @@
 import { supabase } from '@/lib/supabase';
-
+import { jakartaYear } from '@/lib/format';
 
 export async function generateNumber(
  type:'reservation'|'folio'|'invoice'
 ){
 
  const year =
- new Date().getFullYear();
+ jakartaYear();
 
 
  const prefix =

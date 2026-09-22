@@ -1,10 +1,12 @@
 import { supabase } from '@/lib/supabase';
 
+import { jakartaYear } from '@/lib/format';
+
 export async function generateDocumentNumber(
   type:'RES'|'FOL'|'INV'
 ){
 
-  const year=new Date().getFullYear();
+  const year=jakartaYear();
 
   const {data,error}=await supabase.rpc(
     'next_document_number',

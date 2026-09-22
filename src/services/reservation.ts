@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { nightsBetween } from '@/lib/format';
+import { nightsBetween, todayISO } from '@/lib/format';
 import { folioService } from './financial';
 import type { Reservation } from '@/types/database';
 
@@ -148,7 +148,7 @@ export const reservationService = {
   },
 
   async checkIn(reservationId: string, branchId: string, checkinTime: string, userId: string, orgId: string, roomId?: string | null): Promise<void> {
-    const now = `${new Date().toISOString().split('T')[0]}T${checkinTime}:00`;
+    const now = `${todayISO()}T${checkinTime}:00`;
     const { error } = await supabase
       .from('reservations')
       .update({ status: 'checked_in', actual_check_in: now, check_in_time: checkinTime })
@@ -389,7 +389,7 @@ export const reservationService = {
     orgId: string,
     balance: number,
   ): Promise<void> {
-    const now = `${new Date().toISOString().split('T')[0]}T${checkoutTime}:00`;
+    const now = `${todayISO()}T${checkoutTime}:00`;
     const { error } = await supabase
       .from('reservations')
       .update({ status: 'checked_out', actual_check_out: now, check_out_time: checkoutTime })

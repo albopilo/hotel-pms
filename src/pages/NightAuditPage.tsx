@@ -6,7 +6,7 @@ import { useI18n } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { formatIDR, formatDate } from '@/lib/format';
+import { formatIDR, formatDate, todayISO } from '@/lib/format';
 import { Moon, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Clock, History } from 'lucide-react';
 import type { NightAudit, HotelBusinessDate } from '@/types/database';
 
@@ -90,7 +90,7 @@ export function NightAuditPage() {
 
       <Card title={t('night_audit.business_date')}>
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="text-3xl font-bold text-slate-900">{formatDate(businessDate?.business_date || new Date().toISOString().split('T')[0])}</div>
+          <div className="text-3xl font-bold text-slate-900">{formatDate(businessDate?.business_date || todayISO())}</div>
           <Badge color={businessDate?.status === 'open' ? 'green' : 'gray'}>{businessDate?.status || 'open'}</Badge>
         </div>
       </Card>
