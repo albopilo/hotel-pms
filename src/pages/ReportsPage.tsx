@@ -325,10 +325,10 @@ interface DatePreset {
 const DATE_PRESETS: DatePreset[] = [
   { labelKey: 'reports.preset_today', getRange: (bd) => ({ from: bd, to: bd }) },
   { labelKey: 'reports.preset_yesterday', getRange: (bd) => { const d = addDays(bd, -1); return { from: d, to: d }; } },
-  { labelKey: 'reports.preset_this_week', getRange: (bd) => { const d = new Date(bd); const day = d.getDay(); const monday = addDays(bd, -(day === 0 ? 6 : day - 1)); return { from: monday, to: addDays(monday, 6) }; } },
-  { labelKey: 'reports.preset_last_week', getRange: (bd) => { const d = new Date(bd); const day = d.getDay(); const monday = addDays(bd, -(day === 0 ? 6 : day - 1) - 7); return { from: monday, to: addDays(monday, 6) }; } },
-  { labelKey: 'reports.preset_this_month', getRange: (bd) => { const d = new Date(bd); const first = new Date(d.getFullYear(), d.getMonth(), 1).toISOString().split('T')[0]; const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0]; return { from: first, to: last }; } },
-  { labelKey: 'reports.preset_last_month', getRange: (bd) => { const d = new Date(bd); const first = new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0]; const last = new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0]; return { from: first, to: last }; } },
+  { labelKey: 'reports.preset_this_week', getRange: (bd) => { const [y, m, d] = bd.slice(0, 10).split('-').map(Number); const day = new Date(y, m - 1, d).getDay(); const monday = addDays(bd, -(day === 0 ? 6 : day - 1)); return { from: monday, to: addDays(monday, 6) }; } },
+  { labelKey: 'reports.preset_last_week', getRange: (bd) => { const [y, m, d] = bd.slice(0, 10).split('-').map(Number); const day = new Date(y, m - 1, d).getDay(); const monday = addDays(bd, -(day === 0 ? 6 : day - 1) - 7); return { from: monday, to: addDays(monday, 6) }; } },
+  { labelKey: 'reports.preset_this_month', getRange: (bd) => { const [y, m] = bd.slice(0, 10).split('-').map(Number); const first = `${y}-${String(m).padStart(2, '0')}-01`; const lastDay = new Date(y, m, 0).getDate(); const last = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`; return { from: first, to: last }; } },
+  { labelKey: 'reports.preset_last_month', getRange: (bd) => { const [y, m] = bd.slice(0, 10).split('-').map(Number); const pm = m - 1; const py = pm < 1 ? y - 1 : y; const rm = pm < 1 ? 12 : pm; const first = `${py}-${String(rm).padStart(2, '0')}-01`; const lastDay = new Date(py, rm, 0).getDate(); const last = `${py}-${String(rm).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`; return { from: first, to: last }; } },
   { labelKey: 'reports.preset_last_7_days', getRange: (bd) => ({ from: addDays(bd, -6), to: bd }) },
   { labelKey: 'reports.preset_last_30_days', getRange: (bd) => ({ from: addDays(bd, -29), to: bd }) },
 ];
@@ -484,15 +484,15 @@ export function ReportsPage() {
         const { data: newRes } = await supabase.from('reservations')
           .select('*,primary_guest:guests(*)')
           .in('branch_id', branchIds)
-          .gte('created_at', dateFrom + 'T00:00:00')
-          .lte('created_at', dateTo + 'T23:59:59')
+          .gte('created_at', dateFrom + 'T00:00:00+07:00')
+          .lte('created_at', dateTo + 'T23:59:59+07:00')
           .order('created_at', { ascending: false });
         const { data: cancelledRes } = await supabase.from('reservations')
           .select('*,primary_guest:guests(*)')
           .in('branch_id', branchIds)
           .eq('status', 'cancelled')
-          .gte('updated_at', dateFrom + 'T00:00:00')
-          .lte('updated_at', dateTo + 'T23:59:59')
+          .gte('updated_at', dateFrom + 'T00:00:00+07:00')
+          .lte('updated_at', dateTo + 'T23:59:59+07:00')
           .order('updated_at', { ascending: false });
         const newRows = ((newRes || []) as any[]).map((r) => ({ ...r, type: 'New' }));
         const cancelRows = ((cancelledRes || []) as any[]).map((r) => ({ ...r, type: 'Cancellation' }));
@@ -507,8 +507,8 @@ export function ReportsPage() {
         const { data: transfers } = await supabase.from('room_transfers')
           .select('*,reservation:reservations(reservation_number,primary_guest:guests(full_name))')
           .in('branch_id', branchIds)
-          .gte('created_at', dateFrom + 'T00:00:00')
-          .lte('created_at', dateTo + 'T23:59:59')
+          .gte('created_at', dateFrom + 'T00:00:00+07:00')
+          .lte('created_at', dateTo + 'T23:59:59+07:00')
           .order('created_at', { ascending: false });
         const transferRows = (transfers || []) as any[];
         // Resolve room numbers
@@ -537,7 +537,7 @@ export function ReportsPage() {
         if (report.key === 'arrival_report')
           q = q.eq('status', 'confirmed').gte('check_in_date', dateFrom).lte('check_in_date', dateTo);
         if (report.key === 'departure_report')
-          q = q.eq('status', 'checked_out').gte('actual_check_out', dateFrom + 'T00:00:00').lte('actual_check_out', dateTo + 'T23:59:59');
+          q = q.eq('status', 'checked_out').gte('actual_check_out', dateFrom + 'T00:00:00+07:00').lte('actual_check_out', dateTo + 'T23:59:59+07:00');
         if (report.key === 'inhouse_guest_report')
           q = q.eq('status', 'checked_in');
         if (report.key === 'reservation_report')
@@ -573,9 +573,11 @@ export function ReportsPage() {
         // at cutoff time on that calendar day (exclusive — so we use the end of
         // the previous second, i.e. cutoff - 1 sec, but simpler: use lte cutoff
         // on dateTo which is exclusive in practice because the next day starts there).
-        // Business date D starts at cutoff on calendar day D-1 and ends just before cutoff on calendar day D.
-        const fromTs = addDays(dateFrom, -1) + 'T' + cutoffTime;
-        const toTs = dateTo + 'T' + cutoffTime;
+        // Business date D starts at cutoff on calendar day D and ends just before cutoff on calendar day D+1.
+        // e.g. with cutoff 04:30: business date Sep 21 = Sep 21 04:30 to Sep 22 04:30 (Jakarta time).
+        // Append +07:00 so Postgres interprets these as Jakarta time, not UTC.
+        const fromTs = dateFrom + 'T' + cutoffTime + '+07:00';
+        const toTs = addDays(dateTo, 1) + 'T' + cutoffTime + '+07:00';
 
         const { data: itemsByTime } = await supabase.from('folio_items').select('*')
           .in('branch_id', branchIds).eq('voided', false)
