@@ -42,6 +42,14 @@ export interface ChargeInput {
   orgId: string;
 }
 
+export interface PostStayChargeInput extends ChargeInput {
+  methodId: string;
+  subtype?: string;
+  edcTerminal?: string;
+  referenceNumber?: string;
+  approvalCode?: string;
+}
+
 export class FinancialError extends Error {
   constructor(message: string, public code: string = 'financial_error') {
     super(message);
@@ -368,11 +376,15 @@ export const chargeService = {
     await folioService.syncFolioTotals(input.folioId);
   },
 
-  async addPostStayCharge(input: ChargeInput, categories: ChargeCategory[]): Promise<void> {
+  async addPostStayCharge(input: PostStayChargeInput, categories: ChargeCategory[], methods: PaymentMethod[]): Promise<void> {
     assertDefined(input.description, 'Description');
+    assertDefined(input.methodId, 'Payment method');
     if (input.amount <= 0) {
       throw new FinancialError('Charge amount must be greater than zero', 'invalid_amount');
     }
+
+    const method = methods.find((m) => m.id === input.methodId);
+    if (!method) throw new FinancialError('Invalid payment method', 'invalid_method');
 
     const cat = categories.find((c) => c.id === input.categoryId);
 
@@ -442,8 +454,50 @@ export const chargeService = {
       action: 'post_stay_charge',
       object_type: 'folio',
       object_id: input.folioId,
-      new_value: { description: input.description, amount: input.amount },
+      new_value: { description: input.description, amount: input.amount, payment_method: method.code },
     });
+
+    await folioService.syncFolioTotals(input.folioId);
+
+    const payNum = `PAY-${jakartaYear()}-${crypto.randomUUID().slice(0,8).toUpperCase()}`;
+    const { data: payRow, error: payErr } = await supabase.from('payments').insert({
+      branch_id: input.branchId,
+      reservation_id: input.reservationId,
+      folio_id: input.folioId,
+      guest_id: input.guestId,
+      payment_number: payNum,
+      amount: input.amount,
+      payment_method_id: method.id,
+      payment_method_code: method.code,
+      payment_subtype: input.subtype || null,
+      edc_terminal: input.edcTerminal || null,
+      reference_number: input.referenceNumber || null,
+      approval_code: input.approvalCode || null,
+      is_ota: method.is_ota,
+      business_date: await getBusinessDate(input.branchId),
+      created_by: input.userId,
+      notes: input.notes || null,
+    }).select('id').single();
+    if (payErr) throw new FinancialError(payErr.message, 'db_error');
+
+    const { error: pmtFolioErr } = await supabase.from('folio_items').insert({
+      folio_id: input.folioId,
+      branch_id: input.branchId,
+      reservation_id: input.reservationId,
+      guest_id: input.guestId,
+      item_type: 'payment',
+      category: method.code,
+      description: `Post-stay payment: ${method.name}${input.subtype ? ` (${input.subtype})` : ''}`,
+      quantity: 1,
+      unit_amount: -input.amount,
+      amount: -input.amount,
+      business_date: await getBusinessDate(input.branchId),
+      created_by: input.userId,
+      notes: input.notes || null,
+      payment_id: payRow.id,
+      is_post_stay: true,
+    });
+    if (pmtFolioErr) throw new FinancialError(pmtFolioErr.message, 'db_error');
 
     await folioService.syncFolioTotals(input.folioId);
   },

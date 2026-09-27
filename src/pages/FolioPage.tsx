@@ -342,7 +342,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); openPrintTab({ type: 'charge-summary', folioId: folio.id }); }} />}
       {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async (paymentId?: string) => { setShowTakePayment(false); await reloadItems(); if (paymentId) openPrintTab({ type: 'receipt', paymentId }); }} />}
       {showTransfer && <RoomTransferModal folio={folio} reservation={reservation} currentRoom={room} userId={user!.id} orgId={user!.organization_id} branchId={folio.branch_id} onClose={() => setShowTransfer(false)} onSaved={onClose} />}
-      {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); await reloadItems(); }} />}
+      {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); await reloadItems(); }} />}
       <ConfirmModal
         open={!!voidTarget}
         onClose={() => setVoidTarget(null)}
@@ -556,10 +556,10 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
   );
 }
 
-const initialPostStayForm = { category_id: '', description: '', amount: '0', notes: '' };
+const initialPostStayForm = { category_id: '', description: '', amount: '0', method_id: '', subtype: '', edc_terminal: '', reference_number: '', approval_code: '', notes: '' };
 
-function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, orgId, onClose, onSaved }: {
-  folio: Folio; reservation: Reservation | null; room: Room | null; chargeCats: ChargeCategory[];
+function PostStayChargeModal({ folio, reservation, room, chargeCats, paymentMethods, userId, orgId, onClose, onSaved }: {
+  folio: Folio; reservation: Reservation | null; room: Room | null; chargeCats: ChargeCategory[]; paymentMethods: PaymentMethod[];
   userId: string; orgId: string; onClose: () => void; onSaved: () => void;
 }) {
   const { t } = useI18n();
@@ -572,8 +572,11 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
 
   useEffect(() => { saveDraft(POST_STAY_DRAFT_KEY, form); }, [form]);
 
+  const selectedMethod = paymentMethods.find((m) => m.id === form.method_id);
+
   const handleSubmit = async () => {
     if (!form.description || parseFloat(form.amount) <= 0) { showToast('Description and amount required', 'error'); return; }
+    if (!form.method_id) { showToast('Payment method required', 'error'); return; }
     setSaving(true);
     try {
       await chargeService.addPostStayCharge({
@@ -581,8 +584,10 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
         guestId: folio.guest_id, roomId: room?.id || reservation?.room_id || null,
         categoryId: form.category_id, description: form.description,
         amount: parseFloat(form.amount), notes: form.notes, userId, orgId,
-      }, chargeCats);
-      showToast('Post-stay charge added', 'success');
+        methodId: form.method_id, subtype: form.subtype, edcTerminal: form.edc_terminal,
+        referenceNumber: form.reference_number, approvalCode: form.approval_code,
+      }, chargeCats, paymentMethods);
+      showToast('Post-stay charge and payment added', 'success');
       clearDraft(POST_STAY_DRAFT_KEY);
       setSaving(false);
       onSaved();
@@ -599,13 +604,30 @@ function PostStayChargeModal({ folio, reservation, room, chargeCats, userId, org
     <Modal open onClose={handleCancel} title={t('folio.post_stay_charge')} size="md"
       footer={<><Button variant="secondary" onClick={handleCancel}>{t('common.cancel')}</Button><Button loading={saving} variant="warning" onClick={handleSubmit}>{t('common.save')}</Button></>}>
       <div className="space-y-4">
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">This charge will be added as a post-stay additional charge. The original finalized invoice will not be modified.</div>
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-700">This charge will be added as a post-stay additional charge. A payment for the same amount will be recorded using the selected method. The original finalized invoice will not be modified.</div>
         <Select label={t('common.category')} value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}>
           <option value="">--</option>
           {chargeCats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </Select>
         <Input label={t('common.description')} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required />
         <MoneyInput label={t('common.amount')} value={form.amount} onChange={(v) => setForm({ ...form, amount: v })} required />
+        <Select label={t('common.payment_method')} value={form.method_id} onChange={(e) => setForm({ ...form, method_id: e.target.value, subtype: '' })} required>
+          <option value="">--</option>
+          {paymentMethods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+        </Select>
+        {selectedMethod?.is_edc && (
+          <Select label="EDC Subtype" value={form.subtype} onChange={(e) => setForm({ ...form, subtype: e.target.value })}>
+            <option value="">--</option>
+            <option value="debit">{t('payment.edc_debit')}</option>
+            <option value="credit">{t('payment.edc_credit')}</option>
+            <option value="qris">{t('payment.edc_qris')}</option>
+          </Select>
+        )}
+        {selectedMethod?.is_edc && (
+          <Input label={t('common.edc_terminal')} value={form.edc_terminal} onChange={(e) => setForm({ ...form, edc_terminal: e.target.value })} />
+        )}
+        <Input label={t('common.reference_number')} value={form.reference_number} onChange={(e) => setForm({ ...form, reference_number: e.target.value })} />
+        {selectedMethod?.is_edc && <Input label={t('common.approval_code')} value={form.approval_code} onChange={(e) => setForm({ ...form, approval_code: e.target.value })} />}
         <Textarea label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
       </div>
     </Modal>

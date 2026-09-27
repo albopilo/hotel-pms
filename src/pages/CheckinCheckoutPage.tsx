@@ -7,7 +7,7 @@ import { useI18n } from '@/lib/i18n';
 import { useToast } from '@/lib/toast';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Modal, ConfirmModal } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/Modal';
 import { Input, Select, MoneyInput } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Badge } from '@/components/ui/Badge';
@@ -590,8 +590,6 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
     return draft || new Date().toTimeString().slice(0,5);
   });
   const [completing,setCompleting]=useState(false);
-  const [overrideUnpaid,setOverrideUnpaid]=useState(false);
-  const [showOverrideConfirm,setShowOverrideConfirm]=useState(false);
   const [hasInvoice,setHasInvoice]=useState(false);
 
   const branch=branches.find(b=>b.id===reservation.branch_id);
@@ -655,7 +653,7 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   const totalTax=taxes.reduce((s,i)=>s+i.amount,0);
 
   const balance=totalCharges+totalTax-totalDiscounts-totalPayments;
-  const hasUnpaid=balance>0;
+  const hasUnpaid=Math.abs(balance)>0.01;
 
   const handleAddLateCharge = async () => {
     if (!folio) return;
@@ -688,21 +686,14 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   };
 
   const completeCheckout = async () => {
-    if(hasUnpaid && !overrideUnpaid){ setShowOverrideConfirm(true); return; }
+    if(Math.abs(balance) > 0.01){ showToast(t('checkout.balance_not_zero'), 'error'); return; }
     setCompleting(true);
 
     try {
       if(!folio) throw new Error('Folio not found');
 
-      const { data: latestItems, error: itemsError } = await supabase.from('folio_items').select('*').eq('folio_id', folio.id).eq('voided', false);
-      if(itemsError) throw itemsError;
-
-      const items = latestItems || [];
-      const tCharges = items.filter(i => i.item_type === 'charge').reduce((sum,i)=>sum + Number(i.amount || 0), 0);
-      const tPayments = items.filter(i => i.item_type === 'payment').reduce((sum,i)=>sum + Math.abs(Number(i.amount || 0)), 0);
-      const outstanding = tCharges - tPayments;
-
-      if(outstanding > 0 && !overrideUnpaid){ setShowOverrideConfirm(true); setCompleting(false); return; }
+      const totals = await folioService.getTotals(folio.id);
+      if(Math.abs(totals.netBalance) > 0.01){ showToast(t('checkout.balance_not_zero'), 'error'); setCompleting(false); return; }
 
       if(room){
         const {error:roomError} = await supabase.from('rooms').update({ status:'dirty' }).eq('id',room.id);
@@ -741,7 +732,7 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
       await supabase.from('audit_logs').insert({
         organization_id: user!.organization_id, branch_id: reservation.branch_id, user_id: user!.id,
         action: 'check_out', object_type: 'reservation', object_id: reservation.id,
-        new_value: { checkout_time: checkoutTime, total_charges: tCharges, total_payments: tPayments, balance: outstanding }
+        new_value: { checkout_time: checkoutTime, total_charges: totals.totalCharges, total_payments: totals.totalPayments, balance: totals.netBalance }
       });
 
       showToast(t('checkout.complete'), 'success');
@@ -827,15 +818,13 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
           </table>
         </div>
 
-        {hasUnpaid && !overrideUnpaid && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-3 flex items-center gap-2 text-red-700">
-            <AlertCircle size={18}/><span className="text-sm">{t('checkout.unpaid_balance_warning')}</span>
-          </div>
-        )}
-
-        {overrideUnpaid && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-amber-700 text-sm">
-            Override applied — checkout will proceed with unpaid balance (logged to audit).
+        {hasUnpaid && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-1 text-red-700">
+            <div className="flex items-center gap-2">
+              <AlertCircle size={18}/><span className="text-sm font-medium">{t('checkout.balance_not_zero')}</span>
+            </div>
+            {balance > 0 && <div className="text-sm">{t('checkout.unpaid_amount')}: <span className="font-bold">{formatIDR(Math.abs(balance))}</span> — {t('checkout.settle_first')}</div>}
+            {balance < 0 && <div className="text-sm">{t('checkout.overpayment_amount')}: <span className="font-bold">{formatIDR(Math.abs(balance))}</span> — {t('checkout.refund_or_adjust')}</div>}
           </div>
         )}
 
@@ -843,19 +832,10 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
           {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
           {onNavigateToInvoice && hasInvoice && <Button size="sm" variant="outline" onClick={() => onNavigateToInvoice(reservation.id)}><Receipt size={14}/>{t('res.view_invoice')}</Button>}
           <Button variant="secondary" onClick={onClose}>{t('common.cancel')}</Button>
-          <Button loading={completing} variant={hasUnpaid?'danger':'success'} onClick={completeCheckout}><LogOut size={16}/>{t('checkout.complete')}</Button>
+          <Button loading={completing} variant={hasUnpaid?'danger':'success'} disabled={hasUnpaid} onClick={completeCheckout}><LogOut size={16}/>{t('checkout.complete')}</Button>
         </div>
       </div>
     </Modal>
-    <ConfirmModal
-      open={showOverrideConfirm}
-      onClose={()=>setShowOverrideConfirm(false)}
-      onConfirm={()=>{ setOverrideUnpaid(true); setShowOverrideConfirm(false); }}
-      title={t('checkout.unpaid_balance')}
-      message={t('checkout.unpaid_balance_warning')}
-      confirmLabel={t('checkout.override')}
-      variant="danger"
-    />
   </>);
 }
 
