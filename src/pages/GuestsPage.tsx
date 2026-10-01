@@ -52,7 +52,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
 
   const load = useCallback(async () => {
     setLoading(true);
-    const { data } = await supabase.from('guests').select('*').order('full_name', { ascending: true }).limit(100000);
+    const { data } = await supabase.from('guests').select('*').order('full_name', { ascending: true });
     setGuests((data as Guest[]) || []);
     setLoading(false);
   }, []);
@@ -148,7 +148,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
         {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} onSelectReservation={onSelectReservation} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onNewReservationForGuest={onNewReservationForGuest} />}
       </Modal>
 
-      <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} allGuests={guests} orgId={user!.organization_id} userId={user!.id} onSaved={() => { setShowForm(false); load(); }} />
+      <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} allGuests={guests} orgId={user!.organization_id} onSaved={() => { setShowForm(false); load(); }} />
 
       <MergeGuestsModal open={showMerge} onClose={() => setShowMerge(false)} guests={guests} userId={user!.id} orgId={user!.organization_id} onMerged={() => { setShowMerge(false); load(); }} />
     </div>
@@ -395,14 +395,12 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
   );
 }
 
-function GuestFormModal({ open, onClose, guest, allGuests, orgId, userId, onSaved }: {
-  open: boolean; onClose: () => void; guest: Guest | null; allGuests: Guest[]; orgId: string; userId: string; onSaved: () => void;
+function GuestFormModal({ open, onClose, guest, allGuests, orgId, onSaved }: {
+  open: boolean; onClose: () => void; guest: Guest | null; allGuests: Guest[]; orgId: string; onSaved: () => void;
 }) {
   const { t } = useI18n();
   const { showToast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [createM13, setCreateM13] = useState(false);
-  const [m13Creating, setM13Creating] = useState(false);
   const [form, setForm] = useState(() => {
     const draft = loadDraft<typeof initialForm>(GUEST_DRAFT_KEY);
     return draft || { ...initialForm };
@@ -471,43 +469,11 @@ function GuestFormModal({ open, onClose, guest, allGuests, orgId, userId, onSave
     }
     setSaving(true);
     const payload = { ...form, organization_id: orgId, date_of_birth: form.date_of_birth || null };
-    let savedGuestId: string | null = null;
-    if (guest) {
-      const { error } = await supabase.from('guests').update(payload).eq('id', guest.id);
-      if (error) { showToast(error.message, 'error'); setSaving(false); return; }
-      savedGuestId = guest.id;
-    } else {
-      const { data, error } = await supabase.from('guests').insert(payload).select().single();
-      if (error) { showToast(error.message, 'error'); setSaving(false); return; }
-      savedGuestId = (data as Guest)?.id || null;
-    }
-    showToast('Saved', 'success');
-    clearDraft(GUEST_DRAFT_KEY);
-
-    // M13 member creation (non-blocking)
-    if (createM13 && savedGuestId) {
-      const emailToUse = form.email || '';
-      if (!emailToUse) {
-        showToast(t('m13.member_create_failed') + ': ' + t('m13.email_required'), 'warning');
-      } else {
-        setM13Creating(true);
-        try {
-          const { member, error: m13Err } = await loyaltyService.createMember(savedGuestId, emailToUse, userId);
-          if (m13Err) {
-            showToast(t('m13.member_create_failed') + ': ' + m13Err, 'warning');
-          } else if (member?.auth_user_id) {
-            showToast(t('m13.member_exists'), 'info');
-          } else {
-            showToast(t('m13.member_created'), 'success');
-          }
-        } catch (e: any) {
-          showToast(t('m13.member_create_failed') + ': ' + (e.message || ''), 'warning');
-        }
-        setM13Creating(false);
-      }
-    }
-
-    onSaved();
+    const { error } = guest
+      ? await supabase.from('guests').update(payload).eq('id', guest.id)
+      : await supabase.from('guests').insert(payload);
+    if (error) showToast(error.message, 'error');
+    else { showToast('Saved', 'success'); clearDraft(GUEST_DRAFT_KEY); onSaved(); }
     setSaving(false);
   };
 
@@ -565,23 +531,6 @@ function GuestFormModal({ open, onClose, guest, allGuests, orgId, userId, onSave
         </div>
         <Textarea label={t('common.address')} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} rows={2} />
         <Textarea label={t('common.notes')} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} />
-
-        {!guest && (
-          <div className="border border-slate-200 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <Award size={18} className="text-amber-500" />
-              <span className="font-medium text-slate-700">M13 Club</span>
-            </div>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={createM13} onChange={(e) => setCreateM13(e.target.checked)} className="rounded" />
-              {t('m13.create_member')}
-            </label>
-            <p className="text-xs text-slate-400 mt-1">{t('m13.create_member_desc')}</p>
-            {createM13 && !form.email && (
-              <p className="text-xs text-red-500 mt-2">{t('m13.email_required')}</p>
-            )}
-          </div>
-        )}
       </form>
     </Modal>
   );

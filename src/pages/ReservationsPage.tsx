@@ -118,7 +118,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
     setAllLoaded(false);
     const [r, g, ro, rt, bs, hol] = await Promise.all([
       buildQuery(),
-      supabase.from('guests').select('*').order('created_at', { ascending: false }).limit(100000),
+      supabase.from('guests').select('*').order('created_at', { ascending: false }),
       supabase.from('rooms').select('*').in('branch_id', branchIds),
       supabase.from('room_types').select('*').in('branch_id', branchIds),
       supabase.from('booking_sources').select('*').order('sort_order'),
