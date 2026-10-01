@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
@@ -118,7 +119,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
     setAllLoaded(false);
     const [r, g, ro, rt, bs, hol] = await Promise.all([
       buildQuery(),
-      supabase.from('guests').select('*').order('created_at', { ascending: false }),
+      fetchAll<Guest>('guests', { order: { column: 'created_at', ascending: false } }),
       supabase.from('rooms').select('*').in('branch_id', branchIds),
       supabase.from('room_types').select('*').in('branch_id', branchIds),
       supabase.from('booking_sources').select('*').order('sort_order'),
@@ -128,7 +129,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
     setReservations(resData);
     setTotalCount(r.count || 0);
     setLoadedCount(resData.length);
-    setGuests(g.data || []);
+    setGuests(g);
     setRooms(ro.data || []);
     setRoomTypes(rt.data || []);
     setBookingSources(bs.data || []);
@@ -139,13 +140,20 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
   const loadAll = useCallback(async () => {
     if (!branchIds.length || allLoaded) return;
     setLoadingMore(true);
-    const r = await buildQuery({ all: true });
-    const resData = (r.data || []).map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status }));
+    const allData = await fetchAll<Reservation>('reservations', {
+      filters: (q) => {
+        let qq = q.in('branch_id', branchIds);
+        if (statusFilter !== 'all') qq = qq.eq('status', statusFilter);
+        return qq;
+      },
+      order: { column: 'created_at', ascending: false },
+    });
+    const resData = allData.map((x: any) => ({ ...x, status: x.status === 'tentative' ? 'confirmed' : x.status }));
     setReservations(resData);
     setLoadedCount(resData.length);
     setAllLoaded(true);
     setLoadingMore(false);
-  }, [branchIds, allLoaded, buildQuery]);
+  }, [branchIds, allLoaded, statusFilter]);
 
   const loadMore = useCallback(async () => {
     if (!branchIds.length || allLoaded || loadingMore) return;

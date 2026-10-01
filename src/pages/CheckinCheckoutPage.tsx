@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { invoiceService } from '@/services/invoiceService';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
@@ -53,16 +54,16 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
     if (!branchIds.length) return setLoading(false);
     setLoading(true);
 
-    const [{ data: res }, { data: co }, { data: g }, { data: r }] = await Promise.all([
+    const [{ data: res }, { data: co }, g, { data: r }] = await Promise.all([
       supabase.from('reservations').select('*').in('branch_id', branchIds).in('status', ['confirmed', 'checked_in']).order('check_in_date'),
       supabase.from('reservations').select('*').in('branch_id', branchIds).eq('status', 'checked_out').order('actual_check_out', { ascending: false }).limit(20),
-      supabase.from('guests').select('*'),
+      fetchAll<Guest>('guests'),
       supabase.from('rooms').select('*').in('branch_id', branchIds)
     ]);
 
     setReservations((res as Reservation[]) || []);
     setCheckedOut((co as Reservation[]) || []);
-    setGuests((g as Guest[]) || []);
+    setGuests(g);
     setRooms((r as Room[]) || []);
 
     const coIds = ((co as Reservation[]) || []).map(r => r.id).filter(Boolean);
@@ -473,20 +474,10 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
         if (!emailToUse) {
           showToast(t('m13.member_create_failed') + ': ' + t('m13.email_required'), 'warning');
         } else {
-          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/m13-create-member`;
-          const { data: { session } } = await supabase.auth.getSession();
-          const resp = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token || ''}`,
-            },
-            body: JSON.stringify({ guest_id: guest.id, email: emailToUse, staff_user_id: user!.id }),
-          });
-          const result = await resp.json();
-          if (result.error) {
-            showToast(t('m13.member_create_failed') + ': ' + result.error, 'warning');
-          } else if (result.already_existed) {
+          const { member, error: m13Err } = await loyaltyService.createMember(guest.id, emailToUse, user!.id);
+          if (m13Err) {
+            showToast(t('m13.member_create_failed') + ': ' + m13Err, 'warning');
+          } else if (member?.auth_user_id) {
             showToast(t('m13.member_exists'), 'info');
           } else {
             showToast(t('m13.member_created'), 'success');

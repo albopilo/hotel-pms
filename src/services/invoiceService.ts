@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import type { FolioItem } from '@/types/database';
 
 export interface InvoiceCreateInput {
@@ -217,12 +218,11 @@ export const invoiceService = {
   },
 
   async getInvoicesByBranch(branchIds: string[]) {
-    const { data, error } = await supabase
-      .from('invoices')
-      .select(`*, guests(id,full_name,phone,email),branches(id,name,address),reservations(id,reservation_number,room_id,rooms(id,room_number)),invoice_items(id,description,category,quantity,unit_amount,amount)`)
-      .in('branch_id', branchIds)
-      .order('created_at', { ascending: false });
-    if (error) throw new InvoiceError(error.message);
+    const data = await fetchAll('invoices', {
+      select: `*, guests(id,full_name,phone,email),branches(id,name,address),reservations(id,reservation_number,room_id,rooms(id,room_number)),invoice_items(id,description,category,quantity,unit_amount,amount)`,
+      filters: (q) => q.in('branch_id', branchIds),
+      order: { column: 'created_at', ascending: false },
+    });
     return data;
   },
 

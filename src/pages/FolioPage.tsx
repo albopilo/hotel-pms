@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { fetchAll } from '@/lib/fetchAll';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
@@ -51,9 +52,12 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
   const load = useCallback(async () => {
     if (branchIds.length === 0) { setLoading(false); return; }
     setLoading(true);
-    const { data, error } = await supabase.from('folios').select('*, guest:guests(full_name), reservation:reservations(room:rooms(room_number))').in('branch_id', branchIds).order('created_at', { ascending: false });
-    if (error) { setLoading(false); return; }
-    setFolios((data as FolioListRow[]) || []);
+    const data = await fetchAll<FolioListRow>('folios', {
+      select: '*, guest:guests(full_name), reservation:reservations(room:rooms(room_number))',
+      filters: (q) => q.in('branch_id', branchIds),
+      order: { column: 'created_at', ascending: false },
+    });
+    setFolios(data);
     setLoading(false);
   }, [branchIds]);
 
