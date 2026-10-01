@@ -22,6 +22,9 @@ import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt, CircleArrowUp as ArrowUpCircle } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
 import { openPrintTab } from '@/lib/printRoute';
+import { loyaltyService } from '@/services/loyaltyService';
+import type { M13Member } from '@/types/database';
+import { Award } from 'lucide-react';
 
 const CHECKIN_DRAFT_KEY = 'checkin_time_draft';
 const CHECKOUT_DRAFT_KEY = 'checkout_time_draft';
@@ -242,6 +245,10 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
   const [completing, setCompleting] = useState(false);
   const [lockIntegration, setLockIntegration] = useState<HotelLockIntegration | null>(null);
   const [hasInvoice, setHasInvoice] = useState(false);
+  const [m13Member, setM13Member] = useState<M13Member | null>(null);
+  const [createM13, setCreateM13] = useState(false);
+  const [m13Email, setM13Email] = useState('');
+  const [m13Creating, setM13Creating] = useState(false);
 
   const lockProviderType = lockIntegration?.provider_type || 'mock';
   const isProductionLock = lockProviderType === 'production';
@@ -281,6 +288,12 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
 
       const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
       setLockIntegration(lockInteg as HotelLockIntegration | null);
+
+      // Check if guest is already an M13 member
+      if (g) {
+        const { data: m13 } = await supabase.from('m13_members').select('*').eq('pms_guest_id', (g as Guest).id).maybeSingle();
+        setM13Member(m13 as M13Member | null);
+      }
 
       if (f) {
         const { data: inv } = await supabase.from('invoices').select('id').eq('folio_id', f.id).maybeSingle();
@@ -451,6 +464,40 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
 
     showToast(t('checkin.complete'),'success');
     clearDraft(CHECKIN_DRAFT_KEY);
+
+    // M13 member creation (non-blocking)
+    if (createM13 && !m13Member && guest) {
+      setM13Creating(true);
+      try {
+        const emailToUse = m13Email || guest.email || '';
+        if (!emailToUse) {
+          showToast(t('m13.member_create_failed') + ': ' + t('m13.email_required'), 'warning');
+        } else {
+          const apiUrl = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/m13-create-member`;
+          const { data: { session } } = await supabase.auth.getSession();
+          const resp = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token || ''}`,
+            },
+            body: JSON.stringify({ guest_id: guest.id, email: emailToUse, staff_user_id: user!.id }),
+          });
+          const result = await resp.json();
+          if (result.error) {
+            showToast(t('m13.member_create_failed') + ': ' + result.error, 'warning');
+          } else if (result.already_existed) {
+            showToast(t('m13.member_exists'), 'info');
+          } else {
+            showToast(t('m13.member_created'), 'success');
+          }
+        }
+      } catch (e: any) {
+        showToast(t('m13.member_create_failed') + ': ' + (e.message || ''), 'warning');
+      }
+      setM13Creating(false);
+    }
+
     setCompleting(false);
     onClose();
   };
@@ -505,6 +552,43 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
             </div>
           </div>
         )}
+
+        {/* M13 Club Section */}
+        <div className="border border-slate-200 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Award size={18} className="text-amber-500" />
+            <span className="font-medium text-slate-700">M13 Club</span>
+          </div>
+          {m13Member ? (
+            <div className="flex items-center justify-between">
+              <div className="text-sm">
+                <span className="text-slate-500">{t('m13.member_id')}:</span> <span className="font-mono font-medium">{m13Member.member_number}</span>
+                <span className="text-slate-500 ml-4">{t('m13.points')}:</span> <span className="font-bold text-amber-600">{m13Member.points_balance}</span>
+              </div>
+              <Badge color="green">{t('m13.already_member')}</Badge>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <label className="flex items-center gap-2 text-sm text-slate-700">
+                <input type="checkbox" checked={createM13} onChange={(e) => setCreateM13(e.target.checked)} className="rounded" />
+                {t('m13.create_member')}
+              </label>
+              <p className="text-xs text-slate-400">{t('m13.create_member_desc')}</p>
+              {createM13 && !guest?.email && (
+                <div>
+                  <label className="text-sm font-medium text-slate-700">{t('common.email')} <span className="text-red-500">*</span></label>
+                  <input
+                    type="email"
+                    value={m13Email}
+                    onChange={(e) => setM13Email(e.target.value)}
+                    placeholder={t('m13.email_hint')}
+                    className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className="border border-slate-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
@@ -734,6 +818,19 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
         action: 'check_out', object_type: 'reservation', object_id: reservation.id,
         new_value: { checkout_time: checkoutTime, total_charges: totals.totalCharges, total_payments: totals.totalPayments, balance: totals.netBalance }
       });
+
+      // M13 loyalty points earning (non-blocking)
+      try {
+        const { points, error: earnError } = await loyaltyService.earnPointsOnCheckout(reservation.id, user!.id);
+        if (earnError) {
+          console.warn('M13 points earning failed:', earnError);
+          showToast(t('m13.points_earn_failed'), 'warning');
+        } else if (points > 0) {
+          showToast(`${t('m13.points_earned')}: ${points}`, 'success');
+        }
+      } catch (e: any) {
+        console.warn('M13 points earning error:', e);
+      }
 
       showToast(t('checkout.complete'), 'success');
       clearDraft(CHECKOUT_DRAFT_KEY);

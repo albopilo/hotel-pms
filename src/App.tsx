@@ -27,6 +27,15 @@ import { PaymentSettingsPage } from '@/pages/PaymentSettingsPage';
 import { SystemSettingsPage } from '@/pages/SystemSettingsPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
 import { GuidePage } from '@/pages/GuidePage';
+import { LoyaltyMembersPage } from '@/pages/m13/LoyaltyMembersPage';
+import { LoyaltySettingsPage } from '@/pages/m13/LoyaltySettingsPage';
+import { RewardsAdminPage } from '@/pages/m13/RewardsAdminPage';
+import { LoyaltyActivityPage } from '@/pages/m13/LoyaltyActivityPage';
+import { MemberApp } from '@/pages/m13/MemberApp';
+
+function isM13MemberRoute(): boolean {
+  return window.location.hash.startsWith('#/m13');
+}
 
 function AuthenticatedApp() {
   const { user, branches } = useAuth();
@@ -110,6 +119,14 @@ function AuthenticatedApp() {
         return <SystemSettingsPage />;
       case 'audit_logs':
         return <AuditLogsPage />;
+      case 'm13_members':
+        return <LoyaltyMembersPage />;
+      case 'm13_settings':
+        return <LoyaltySettingsPage />;
+      case 'm13_rewards':
+        return <RewardsAdminPage />;
+      case 'm13_activity':
+        return <LoyaltyActivityPage />;
       case 'guide':
         return <GuidePage />;
       default:
@@ -152,6 +169,13 @@ function AppInner() {
 }
 
 export default function App() {
+  if (isM13MemberRoute()) {
+    return (
+      <I18nProvider>
+        <MemberApp />
+      </I18nProvider>
+    );
+  }
   if (parsePrintHash(window.location.hash)) {
     return (
       <I18nProvider>

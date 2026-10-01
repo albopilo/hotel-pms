@@ -11,11 +11,12 @@ import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck } from 'lucide-react';
-import type { Guest, Reservation } from '@/types/database';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck, Award, Ticket, Star, History as HistoryIcon, Minus } from 'lucide-react';
+import type { Guest, Reservation, M13Member, M13PointLedger, M13RewardRedemptionWithReward, UserRole } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { findSimilarGuests, findDuplicateGuestPairs, type SimilarGuestMatch, type DuplicatePair } from '@/lib/guest-similarity';
 import { guestMergeService, type MergePreview } from '@/services/guestMergeService';
+import { loyaltyService } from '@/services/loyaltyService';
 import { NATIONALITIES } from '@/lib/nationalities';
 
 const GUEST_DRAFT_KEY = 'guest_form_draft';
@@ -164,9 +165,19 @@ interface GuestDetailProps {
 }
 
 function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, onNavigateToInvoice, onNewReservationForGuest }: GuestDetailProps) {
+  const { user } = useAuth();
   const { t } = useI18n();
+  const { showToast } = useToast();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [stats, setStats] = useState({ totalStays: 0, totalSpending: 0, outstanding: 0 });
+  const [m13Member, setM13Member] = useState<M13Member | null>(null);
+  const [m13History, setM13History] = useState<M13PointLedger[]>([]);
+  const [m13Redemptions, setM13Redemptions] = useState<M13RewardRedemptionWithReward[]>([]);
+  const [showM13Detail, setShowM13Detail] = useState(false);
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [adjustPoints, setAdjustPoints] = useState('');
+  const [adjustReason, setAdjustReason] = useState('');
+  const [adjusting, setAdjusting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -211,6 +222,19 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
         totalSpending: charges + tax - discounts,
         outstanding: netBalance > 0 ? netBalance : 0,
       });
+
+      // Load M13 membership
+      const { data: m13 } = await supabase.from('m13_members').select('*').eq('pms_guest_id', guest.id).maybeSingle();
+      if (m13) {
+        const m = m13 as M13Member;
+        setM13Member(m);
+        const [h, r] = await Promise.all([
+          loyaltyService.getMemberPointHistory(m.id),
+          loyaltyService.getMemberRedemptions(m.id),
+        ]);
+        setM13History(h);
+        setM13Redemptions(r);
+      }
     })();
   }, [guest.id]);
 
@@ -267,6 +291,100 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      {/* M13 Club Panel */}
+      <div className="border border-slate-200 rounded-lg p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Award size={18} className="text-amber-500" />
+          <span className="font-medium text-slate-700">M13 Club</span>
+        </div>
+        {m13Member ? (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4 text-sm">
+                <div><span className="text-slate-500">{t('m13.member_id')}:</span> <span className="font-mono font-medium">{m13Member.member_number}</span></div>
+                <div><span className="text-slate-500">{t('m13.points')}:</span> <span className="font-bold text-amber-600">{m13Member.points_balance}</span></div>
+                <Badge color={m13Member.status === 'active' ? 'green' : 'gray'}>{m13Member.status === 'active' ? t('common.active') : t('common.inactive')}</Badge>
+              </div>
+              <Button size="sm" variant="outline" onClick={() => setShowM13Detail(!showM13Detail)}>{t('m13.view_history')}</Button>
+            </div>
+            {showM13Detail && (
+              <div className="space-y-3 border-t border-slate-100 pt-3">
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('m13.point_history')}</p>
+                  {m13History.length === 0 ? <p className="text-sm text-slate-400">{t('m13.no_history')}</p> : (
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {m13History.map((e) => (
+                        <div key={e.id} className="flex items-center justify-between text-xs border border-slate-100 rounded px-2 py-1">
+                          <div><span className="text-slate-700">{e.description || e.type}</span> <span className="text-slate-400">{formatDate(e.created_at)}</span></div>
+                          <span className={`font-bold ${(e.type === 'EARN' || e.type === 'ADJUSTMENT_CREDIT') ? 'text-emerald-600' : 'text-red-600'}`}>{(e.type === 'EARN' || e.type === 'ADJUSTMENT_CREDIT') ? '+' : '-'}{e.points}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">{t('m13.redemptions')}</p>
+                  {m13Redemptions.length === 0 ? <p className="text-sm text-slate-400">{t('m13.no_redemptions')}</p> : (
+                    <div className="space-y-1 max-h-32 overflow-y-auto">
+                      {m13Redemptions.map((r) => (
+                        <div key={r.id} className="flex items-center justify-between text-xs border border-slate-100 rounded px-2 py-1">
+                          <div><span className="text-slate-700">{r.reward?.name || '-'}</span> <span className="text-slate-400">{r.redemption_code}</span></div>
+                          <Badge color={r.status === 'UNUSED' ? 'green' : 'gray'} size="sm">{r.status}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                {user && (() => {
+                  const role = user.role as UserRole;
+                  const canAdd = role === 'super_admin';
+                  const canDeduct = role === 'super_admin' || role === 'manager' || role === 'receptionist';
+                  if (!canDeduct) return null;
+                  const handleAdjust = async (isAdd: boolean) => {
+                    const pts = parseInt(adjustPoints, 10);
+                    if (!pts || pts <= 0) { showToast('Invalid points', 'error'); return; }
+                    if (!adjustReason.trim()) { showToast(t('m13.adjust_reason_required'), 'error'); return; }
+                    setAdjusting(true);
+                    const { error } = await loyaltyService.adjustPoints(m13Member.id, isAdd ? pts : -pts, adjustReason, user.id);
+                    if (error) { showToast(t('m13.adjust_failed'), 'error'); } else {
+                      showToast(t('m13.adjust_success'), 'success');
+                      setShowAdjust(false); setAdjustPoints(''); setAdjustReason('');
+                      const { data: updated } = await supabase.from('m13_members').select('*').eq('id', m13Member.id).maybeSingle();
+                      setM13Member(updated as M13Member | null);
+                      const h = await loyaltyService.getMemberPointHistory(m13Member.id);
+                      setM13History(h);
+                    }
+                    setAdjusting(false);
+                  };
+                  return (
+                    <div className="border-t border-slate-100 pt-3">
+                      {!showAdjust ? (
+                        <div className="flex gap-2">
+                          {canAdd && <Button size="sm" variant="success" onClick={() => setShowAdjust(true)}><Plus size={12} /> {t('m13.add_points')}</Button>}
+                          <Button size="sm" variant="danger" onClick={() => setShowAdjust(true)}><Minus size={12} /> {t('m13.deduct_points')}</Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <Input type="number" placeholder={canAdd ? t('m13.points_to_add') + ' / ' + t('m13.points_to_deduct') : t('m13.points_to_deduct')} value={adjustPoints} onChange={(e) => setAdjustPoints(e.target.value)} />
+                          <Textarea placeholder={t('common.reason')} value={adjustReason} onChange={(e) => setAdjustReason(e.target.value)} rows={2} />
+                          <div className="flex gap-2">
+                            {canAdd && <Button size="sm" variant="success" loading={adjusting} onClick={() => handleAdjust(true)}>{t('m13.add_points')}</Button>}
+                            <Button size="sm" variant="danger" loading={adjusting} onClick={() => handleAdjust(false)}>{t('m13.deduct_points')}</Button>
+                            <Button size="sm" variant="secondary" onClick={() => setShowAdjust(false)}>{t('common.cancel')}</Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-sm text-slate-400">{t('m13.not_member')}</p>
         )}
       </div>
 

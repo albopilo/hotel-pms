@@ -8,7 +8,7 @@ import {
   LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, FileText,
   Receipt, Wallet, FileSpreadsheet, Moon, Building2, DoorOpen,
   Settings, ScrollText, CreditCard, Tags, Globe, LogOut, Search,
-  ChevronDown, Hotel, KeyRound, BookOpen,
+  ChevronDown, Hotel, KeyRound, BookOpen, Award, Gift, Activity,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { UserRole } from '@/types/database';
@@ -20,7 +20,8 @@ export type PageKey =
   | 'reports' | 'night_audit'
   | 'branches' | 'room_types' | 'users' | 'charge_categories'
   | 'payment_settings' | 'hotel_lock' | 'system_settings' | 'audit_logs'
-  | 'booking_sources' | 'guide';
+  | 'booking_sources' | 'guide'
+  | 'm13_members' | 'm13_settings' | 'm13_rewards' | 'm13_activity';
 
 interface NavItem {
   key: PageKey;
@@ -51,6 +52,10 @@ const navItems: NavItem[] = [
   { key: 'system_settings', labelKey: 'nav.system_settings', icon: <Settings size={20} />, roles: ['super_admin'], group: 'admin' },
   { key: 'audit_logs', labelKey: 'nav.audit_logs', icon: <ScrollText size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
   { key: 'guide', labelKey: 'nav.guide', icon: <BookOpen size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
+  { key: 'm13_members', labelKey: 'nav.m13_members', icon: <Award size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
+  { key: 'm13_settings', labelKey: 'nav.m13_settings', icon: <Award size={20} />, roles: ['super_admin'], group: 'admin' },
+  { key: 'm13_rewards', labelKey: 'nav.m13_rewards', icon: <Gift size={20} />, roles: ['super_admin'], group: 'admin' },
+  { key: 'm13_activity', labelKey: 'nav.m13_activity', icon: <Activity size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
 ];
 
 interface LayoutProps {

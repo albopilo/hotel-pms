@@ -482,3 +482,93 @@ export interface RoomWithRelations extends Room {
   branch?: Branch | null;
   current_reservation?: ReservationWithRelations | null;
 }
+
+// ============================================================
+// M13 Club Loyalty System Types
+// ============================================================
+
+export type M13LedgerType =
+  | 'EARN'
+  | 'REDEEM'
+  | 'ADJUSTMENT_DEBIT'
+  | 'ADJUSTMENT_CREDIT'
+  | 'EXPIRATION'
+  | 'REVERSAL';
+
+export type M13RedemptionStatus = 'UNUSED' | 'USED';
+
+export type M13MemberStatus = 'active' | 'inactive';
+
+export interface M13Member {
+  id: string;
+  pms_guest_id: string | null;
+  member_number: string;
+  auth_user_id: string | null;
+  organization_id: string;
+  status: M13MemberStatus;
+  points_balance: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface M13MemberWithGuest extends M13Member {
+  guest?: Guest | null;
+}
+
+export interface M13LoyaltySettings {
+  id: string;
+  organization_id: string;
+  charge_category_code: string;
+  spending_threshold: number;
+  points_awarded: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface M13PointLedger {
+  id: string;
+  member_id: string;
+  type: M13LedgerType;
+  points: number;
+  description: string | null;
+  source_type: string | null;
+  source_id: string | null;
+  performed_by: string | null;
+  reason: string | null;
+  created_at: string;
+}
+
+export interface M13Reward {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  points_required: number;
+  redemption_deadline: string | null;
+  terms_conditions: string | null;
+  total_redemption_limit: number;
+  total_redeemed: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface M13RewardRedemption {
+  id: string;
+  member_id: string;
+  reward_id: string;
+  redemption_code: string;
+  points_used: number;
+  status: M13RedemptionStatus;
+  redeemed_at: string;
+  used_at: string | null;
+  pms_reference: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface M13RewardRedemptionWithReward extends M13RewardRedemption {
+  reward?: M13Reward | null;
+}
