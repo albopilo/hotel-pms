@@ -950,6 +950,7 @@ const translations: Record<string, { en: string; id: string }> = {
   'm13.available_rewards': { en: 'Available Rewards', id: 'Hadiah Tersedia' },
   'm13.no_rewards_available': { en: 'No rewards available right now', id: 'Tidak ada hadiah tersedia saat ini' },
   'm13.view_details': { en: 'View Details', id: 'Lihat Detail' },
+  'm13.tap_for_details': { en: 'Tap for details', id: 'Ketuk untuk detail' },
   'm13.redeem_btn': { en: 'Redeem', id: 'Tukarkan' },
   'm13.redeem_for': { en: 'Redeem for', id: 'Tukarkan dengan' },
   'm13.redeem_confirm': { en: 'Redeem this reward?', id: 'Tukarkan hadiah ini?' },

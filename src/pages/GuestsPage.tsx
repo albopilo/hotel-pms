@@ -189,7 +189,7 @@ function GuestDetail({ guest, onEdit, onDelete, onSelectReservation, onNavigateT
   const handleDelete = async () => {
     setDeleting(true);
     setDeleteError(null);
-    const { error } = await supabase.rpc('safe_delete_guest', { p_guest_id: guest.id });
+    const { error } = await supabase.rpc('safe_delete_guest', { p_guest_id: guest.id, p_force: isSuperAdmin });
     if (error) {
       setDeleteError(error.message);
       setDeleting(false);
@@ -442,6 +442,11 @@ function GuestDetail({ guest, onEdit, onDelete, onSelectReservation, onNavigateT
                   <AlertCircle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
                   <p className="text-sm text-slate-700">{t('guest.delete_confirm_desc')}</p>
                 </div>
+                {isSuperAdmin && (
+                  <p className="text-xs text-amber-700 bg-amber-50 rounded-lg p-2">
+                    As super admin, this guest will be deleted regardless of reservation status. All related records will have their guest reference removed.
+                  </p>
+                )}
                 <div className="flex justify-end gap-2">
                   <Button size="sm" variant="secondary" onClick={() => setShowDeleteConfirm(false)}>{t('common.cancel')}</Button>
                   <Button size="sm" variant="danger" loading={deleting} onClick={handleDelete}><Trash2 size={14} /> {t('guest.delete')}</Button>

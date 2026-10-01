@@ -42,7 +42,7 @@ export function MemberApp() {
       setLoading(false);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((event, s) => {
       (async () => {
         setSession(!!s);
         if (s) {
@@ -51,7 +51,9 @@ export function MemberApp() {
           setMember(null);
           setGuest(null);
         }
-        setPage('dashboard');
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+          setPage('dashboard');
+        }
       })();
     });
     return () => sub.subscription.unsubscribe();
@@ -418,12 +420,13 @@ function MemberRewards({ member }: { member: M13Member }) {
           return (
             <div
               key={reward.id}
-              className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3"
+              onClick={() => { setSelectedReward(reward); setError(''); }}
+              className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3 cursor-pointer hover:border-amber-500/50 transition-colors"
             >
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <h3 className="font-semibold text-white">{reward.name}</h3>
-                  {reward.description && <p className="text-slate-400 text-sm mt-1">{reward.description}</p>}
+                  <p className="text-slate-500 text-xs mt-1">{t('m13.tap_for_details')}</p>
                 </div>
                 <div className="flex items-center gap-1 text-amber-400 font-bold text-lg ml-3">
                   <Star size={16} />
@@ -436,17 +439,12 @@ function MemberRewards({ member }: { member: M13Member }) {
                 )}
                 <span>{t('m13.remaining')}: {remaining}</span>
               </div>
-              <button
-                onClick={() => { setSelectedReward(reward); setError(''); }}
-                disabled={!canAfford}
-                className={`w-full py-2 rounded-lg font-medium text-sm transition-colors ${
-                  canAfford
-                    ? 'bg-amber-500 text-slate-900 hover:bg-amber-400'
-                    : 'bg-slate-700 text-slate-500 cursor-not-allowed'
-                }`}
-              >
-                {canAfford ? t('m13.view_details') : `${reward.points_required} ${t('m13.points')}`}
-              </button>
+              <div className="flex items-center justify-between">
+                <span className={`text-xs font-medium ${canAfford ? 'text-amber-400' : 'text-slate-500'}`}>
+                  {canAfford ? t('m13.view_details') : `${reward.points_required} ${t('m13.points')}`}
+                </span>
+                <span className="text-slate-500 text-xs">{t('m13.tap_for_details')}</span>
+              </div>
             </div>
           );
         })
