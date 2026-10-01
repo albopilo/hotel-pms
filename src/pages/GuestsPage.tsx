@@ -663,17 +663,23 @@ function MergeGuestsModal({ open, onClose, guests, userId, orgId, onMerged }: {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [merging, setMerging] = useState(false);
   const [keepPrimary, setKeepPrimary] = useState(true);
+  const [selectedForBatch, setSelectedForBatch] = useState<Set<number>>(new Set());
+  const [batchMerging, setBatchMerging] = useState(false);
+  const [batchProgress, setBatchProgress] = useState({ done: 0, total: 0, errors: 0 });
 
   useEffect(() => {
     if (open && guests.length > 0) {
       const pairs = findDuplicateGuestPairs(guests, 0.7);
       setDuplicatePairs(pairs);
       setSelectedPairIdx(pairs.length > 0 ? 0 : null);
+      setSelectedForBatch(new Set(pairs.map((_, i) => i)));
     } else if (open) {
       setDuplicatePairs([]);
       setSelectedPairIdx(null);
+      setSelectedForBatch(new Set());
     }
     setPreview(null);
+    setBatchProgress({ done: 0, total: 0, errors: 0 });
   }, [open, guests]);
 
   useEffect(() => {
@@ -718,18 +724,89 @@ function MergeGuestsModal({ open, onClose, guests, userId, orgId, onMerged }: {
     }
   };
 
+  const toggleBatchSelection = (idx: number) => {
+    setSelectedForBatch((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const selectAllBatch = () => setSelectedForBatch(new Set(duplicatePairs.map((_, i) => i)));
+  const clearBatchSelection = () => setSelectedForBatch(new Set());
+
+  const handleBatchMerge = async () => {
+    const indices = Array.from(selectedForBatch).sort((a, b) => a - b);
+    if (indices.length === 0) {
+      showToast('No pairs selected for batch merge', 'warning');
+      return;
+    }
+    setBatchMerging(true);
+    setBatchProgress({ done: 0, total: indices.length, errors: 0 });
+    let errors = 0;
+    for (let i = 0; i < indices.length; i++) {
+      const pairIdx = indices[i];
+      const pair = duplicatePairs[pairIdx];
+      if (!pair) continue;
+      const primaryId = pair.primary.id;
+      const duplicateId = pair.duplicate.id;
+      try {
+        await guestMergeService.mergeGuests(primaryId, duplicateId, userId, orgId);
+      } catch (e: any) {
+        errors++;
+        console.error(`Merge failed for pair ${pair.primary.full_name} / ${pair.duplicate.full_name}:`, e.message);
+      }
+      setBatchProgress({ done: i + 1, total: indices.length, errors });
+    }
+    setBatchMerging(false);
+    if (errors === 0) {
+      showToast(`Batch merge complete: ${indices.length} pairs merged`, 'success');
+    } else {
+      showToast(`Batch merge complete: ${indices.length - errors} succeeded, ${errors} failed`, 'warning');
+    }
+    onMerged();
+  };
+
+  const batchSelectedCount = selectedForBatch.size;
+
   return (
     <Modal open={open} onClose={onClose} title="Merge Duplicate Guests" size="lg"
-      footer={currentPair ? (
-        <>
-          <Button variant="secondary" onClick={handleSkip}>Skip</Button>
-          <Button variant="danger" loading={merging} onClick={handleMerge}>
-            <GitMerge size={14} /> Merge & Delete Duplicate
-          </Button>
-        </>
-      ) : (
-        <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
-      )}>
+      footer={
+        batchMerging ? (
+          <div className="flex items-center gap-3 w-full">
+            <div className="flex-1">
+              <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
+                <div className="h-full bg-blue-600 transition-all" style={{ width: `${batchProgress.total > 0 ? (batchProgress.done / batchProgress.total) * 100 : 0}%` }} />
+              </div>
+              <p className="text-xs text-slate-500 mt-1">Merging {batchProgress.done} / {batchProgress.total}{batchProgress.errors > 0 ? ` (${batchProgress.errors} failed)` : ''}</p>
+            </div>
+          </div>
+        ) : duplicatePairs.length > 0 ? (
+          <div className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" onClick={selectAllBatch}>Select All</Button>
+              <Button size="sm" variant="outline" onClick={clearBatchSelection}>Clear</Button>
+              <span className="text-xs text-slate-500">{batchSelectedCount} selected</span>
+            </div>
+            <div className="flex gap-2">
+              {currentPair && (
+                <>
+                  <Button variant="secondary" onClick={handleSkip}>Skip</Button>
+                  <Button variant="danger" loading={merging} onClick={handleMerge}>
+                    <GitMerge size={14} /> Merge Selected Pair
+                  </Button>
+                </>
+              )}
+              <Button variant="danger" loading={batchMerging} onClick={handleBatchMerge} disabled={batchSelectedCount === 0}>
+                <GitMerge size={14} /> Batch Merge ({batchSelectedCount})
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button variant="secondary" onClick={onClose}>{t('common.close')}</Button>
+        )
+      }>
       <div className="space-y-4">
         {duplicatePairs.length === 0 ? (
           <div className="text-center py-8">
@@ -739,19 +816,38 @@ function MergeGuestsModal({ open, onClose, guests, userId, orgId, onMerged }: {
           </div>
         ) : (
           <>
-            {/* Pair selector */}
+            {/* Batch info banner */}
+            <div className="rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <div className="flex items-start gap-2">
+                <GitMerge size={16} className="text-blue-600 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-blue-800">Batch Merge</p>
+                  <p className="text-xs text-blue-700 mt-0.5">Select multiple duplicate pairs and click "Batch Merge" to merge them all at once. Each pair merges the older record as primary by default. Use individual merge if you need to choose which record to keep.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Pair selector with checkboxes */}
             <div className="flex items-center gap-2 flex-wrap">
               {duplicatePairs.map((pair, idx) => (
-                <button
-                  key={`${pair.primary.id}-${pair.duplicate.id}`}
-                  onClick={() => setSelectedPairIdx(idx)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
-                    selectedPairIdx === idx ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  {pair.primary.full_name} / {pair.duplicate.full_name}
-                  <span className="ml-1 opacity-70">({Math.round(pair.score * 100)}%)</span>
-                </button>
+                <div key={`${pair.primary.id}-${pair.duplicate.id}`} className="flex items-center gap-1">
+                  <input
+                    type="checkbox"
+                    checked={selectedForBatch.has(idx)}
+                    onChange={() => toggleBatchSelection(idx)}
+                    className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                    title="Include in batch merge"
+                  />
+                  <button
+                    onClick={() => setSelectedPairIdx(idx)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                      selectedPairIdx === idx ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {pair.primary.full_name} / {pair.duplicate.full_name}
+                    <span className="ml-1 opacity-70">({Math.round(pair.score * 100)}%)</span>
+                  </button>
+                </div>
               ))}
             </div>
 
