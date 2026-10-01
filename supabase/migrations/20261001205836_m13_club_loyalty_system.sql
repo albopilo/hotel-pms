@@ -824,17 +824,18 @@ USING (
 );
 
 -- ============================================================
--- 22. Seed default loyalty settings for existing org
+-- 22. Seed default loyalty settings for all existing orgs
+-- Uses a dynamic CTE so it works on ANY Supabase project regardless of org ID
 -- ============================================================
 INSERT INTO m13_loyalty_settings (organization_id, charge_category_code, spending_threshold, points_awarded, is_active)
-SELECT 'e0000000-0000-0000-0000-000000000001', code,
+SELECT cc.organization_id, cc.code,
   CASE
-    WHEN code = 'ROOM' THEN 10000
-    WHEN code IN ('AMENITY', 'EXTRA_BED', 'EXTRA_GUEST') THEN 15000
+    WHEN cc.code = 'ROOM' THEN 10000
+    WHEN cc.code IN ('AMENITY', 'EXTRA_BED', 'EXTRA_GUEST') THEN 15000
     ELSE 20000
   END,
   1,
   true
-FROM charge_categories
-WHERE organization_id = 'e0000000-0000-0000-0000-000000000001'
+FROM charge_categories cc
+WHERE cc.organization_id IN (SELECT id FROM organizations)
 ON CONFLICT (organization_id, charge_category_code) DO NOTHING;
