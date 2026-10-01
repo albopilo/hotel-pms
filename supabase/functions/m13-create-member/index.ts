@@ -124,12 +124,7 @@ Deno.serve(async (req: Request) => {
 
     if (linkError) throw linkError;
 
-    // Send welcome email via Supabase Auth invite
-    try {
-      await supabaseAdmin.auth.admin.inviteUserByEmail(email);
-    } catch {
-      // Non-blocking — member is created, email can be resent later
-    }
+    // Email confirm is already set to true during createUser, so no invite needed.
 
     return new Response(
       JSON.stringify({

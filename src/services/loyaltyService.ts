@@ -32,13 +32,17 @@ export const loyaltyService = {
   },
 
   async createMember(guestId: string, email: string, staffUserId: string): Promise<{ member: M13Member | null; error: string | null }> {
-    const { data, error } = await supabase.rpc('m13_create_member', {
-      p_guest_id: guestId,
-      p_email: email,
-      p_staff_user_id: staffUserId,
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData?.session?.access_token;
+    if (!accessToken) return { member: null, error: 'Not authenticated' };
+
+    const { data, error } = await supabase.functions.invoke('m13-create-member', {
+      body: { guest_id: guestId, email, staff_user_id: staffUserId },
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
     if (error) return { member: null, error: error.message };
-    return { member: data as M13Member, error: null };
+    if (data?.error) return { member: null, error: data.error };
+    return { member: (data?.member as M13Member) || null, error: null };
   },
 
   async earnPointsOnCheckout(reservationId: string, staffUserId: string): Promise<{ points: number; error: string | null }> {
