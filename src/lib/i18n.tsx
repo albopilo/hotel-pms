@@ -520,6 +520,14 @@ const translations: Record<string, { en: string; id: string }> = {
   'guest.duplicate_deleted_warning': { en: 'The duplicate guest record will be permanently deleted after all records are reassigned.', id: 'Catatan tamu duplikat akan dihapus permanen setelah semua catatan dipindahkan.' },
   'guest.merged_success': { en: 'Guests merged successfully', id: 'Tamu berhasil digabung' },
   'guest.merge_failed': { en: 'Merge failed', id: 'Penggabungan gagal' },
+  'guest.delete': { en: 'Delete Guest', id: 'Hapus Tamu' },
+  'guest.delete_confirm_title': { en: 'Delete Guest', id: 'Hapus Tamu' },
+  'guest.delete_confirm_desc': { en: 'Are you sure you want to permanently delete this guest? This action cannot be undone.', id: 'Apakah Anda yakin ingin menghapus tamu ini secara permanen? Tindakan ini tidak dapat dibatalkan.' },
+  'guest.delete_blocked': { en: 'Cannot delete guest', id: 'Tidak dapat menghapus tamu' },
+  'guest.delete_blocked_desc': { en: 'This guest has reservation, folio, or payment history and cannot be deleted. Use Merge Duplicates instead to combine their records with another guest.', id: 'Tamu ini memiliki riwayat reservasi, folio, atau pembayaran dan tidak dapat dihapus. Gunakan Gabung Duplikat sebagai gantinya untuk menggabungkan catatan mereka dengan tamu lain.' },
+  'guest.delete_success': { en: 'Guest deleted', id: 'Tamu dihapus' },
+  'guest.delete_failed': { en: 'Failed to delete guest', id: 'Gagal menghapus tamu' },
+  'guest.use_merge_instead': { en: 'Use Merge Instead', id: 'Gunakan Gabung' },
 
   // Receipt additional
   'receipt.payment_history': { en: 'Payment History', id: 'Riwayat Pembayaran' },

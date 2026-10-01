@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
 import { formatIDR, formatDate } from '@/lib/format';
-import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck, Award, Ticket, Star, History as HistoryIcon, Minus } from 'lucide-react';
+import { Plus, Search, CreditCard as Edit, Users, Phone, Mail, FileText, Receipt, CalendarPlus, CircleAlert as AlertCircle, GitMerge, CircleCheck, Award, Ticket, Star, History as HistoryIcon, Minus, Trash2 } from 'lucide-react';
 import type { Guest, Reservation, M13Member, M13PointLedger, M13RewardRedemptionWithReward, UserRole } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
 import { findSimilarGuests, findDuplicateGuestPairs, type SimilarGuestMatch, type DuplicatePair } from '@/lib/guest-similarity';
@@ -146,7 +146,7 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
 
       {/* Guest detail */}
       <Modal open={!!selectedGuest} onClose={() => setSelectedGuest(null)} title={selectedGuest?.full_name || ''} size="lg">
-        {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} onSelectReservation={onSelectReservation} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onNewReservationForGuest={onNewReservationForGuest} />}
+        {selectedGuest && <GuestDetail guest={selectedGuest} onEdit={() => { setEditing(selectedGuest); setShowForm(true); setSelectedGuest(null); }} onDelete={() => { setSelectedGuest(null); load(); }} onSelectReservation={onSelectReservation} onNavigateToPayment={onNavigateToPayment} onNavigateToInvoice={onNavigateToInvoice} onNewReservationForGuest={onNewReservationForGuest} />}
       </Modal>
 
       <GuestFormModal open={showForm} onClose={() => setShowForm(false)} guest={editing} allGuests={guests} orgId={user!.organization_id} userId={user!.id} onSaved={() => { setShowForm(false); load(); }} />
@@ -159,13 +159,14 @@ export function GuestsPage({ searchQuery = '', selectedGuestId, onSelectReservat
 interface GuestDetailProps {
   guest: Guest;
   onEdit: () => void;
+  onDelete: () => void;
   onSelectReservation?: (id: string) => void;
   onNavigateToPayment?: (id: string) => void;
   onNavigateToInvoice?: (id: string) => void;
   onNewReservationForGuest?: (guestId: string) => void;
 }
 
-function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, onNavigateToInvoice, onNewReservationForGuest }: GuestDetailProps) {
+function GuestDetail({ guest, onEdit, onDelete, onSelectReservation, onNavigateToPayment, onNavigateToInvoice, onNewReservationForGuest }: GuestDetailProps) {
   const { user } = useAuth();
   const { t } = useI18n();
   const { showToast } = useToast();
@@ -179,6 +180,26 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
   const [adjustPoints, setAdjustPoints] = useState('');
   const [adjustReason, setAdjustReason] = useState('');
   const [adjusting, setAdjusting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const isSuperAdmin = (user?.role as UserRole) === 'super_admin';
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    const { error } = await supabase.rpc('safe_delete_guest', { p_guest_id: guest.id });
+    if (error) {
+      setDeleteError(error.message);
+      setDeleting(false);
+      return;
+    }
+    showToast(t('guest.delete_success'), 'success');
+    setDeleting(false);
+    setShowDeleteConfirm(false);
+    onDelete();
+  };
 
   useEffect(() => {
     (async () => {
@@ -389,9 +410,47 @@ function GuestDetail({ guest, onEdit, onSelectReservation, onNavigateToPayment, 
         )}
       </div>
 
-      <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={onEdit}><Edit size={14} /> {t('common.edit')}</Button>
+      <div className="flex justify-between items-center">
+        {isSuperAdmin && (
+          <Button variant="danger" size="sm" onClick={() => { setDeleteError(null); setShowDeleteConfirm(true); }}><Trash2 size={14} /> {t('guest.delete')}</Button>
+        )}
+        <div className="flex gap-2 ml-auto">
+          <Button variant="outline" size="sm" onClick={onEdit}><Edit size={14} /> {t('common.edit')}</Button>
+        </div>
       </div>
+
+      {showDeleteConfirm && (
+        <Modal open onClose={() => setShowDeleteConfirm(false)} title={t('guest.delete_confirm_title')} size="sm">
+          <div className="space-y-4">
+            {deleteError ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={18} className="text-red-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800">{t('guest.delete_blocked')}</p>
+                    <p className="text-xs text-red-700 mt-1">{deleteError}</p>
+                  </div>
+                </div>
+                <p className="text-xs text-slate-600">{t('guest.delete_blocked_desc')}</p>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setShowDeleteConfirm(false)}>{t('common.close')}</Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-start gap-2">
+                  <AlertCircle size={18} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                  <p className="text-sm text-slate-700">{t('guest.delete_confirm_desc')}</p>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => setShowDeleteConfirm(false)}>{t('common.cancel')}</Button>
+                  <Button size="sm" variant="danger" loading={deleting} onClick={handleDelete}><Trash2 size={14} /> {t('guest.delete')}</Button>
+                </div>
+              </>
+            )}
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
