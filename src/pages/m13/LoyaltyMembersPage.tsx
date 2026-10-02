@@ -12,7 +12,8 @@ import { Input, Textarea, Select } from '@/components/ui/Form';
 import { Pagination } from '@/components/ui/Pagination';
 import { loyaltyService } from '@/services/loyaltyService';
 import { formatDate, formatDateTime } from '@/lib/format';
-import { Users, Star, Ticket, TrendingUp, Search, Minus, Plus, History as HistoryIcon } from 'lucide-react';
+import { Users, Star, Ticket, TrendingUp, Search, Minus, Plus, History as HistoryIcon, QrCode } from 'lucide-react';
+import { openPrintTab } from '@/lib/printRoute';
 import type { M13MemberWithGuest, M13PointLedger, M13RewardRedemptionWithReward, M13Member, UserRole } from '@/types/database';
 
 const PAGE_SIZE = 20;
@@ -49,7 +50,12 @@ export function LoyaltyMembersPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">{t('m13.members_title')}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-slate-900">{t('m13.members_title')}</h1>
+        <Button variant="outline" size="sm" onClick={() => openPrintTab({ type: 'm13-qr' })}>
+          <QrCode size={16} /> Print QR Code
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label={t('m13.total_members')} value={stats.total} icon={<Users size={20} />} color="blue" />

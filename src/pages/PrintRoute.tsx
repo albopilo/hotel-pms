@@ -5,6 +5,7 @@ const PaymentReceiptPrintPage = lazy(() => import('@/pages/PaymentReceiptPrintPa
 const ChargeSummaryPrintPage = lazy(() => import('@/pages/ChargeSummaryPrintPage').then(m => ({ default: m.ChargeSummaryPrintPage })));
 const InvoicePrintPage = lazy(() => import('@/pages/InvoicePrintPage').then(m => ({ default: m.InvoicePrintPage })));
 const GrcPrintPage = lazy(() => import('@/pages/GrcPrintPage').then(m => ({ default: m.GrcPrintPage })));
+const M13QrPrintPage = lazy(() => import('@/pages/m13/M13QrPrintPage').then(m => ({ default: m.M13QrPrintPage })));
 
 export function PrintRoute() {
   const [params, setParams] = useState<PrintParams | null>(null);
@@ -25,6 +26,7 @@ export function PrintRoute() {
       {params.type === 'charge-summary' && <ChargeSummaryPrintPage folioId={params.folioId!} title={params.title || 'Charge Summary'} onClose={handleClose} />}
       {params.type === 'invoice' && <InvoicePrintPage invoiceId={params.invoiceId!} onClose={handleClose} />}
       {params.type === 'grc' && <GrcPrintPage reservationId={params.reservationId!} onClose={handleClose} />}
+      {params.type === 'm13-qr' && <M13QrPrintPage />}
     </Suspense>
   );
 }

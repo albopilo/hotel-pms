@@ -1,4 +1,4 @@
-export type PrintDocType = 'receipt' | 'charge-summary' | 'invoice' | 'grc';
+export type PrintDocType = 'receipt' | 'charge-summary' | 'invoice' | 'grc' | 'm13-qr';
 
 export interface PrintParams {
   type: PrintDocType;
@@ -10,6 +10,10 @@ export interface PrintParams {
 }
 
 export function openPrintTab(params: PrintParams): void {
+  if (params.type === 'm13-qr') {
+    window.open('#print/m13-qr', '_blank');
+    return;
+  }
   const hash = `#print/${params.type}/${[
     params.paymentId || '',
     params.folioId || '',
@@ -21,6 +25,9 @@ export function openPrintTab(params: PrintParams): void {
 }
 
 export function parsePrintHash(hash: string): PrintParams | null {
+  if (hash === '#print/m13-qr') {
+    return { type: 'm13-qr' };
+  }
   const m = hash.match(/^#print\/(receipt|charge-summary|invoice|grc)\/([^/]*)\/([^/]*)\/([^/]*)\/([^/]*)\/(.*)$/);
   if (!m) return null;
   return {
