@@ -250,6 +250,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
   const [createM13, setCreateM13] = useState(false);
   const [m13Email, setM13Email] = useState('');
   const [m13Creating, setM13Creating] = useState(false);
+  const [m13Eligible, setM13Eligible] = useState(false);
 
   const lockProviderType = lockIntegration?.provider_type || 'mock';
   const isProductionLock = lockProviderType === 'production';
@@ -290,8 +291,12 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
       const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
       setLockIntegration(lockInteg as HotelLockIntegration | null);
 
+      // Check branch eligibility for M13 Club
+      const eligible = await loyaltyService.isBranchEligible(reservation.branch_id);
+      setM13Eligible(eligible);
+
       // Check if guest is already an M13 member
-      if (g) {
+      if (g && eligible) {
         const { data: m13 } = await supabase.from('m13_members').select('*').eq('pms_guest_id', (g as Guest).id).maybeSingle();
         setM13Member(m13 as M13Member | null);
       }
@@ -544,7 +549,8 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
           </div>
         )}
 
-        {/* M13 Club Section */}
+        {/* M13 Club Section — only shown for eligible branches */}
+        {m13Eligible && (
         <div className="border border-slate-200 rounded-lg p-4">
           <div className="flex items-center gap-2 mb-3">
             <Award size={18} className="text-amber-500" />
@@ -580,6 +586,7 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
             </div>
           )}
         </div>
+        )}
 
         <div className="border border-slate-200 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">

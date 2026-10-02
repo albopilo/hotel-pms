@@ -495,7 +495,7 @@ export type M13LedgerType =
   | 'EXPIRATION'
   | 'REVERSAL';
 
-export type M13RedemptionStatus = 'UNUSED' | 'USED';
+export type M13RedemptionStatus = 'UNUSED' | 'USED' | 'EXPIRED';
 
 export type M13MemberStatus = 'active' | 'inactive';
 

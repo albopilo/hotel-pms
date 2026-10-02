@@ -9,9 +9,10 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { Input, Textarea } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
-import { Plus, CreditCard as Edit, Building2, Trash2 } from 'lucide-react';
+import { Plus, CreditCard as Edit, Building2, Trash2, Award } from 'lucide-react';
 import type { Branch } from '@/types/database';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
+import { loyaltyService } from '@/services/loyaltyService';
 
 const BRANCH_DRAFT_KEY = 'branch_form_draft';
 
@@ -30,15 +31,38 @@ export function BranchesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Branch | null>(null);
+  const [eligibleMap, setEligibleMap] = useState<Record<string, boolean>>({});
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+
+  const isSuperAdmin = user?.role === 'super_admin';
 
   const load = useCallback(async () => {
     setLoading(true);
     const { data } = await supabase.from('branches').select('*').order('name');
     setBranches((data as Branch[]) || []);
+    const eligible = await loyaltyService.getEligibleBranches();
+    const map: Record<string, boolean> = {};
+    for (const e of eligible) {
+      map[e.branch_id] = e.is_active;
+    }
+    setEligibleMap(map);
     setLoading(false);
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const handleToggleEligible = async (branch: Branch) => {
+    const currentlyEligible = !!eligibleMap[branch.id];
+    setTogglingId(branch.id);
+    const { error } = await loyaltyService.setBranchEligibility(user!.organization_id, branch.id, !currentlyEligible);
+    if (error) {
+      showToast(error, 'error');
+    } else {
+      setEligibleMap({ ...eligibleMap, [branch.id]: !currentlyEligible });
+      showToast(currentlyEligible ? 'Removed M13 Club eligibility' : 'Added M13 Club eligibility', 'success');
+    }
+    setTogglingId(null);
+  };
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
@@ -61,32 +85,53 @@ export function BranchesPage() {
         <EmptyState icon={<Building2 size={48} />} title={t('common.no_data')} />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {branches.map((b) => (
-            <Card key={b.id}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold text-slate-800">{b.name}</h3>
-                  <p className="text-xs text-slate-400">{b.code}</p>
+          {branches.map((b) => {
+            const isEligible = !!eligibleMap[b.id];
+            return (
+              <Card key={b.id}>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <h3 className="font-semibold text-slate-800">{b.name}</h3>
+                    <p className="text-xs text-slate-400">{b.code}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button onClick={() => { setEditing(b); setShowForm(true); }} className="text-slate-400 hover:text-blue-600"><Edit size={16} /></button>
+                    <button onClick={() => setDeleteTarget(b)} className="text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
+                  </div>
                 </div>
-                <div className="flex gap-1">
-                  <button onClick={() => { setEditing(b); setShowForm(true); }} className="text-slate-400 hover:text-blue-600"><Edit size={16} /></button>
-                  <button onClick={() => setDeleteTarget(b)} className="text-slate-400 hover:text-red-600"><Trash2 size={16} /></button>
+                <div className="mt-3 space-y-1 text-sm text-slate-600">
+                  {b.address && <p>{b.address}</p>}
+                  {b.phone && <p>{b.phone}</p>}
+                  {b.email && <p>{b.email}</p>}
+                  {b.tax_id && <p className="text-xs text-slate-400">Tax ID: {b.tax_id}</p>}
+                  <div className="flex gap-3 pt-1 text-xs text-slate-500">
+                    <span>CI: {b.standard_checkin_time}</span>
+                    <span>CO: {b.standard_checkout_time}</span>
+                    <span>Cutoff: {b.business_day_cutoff}</span>
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Badge color={b.is_active ? 'green' : 'gray'}>{b.is_active ? t('common.active') : t('common.inactive')}</Badge>
+                    {isEligible && <Badge color="amber">M13 Club</Badge>}
+                  </div>
                 </div>
-              </div>
-              <div className="mt-3 space-y-1 text-sm text-slate-600">
-                {b.address && <p>{b.address}</p>}
-                {b.phone && <p>{b.phone}</p>}
-                {b.email && <p>{b.email}</p>}
-                {b.tax_id && <p className="text-xs text-slate-400">Tax ID: {b.tax_id}</p>}
-                <div className="flex gap-3 pt-1 text-xs text-slate-500">
-                  <span>CI: {b.standard_checkin_time}</span>
-                  <span>CO: {b.standard_checkout_time}</span>
-                  <span>Cutoff: {b.business_day_cutoff}</span>
-                </div>
-                <div className="pt-1"><Badge color={b.is_active ? 'green' : 'gray'}>{b.is_active ? t('common.active') : t('common.inactive')}</Badge></div>
-              </div>
-            </Card>
-          ))}
+                {isSuperAdmin && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isEligible}
+                        onChange={() => handleToggleEligible(b)}
+                        disabled={togglingId === b.id}
+                        className="rounded"
+                      />
+                      <Award size={14} className="text-amber-500" />
+                      <span>M13 Club Eligible</span>
+                    </label>
+                  </div>
+                )}
+              </Card>
+            );
+          })}
         </div>
       )}
 

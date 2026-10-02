@@ -11,6 +11,51 @@ import type {
 } from '@/types/database';
 
 export const loyaltyService = {
+  async getEligibleBranchIds(): Promise<Set<string>> {
+    const { data, error } = await supabase
+      .from('m13_eligible_branches')
+      .select('branch_id')
+      .eq('is_active', true);
+    if (error || !data) return new Set();
+    return new Set(data.map((r: { branch_id: string }) => r.branch_id));
+  },
+
+  async isBranchEligible(branchId: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc('m13_is_branch_eligible', { p_branch_id: branchId });
+    if (error) return false;
+    return (data as boolean) || false;
+  },
+
+  async getEligibleBranches(): Promise<Array<{ branch_id: string; is_active: boolean }>> {
+    const { data, error } = await supabase
+      .from('m13_eligible_branches')
+      .select('branch_id, is_active');
+    if (error || !data) return [];
+    return data as Array<{ branch_id: string; is_active: boolean }>;
+  },
+
+  async setBranchEligibility(orgId: string, branchId: string, eligible: boolean): Promise<{ error: string | null }> {
+    if (eligible) {
+      const { error } = await supabase
+        .from('m13_eligible_branches')
+        .upsert({
+          organization_id: orgId,
+          branch_id: branchId,
+          is_active: true,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'organization_id,branch_id' });
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await supabase
+        .from('m13_eligible_branches')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .eq('organization_id', orgId)
+        .eq('branch_id', branchId);
+      if (error) return { error: error.message };
+    }
+    return { error: null };
+  },
+
   async getMemberByGuestId(guestId: string): Promise<M13Member | null> {
     const { data, error } = await supabase
       .from('m13_members')
@@ -76,6 +121,7 @@ export const loyaltyService = {
   },
 
   async getMemberRedemptions(memberId: string): Promise<M13RewardRedemptionWithReward[]> {
+    await supabase.rpc('m13_expire_redemptions');
     const { data, error } = await supabase
       .from('m13_reward_redemptions')
       .select('*, reward:m13_rewards(*)')

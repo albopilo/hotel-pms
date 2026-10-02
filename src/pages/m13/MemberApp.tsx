@@ -89,7 +89,7 @@ export function MemberApp() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+    <div className="h-screen flex flex-col bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
       <MemberHeader
         member={member}
         guest={guest}
@@ -99,7 +99,7 @@ export function MemberApp() {
         language={language}
         onLanguageChange={setLanguage}
       />
-      <main className="max-w-2xl mx-auto px-4 py-6">
+      <main className="flex-1 overflow-y-auto max-w-2xl w-full mx-auto px-4 py-6">
         {page === 'dashboard' && <MemberDashboard member={member} guest={guest} onNavigate={setPage} />}
         {page === 'rewards' && <MemberRewards member={member} />}
         {page === 'my_rewards' && <MemberMyRewards member={member} />}
@@ -364,6 +364,7 @@ function MemberRewards({ member }: { member: M13Member }) {
   const load = useCallback(async () => {
     setLoading(true);
     const data = await loyaltyService.getAvailableRewards();
+    data.sort((a, b) => a.points_required - b.points_required);
     setRewards(data);
     setLoading(false);
   }, []);
@@ -452,7 +453,7 @@ function MemberRewards({ member }: { member: M13Member }) {
 
       {selectedReward && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setSelectedReward(null)}>
-          <div className="bg-slate-800 rounded-xl p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-slate-800 rounded-xl p-6 max-w-sm w-full space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-bold text-white">{selectedReward.name}</h3>
             {selectedReward.description && <p className="text-slate-300 text-sm">{selectedReward.description}</p>}
             {selectedReward.terms_conditions && (
@@ -525,6 +526,7 @@ function MemberMyRewards({ member }: { member: M13Member }) {
   }
 
   const unused = redemptions.filter((r) => r.status === 'UNUSED');
+  const expired = redemptions.filter((r) => r.status === 'EXPIRED');
   const used = redemptions.filter((r) => r.status === 'USED');
 
   return (
@@ -569,6 +571,28 @@ function MemberMyRewards({ member }: { member: M13Member }) {
         )}
       </div>
 
+      {expired.length > 0 && (
+        <div className="space-y-3">
+          <h3 className="text-sm font-semibold text-red-400 uppercase">Expired ({expired.length})</h3>
+          {expired.map((r) => (
+            <div key={r.id} className="bg-red-900/20 border border-red-800/40 rounded-xl p-4 opacity-70">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h4 className="font-semibold text-slate-300">{r.reward?.name || '-'}</h4>
+                  <p className="text-slate-500 text-xs mt-1">{t('m13.redeemed_on')} {formatDate(r.redeemed_at)}</p>
+                </div>
+                <span className="text-slate-500 text-xs">{r.points_used} pts</span>
+              </div>
+              <div className="mt-2 text-center">
+                <span className="inline-flex items-center gap-1 text-red-400 text-sm font-medium">
+                  <AlertCircle size={14} /> Expired
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-slate-400 uppercase">{t('m13.used_rewards')} ({used.length})</h3>
         {used.length === 0 ? (
@@ -595,7 +619,7 @@ function MemberMyRewards({ member }: { member: M13Member }) {
 
       {useTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={() => setUseTarget(null)}>
-          <div className="bg-slate-800 rounded-xl p-6 max-w-sm w-full space-y-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-slate-800 rounded-xl p-6 max-w-sm w-full space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <AlertCircle size={32} className="text-amber-400 mx-auto" />
             <h3 className="text-lg font-bold text-white text-center">{t('m13.use_reward')}</h3>
             <p className="text-slate-300 text-sm text-center">{t('m13.use_confirm')}</p>
