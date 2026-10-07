@@ -99,11 +99,11 @@ export const folioService = {
     const discounts = active.filter((i) => i.item_type === 'discount');
     const taxes = active.filter((i) => i.item_type === 'tax');
 
-    const totalCharges = charges.reduce((s, i) => s + i.amount, 0);
-    const totalPayments = payments.reduce((s, i) => s + Math.abs(i.amount), 0);
-    const totalDiscounts = discounts.reduce((s, i) => s + Math.abs(i.amount), 0);
-    const totalTax = taxes.reduce((s, i) => s + i.amount, 0);
-    const netBalance = totalCharges + totalTax - totalDiscounts - totalPayments;
+    const totalCharges = Math.round(charges.reduce((s, i) => s + i.amount, 0));
+    const totalPayments = Math.round(payments.reduce((s, i) => s + Math.abs(i.amount), 0));
+    const totalDiscounts = Math.round(discounts.reduce((s, i) => s + Math.abs(i.amount), 0));
+    const totalTax = Math.round(taxes.reduce((s, i) => s + i.amount, 0));
+    const netBalance = Math.round(totalCharges + totalTax - totalDiscounts - totalPayments);
 
     return { totalCharges, totalPayments, totalDiscounts, totalTax, netBalance };
   },

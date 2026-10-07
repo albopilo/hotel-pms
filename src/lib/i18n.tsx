@@ -226,6 +226,7 @@ const translations: Record<string, { en: string; id: string }> = {
   'checkout.unpaid_balance': { en: 'Cannot checkout with unpaid balance', id: 'Tidak dapat check-out dengan saldo belum dibayar' },
   'checkout.unpaid_balance_warning': { en: 'This guest has an unpaid balance. Are you sure you want to proceed?', id: 'Tamu ini memiliki saldo belum dibayar. Yakin ingin melanjutkan?' },
   'checkout.balance_not_zero': { en: 'Cannot check out: folio balance is not zero. Please settle all charges and payments first.', id: 'Tidak dapat check-out: saldo folio belum nol. Mohon lunasi semua biaya dan pembayaran terlebih dahulu.' },
+  'checkout.rounding_note': { en: 'Small rounding difference of {amount} automatically settled (within tolerance).', id: 'Selisih pembulatan kecil sebesar {amount} otomatis diselesaikan (dalam toleransi).' },
   'checkout.unpaid_amount': { en: 'Unpaid amount', id: 'Jumlah belum dibayar' },
   'checkout.overpayment_amount': { en: 'Overpayment', id: 'Kelebihan pembayaran' },
   'checkout.settle_first': { en: 'record a payment or remove charges before checking out', id: 'catat pembayaran atau hapus biaya sebelum check-out' },
@@ -360,6 +361,8 @@ const translations: Record<string, { en: string; id: string }> = {
   'settings.default_tax': { en: 'Default Tax Rate (%)', id: 'Tarif Pajak Default (%)' },
   'settings.invoice_prefix': { en: 'Invoice Prefix', id: 'Prefix Faktur' },
   'settings.reservation_prefix': { en: 'Reservation Prefix', id: 'Prefix Reservasi' },
+  'settings.checkout_tolerance': { en: 'Checkout Balance Tolerance (IDR)', id: 'Toleransi Saldo Check-out (IDR)' },
+  'settings.checkout_tolerance_hint': { en: 'Maximum absolute balance considered settled at checkout. Covers rounding differences.', id: 'Saldo absolut maksimum yang dianggap lunas saat check-out. Menutupi selisih pembulatan.' },
 
   // Audit log
   'audit.title': { en: 'Audit Logs', id: 'Log Audit' },

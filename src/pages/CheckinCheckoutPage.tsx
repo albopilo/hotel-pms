@@ -673,6 +673,7 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   });
   const [completing,setCompleting]=useState(false);
   const [hasInvoice,setHasInvoice]=useState(false);
+  const [tolerance,setTolerance]=useState(100);
 
   const branch=branches.find(b=>b.id===reservation.branch_id);
   const standardTime=branch?.standard_checkout_time || '12:00';
@@ -712,6 +713,10 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
         const {data:inv}=await supabase.from('invoices').select('id').eq('folio_id',f.id).maybeSingle();
         setHasInvoice(!!inv);
       }
+
+      const {data:tolSetting}=await supabase.from('system_settings').select('value').eq('key','checkout_balance_tolerance').maybeSingle();
+      if(tolSetting?.value) setTolerance(parseFloat(tolSetting.value)||100);
+
       setLoading(false);
     })();
   },[reservation]);
@@ -729,13 +734,14 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   const discounts=folioItems.filter(i=>i.item_type==='discount');
   const taxes=folioItems.filter(i=>i.item_type==='tax');
 
-  const totalCharges=charges.reduce((s,i)=>s+i.amount,0);
-  const totalPayments=payments.reduce((s,i)=>s+Math.abs(i.amount),0);
-  const totalDiscounts=discounts.reduce((s,i)=>s+Math.abs(i.amount),0);
-  const totalTax=taxes.reduce((s,i)=>s+i.amount,0);
+  const totalCharges=Math.round(charges.reduce((s,i)=>s+i.amount,0));
+  const totalPayments=Math.round(payments.reduce((s,i)=>s+Math.abs(i.amount),0));
+  const totalDiscounts=Math.round(discounts.reduce((s,i)=>s+Math.abs(i.amount),0));
+  const totalTax=Math.round(taxes.reduce((s,i)=>s+i.amount,0));
 
-  const balance=totalCharges+totalTax-totalDiscounts-totalPayments;
-  const hasUnpaid=Math.abs(balance)>0.01;
+  const balance=Math.round(totalCharges+totalTax-totalDiscounts-totalPayments);
+  const hasUnpaid=Math.abs(balance)>tolerance;
+  const hasRoundingResidual=!hasUnpaid && Math.abs(balance)>0;
 
   const handleAddLateCharge = async () => {
     if (!folio) return;
@@ -768,14 +774,14 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
   };
 
   const completeCheckout = async () => {
-    if(Math.abs(balance) > 0.01){ showToast(t('checkout.balance_not_zero'), 'error'); return; }
+    if(Math.abs(balance) > tolerance){ showToast(t('checkout.balance_not_zero'), 'error'); return; }
     setCompleting(true);
 
     try {
       if(!folio) throw new Error('Folio not found');
 
       const totals = await folioService.getTotals(folio.id);
-      if(Math.abs(totals.netBalance) > 0.01){ showToast(t('checkout.balance_not_zero'), 'error'); setCompleting(false); return; }
+      if(Math.abs(totals.netBalance) > tolerance){ showToast(t('checkout.balance_not_zero'), 'error'); setCompleting(false); return; }
 
       if(room){
         const {error:roomError} = await supabase.from('rooms').update({ status:'dirty' }).eq('id',room.id);
@@ -920,6 +926,15 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
             </div>
             {balance > 0 && <div className="text-sm">{t('checkout.unpaid_amount')}: <span className="font-bold">{formatIDR(Math.abs(balance))}</span> — {t('checkout.settle_first')}</div>}
             {balance < 0 && <div className="text-sm">{t('checkout.overpayment_amount')}: <span className="font-bold">{formatIDR(Math.abs(balance))}</span> — {t('checkout.refund_or_adjust')}</div>}
+          </div>
+        )}
+
+        {hasRoundingResidual && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-blue-700 text-sm">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 size={16}/>
+              <span>{t('checkout.rounding_note').replace('{amount}', formatIDR(Math.abs(balance)))}</span>
+            </div>
           </div>
         )}
 

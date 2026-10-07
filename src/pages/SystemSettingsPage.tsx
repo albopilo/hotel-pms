@@ -21,6 +21,7 @@ const SETTING_KEYS = [
   { key: 'default_tax_rate', label: 'settings.default_tax', type: 'number' },
   { key: 'invoice_prefix', label: 'settings.invoice_prefix', type: 'string' },
   { key: 'reservation_prefix', label: 'settings.reservation_prefix', type: 'string' },
+  { key: 'checkout_balance_tolerance', label: 'settings.checkout_tolerance', type: 'number' },
 ];
 
 const initialOrgForm = { name: '', legal_name: '', address: '', phone: '', email: '', tax_id: '', currency: 'IDR', timezone: 'Asia/Jakarta' };
@@ -154,6 +155,7 @@ export function SystemSettingsPage() {
               )
             ))}
           </div>
+          <p className="text-xs text-slate-400">{t('settings.checkout_tolerance_hint')}</p>
           <div className="flex justify-end">
             <Button loading={saving} onClick={handleSaveSettings}><Save size={16} /> {t('common.save')}</Button>
           </div>
