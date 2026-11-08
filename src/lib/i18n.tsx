@@ -171,6 +171,10 @@ const translations: Record<string, { en: string; id: string }> = {
   'dash.today_payments': { en: "Today's Payments", id: 'Pembayaran Hari Ini' },
   'dash.outstanding_balances': { en: 'Outstanding Balances', id: 'Saldo Tertunggak' },
   'dash.occupancy_rate': { en: 'Occupancy Rate', id: 'Tingkat Hunian' },
+  'dash.send_test_email': { en: 'Send test loyalty email', id: 'Kirim email uji poin loyalti' },
+  'dash.sending_test_email': { en: 'Sending...', id: 'Mengirim...' },
+  'dash.test_email_sent': { en: 'Test email sent to', id: 'Email uji terkirim ke' },
+  'dash.test_email_failed': { en: 'Could not send the test email', id: 'Gagal mengirim email uji' },
 
   // Auth
   'auth.login': { en: 'Sign In', id: 'Masuk' },

@@ -1,4 +1,4 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -253,6 +253,48 @@ async function sendViaBrevo(apiKey: string, to: { email: string; name: string },
   }
 }
 
+async function loadAvailableRewards(admin: SupabaseClient, organizationId: string): Promise<RewardRow[]> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await admin
+    .from("m13_rewards")
+    .select("name, points_required, redemption_deadline, total_redeemed, total_redemption_limit")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .order("points_required", { ascending: true });
+  if (error) throw error;
+  return ((data ?? []) as RewardRow[]).filter(
+    (r) => (!r.redemption_deadline || r.redemption_deadline >= today) && r.total_redeemed < r.total_redemption_limit,
+  );
+}
+
+async function sendTestEmail(req: Request, admin: SupabaseClient, apiKey: string) {
+  const token = req.headers.get("Authorization")?.replace("Bearer ", "");
+  if (!token) throw new Error("Missing authorization");
+
+  const { data: userData, error: userError } = await admin.auth.getUser(token);
+  const user = userData?.user;
+  if (userError || !user?.email) throw new Error("Unauthorized");
+
+  const { data: caller, error: callerError } = await admin
+    .from("profiles")
+    .select("role, organization_id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (callerError || !caller || !["super_admin", "manager"].includes(caller.role)) {
+    throw new Error("Unauthorized");
+  }
+
+  const rewards = await loadAvailableRewards(admin, caller.organization_id);
+  const { subject, html } = buildEmail("points_earned", {
+    name: "Sample Member",
+    balance: 1250,
+    pointsAdded: 150,
+    rewards,
+  });
+  await sendViaBrevo(apiKey, { email: user.email, name: "Sample Member" }, `[Test] ${subject}`, html);
+  return { sent_to: user.email };
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { status: 200, headers: corsHeaders });
@@ -269,6 +311,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    const body = await req.json().catch(() => ({}));
+    if (body?.action === "send_test") {
+      const result = await sendTestEmail(req, admin, apiKey);
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { data, error } = await admin
       .from("m13_member_emails")
       .select(
@@ -281,7 +331,6 @@ Deno.serve(async (req: Request) => {
     if (error) throw error;
 
     const queue = (data ?? []) as unknown as QueuedEmail[];
-    const today = new Date().toISOString().slice(0, 10);
     const rewardCache = new Map<string, RewardRow[]>();
     const counts = { processed: 0, sent: 0, failed: 0, skipped: 0 };
 
@@ -301,17 +350,7 @@ Deno.serve(async (req: Request) => {
 
       try {
         if (!rewardCache.has(member.organization_id)) {
-          const { data: rewardData, error: rewardError } = await admin
-            .from("m13_rewards")
-            .select("name, points_required, redemption_deadline, total_redeemed, total_redemption_limit")
-            .eq("organization_id", member.organization_id)
-            .eq("is_active", true)
-            .order("points_required", { ascending: true });
-          if (rewardError) throw rewardError;
-          const available = ((rewardData ?? []) as RewardRow[]).filter(
-            (r) => (!r.redemption_deadline || r.redemption_deadline >= today) && r.total_redeemed < r.total_redemption_limit,
-          );
-          rewardCache.set(member.organization_id, available);
+          rewardCache.set(member.organization_id, await loadAvailableRewards(admin, member.organization_id));
         }
 
         const ctx: EmailContext = {

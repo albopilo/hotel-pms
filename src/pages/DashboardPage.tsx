@@ -3,10 +3,12 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { useBranch } from '@/lib/branch-context';
 import { useI18n } from '@/lib/i18n';
+import { useToast } from '@/lib/toast';
 import { Card, StatCard } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
 import { LoadingPage } from '@/components/ui/States';
 import { formatIDR, todayISO } from '@/lib/format';
-import { BedDouble, CircleCheck as CheckCircle2, LogIn, LogOut, Users, Wallet, TrendingUp, CircleAlert as AlertCircle } from 'lucide-react';
+import { BedDouble, CircleCheck as CheckCircle2, LogIn, LogOut, Mail, Users, Wallet, TrendingUp, CircleAlert as AlertCircle } from 'lucide-react';
 
 interface DashboardStats {
   totalRooms: number;
@@ -38,8 +40,24 @@ export function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [branchStats, setBranchStats] = useState<BranchStats[]>([]);
   const [loading, setLoading] = useState(true);
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const { showToast } = useToast();
 
   const isSuperAdmin = user?.role === 'super_admin';
+  const canSendTestEmail = user?.role === 'super_admin' || user?.role === 'manager';
+
+  const sendTestEmail = async () => {
+    setSendingTestEmail(true);
+    const { data, error } = await supabase.functions.invoke('m13-send-member-emails', {
+      body: { action: 'send_test' },
+    });
+    setSendingTestEmail(false);
+    if (error || !data?.sent_to) {
+      showToast(t('dash.test_email_failed'), 'error');
+      return;
+    }
+    showToast(`${t('dash.test_email_sent')} ${data.sent_to}`, 'success');
+  };
   const showAllBranches = isSuperAdmin && !selectedBranchId;
 
   const loadStats = useCallback(async () => {
@@ -197,7 +215,15 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-slate-900">{t('dash.title')}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">{t('dash.title')}</h1>
+        {canSendTestEmail && (
+          <Button variant="secondary" size="sm" onClick={sendTestEmail} loading={sendingTestEmail}>
+            <Mail size={16} />
+            {sendingTestEmail ? t('dash.sending_test_email') : t('dash.send_test_email')}
+          </Button>
+        )}
+      </div>
 
       {showAllBranches && (
         <Card title={`${t('common.all_branches')} — ${t('dash.occupancy_rate')}: ${occupancyRate}%`}>
