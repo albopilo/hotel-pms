@@ -28,3 +28,4 @@ build/
 Thumbs.db
 Desktop.ini
 supabase/migrations/20261026083949_add_gen_random_bytes_public_wrapper.sql
+Brevo api key.txt
