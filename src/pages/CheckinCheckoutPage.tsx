@@ -13,14 +13,12 @@ import { Input, Select, MoneyInput } from '@/components/ui/Form';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Badge } from '@/components/ui/Badge';
 import { formatIDR, formatDate, formatTime, formatDateTime, todayISO, todayInTimezone, nowInTimezone, addDays, nightsBetween, formatHoursShort } from '@/lib/format';
-import { getLockProviderByType, integrationToConfig } from '@/lib/hotel-lock/provider';
-import type { HotelLockIntegration } from '@/types/database';
 import { generateDocumentNumber } from '@/lib/documentNumber';
 import { calculateTotalRate, getRateTypeLabel } from '@/lib/rate-calculator';
 import { folioService } from '@/services/financial';
 import { getBusinessDate } from '@/services/businessDateService';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
-import { LogIn, LogOut, KeyRound, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, Loader as Loader2, CalendarPlus, Split, FileText, Receipt, CircleArrowUp as ArrowUpCircle } from 'lucide-react';
+import { LogIn, LogOut, CircleAlert as AlertCircle, CircleCheck as CheckCircle2, CalendarPlus, Split, FileText, Receipt, CircleArrowUp as ArrowUpCircle } from 'lucide-react';
 import type { Reservation, Guest, Room, Folio, BookingSource, RoomType, ReservationRoom, IndonesianHoliday } from '@/types/database';
 import { openPrintTab } from '@/lib/printRoute';
 import { loyaltyService } from '@/services/loyaltyService';
@@ -241,19 +239,13 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
     const draft = loadDraft<string>(CHECKIN_DRAFT_KEY);
     return draft || nowInTimezone('Asia/Jakarta');
   });
-  const [cardState, setCardState] = useState<'idle'|'connecting'|'checking_encoder'|'waiting_for_card'|'writing'|'completed'|'success'|'failed'|'unavailable'>('idle');
-  const [cardMessage, setCardMessage] = useState('');
   const [completing, setCompleting] = useState(false);
-  const [lockIntegration, setLockIntegration] = useState<HotelLockIntegration | null>(null);
   const [hasInvoice, setHasInvoice] = useState(false);
   const [m13Member, setM13Member] = useState<M13Member | null>(null);
   const [createM13, setCreateM13] = useState(false);
   const [m13Email, setM13Email] = useState('');
   const [m13Creating, setM13Creating] = useState(false);
   const [m13Eligible, setM13Eligible] = useState(false);
-
-  const lockProviderType = lockIntegration?.provider_type || 'mock';
-  const isProductionLock = lockProviderType === 'production';
 
   const branch = branches.find(b => b.id === reservation.branch_id);
   const standardTime = branch?.standard_checkin_time || '14:00';
@@ -287,9 +279,6 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
           .select('*,room:rooms(*)').eq('reservation_id', reservation.id).eq('status','active').order('created_at');
         setGroupRooms((rrData as ReservationRoom[]) || []);
       }
-
-      const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
-      setLockIntegration(lockInteg as HotelLockIntegration | null);
 
       // Check branch eligibility for M13 Club
       const eligible = await loyaltyService.isBranchEligible(reservation.branch_id);
@@ -358,99 +347,6 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
     });
     setEarlyWarning(false);
     showToast('Continued without charge (logged)','info');
-  };
-
-  const encodeCard = async () => {
-    if (!room || !guest) return;
-    const provider = getLockProviderByType(lockProviderType);
-    provider.configure(integrationToConfig(lockIntegration));
-
-    // Step 1: Connecting
-    setCardState('connecting');
-    setCardMessage(t('checkin.connecting'));
-    if (!(await provider.connect())) {
-      setCardState('unavailable');
-      setCardMessage(t('checkin.lock_unavailable'));
-      await supabase.from('card_issuances').insert({
-        branch_id:reservation.branch_id, reservation_id:reservation.id, guest_id:guest.id, room_id:room.id,
-        issuance_type:'issue', card_sequence:1,
-        valid_from:`${reservation.check_in_date}T${checkinTime}`,
-        valid_until:`${reservation.check_out_date}T${reservation.check_out_time}`,
-        status:'failed', failure_reason:t('checkin.lock_unavailable'), provider_type:lockProviderType, performed_by:user!.id
-      });
-      return;
-    }
-
-    // Step 2: Checking encoder
-    setCardState('checking_encoder');
-    setCardMessage(isProductionLock ? 'Checking encoder...' : t('checkin.connecting'));
-    if (isProductionLock) {
-      const encStatus = await provider.readEncoderStatus();
-      if (!encStatus.connected) {
-        setCardState('unavailable');
-        setCardMessage('Encoder unavailable');
-        await supabase.from('card_issuances').insert({
-          branch_id:reservation.branch_id, reservation_id:reservation.id, guest_id:guest.id, room_id:room.id,
-          issuance_type:'issue', card_sequence:1,
-          valid_from:`${reservation.check_in_date}T${checkinTime}`,
-          valid_until:`${reservation.check_out_date}T${reservation.check_out_time}`,
-          status:'failed', failure_reason:'Encoder unavailable', provider_type:lockProviderType, performed_by:user!.id
-        });
-        return;
-      }
-    }
-    await new Promise(r => setTimeout(r, 300));
-
-    // Step 3: Waiting for card
-    setCardState('waiting_for_card');
-    setCardMessage(isProductionLock ? 'Waiting for card...' : t('checkin.writing'));
-    await new Promise(r => setTimeout(r, isProductionLock ? 800 : 200));
-
-    // Step 4: Writing card
-    setCardState('writing');
-    setCardMessage(t('checkin.writing'));
-    const result = await provider.encodeGuestCard({
-      roomId:room.id, roomNumber:room.room_number, guestName:guest.full_name,
-      validFrom:`${reservation.check_in_date}T${checkinTime}`,
-      validUntil:`${reservation.check_out_date}T${reservation.check_out_time}`
-    });
-
-    if (result.success) {
-      // Step 5: Completed
-      setCardState('completed');
-      setCardMessage(isProductionLock ? 'Completed' : t('checkin.confirming'));
-      await new Promise(r => setTimeout(r, 500));
-      setCardState('success');
-      setCardMessage(t('checkin.card_success'));
-      await supabase.from('card_issuances').insert({
-        branch_id:reservation.branch_id, reservation_id:reservation.id, guest_id:guest.id, room_id:room.id,
-        issuance_type:'issue', card_sequence:1,
-        valid_from:`${reservation.check_in_date}T${checkinTime}`,
-        valid_until:`${reservation.check_out_date}T${reservation.check_out_time}`,
-        status:'success', provider_type:lockProviderType, performed_by:user!.id
-      });
-      if (lockIntegration) {
-        await supabase.from('hotel_lock_integrations').update({
-          last_success_encoding: new Date().toISOString(),
-          encoder_status: 'connected',
-        }).eq('id', lockIntegration.id);
-      }
-    } else {
-      setCardState('failed');
-      setCardMessage(result.message);
-      await supabase.from('card_issuances').insert({
-        branch_id:reservation.branch_id, reservation_id:reservation.id, guest_id:guest.id, room_id:room.id,
-        issuance_type:'issue', card_sequence:1,
-        valid_from:`${reservation.check_in_date}T${checkinTime}`,
-        valid_until:`${reservation.check_out_date}T${reservation.check_out_time}`,
-        status:'failed', failure_reason:result.message, provider_type:lockProviderType, performed_by:user!.id
-      });
-      if (lockIntegration) {
-        await supabase.from('hotel_lock_integrations').update({
-          last_error: result.message,
-        }).eq('id', lockIntegration.id);
-      }
-    }
   };
 
   const completeCheckin = async () => {
@@ -587,60 +483,6 @@ function CheckinModal({ reservation, onClose, onNavigateToPayment, onNavigateToI
           )}
         </div>
         )}
-
-        <div className="border border-slate-200 rounded-lg p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2"><KeyRound size={18}/><span className="font-medium text-slate-700">{t('checkin.encode_card')}</span></div>
-            {isProductionLock
-              ? <span className="text-xs text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded">PRODUCTION MODE</span>
-              : <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-0.5 rounded">DEVELOPMENT / MOCK MODE</span>}
-          </div>
-          {room && guest && <div className="text-sm text-slate-500 mb-3">{t('common.room')}: <span className="font-medium">{room.room_number}</span> · {t('common.guest')}: <span className="font-medium">{guest.full_name}</span></div>}
-
-          {cardState === 'idle' && <Button onClick={encodeCard} disabled={!room}><KeyRound size={16}/>{t('checkin.encode_card')}</Button>}
-
-          {cardState !== 'idle' && (
-            <div className="space-y-3">
-              {/* Progress steps */}
-              <div className="space-y-1.5">
-                {[
-                  { key: 'connecting', label: t('checkin.connecting') },
-                  { key: 'checking_encoder', label: 'Checking encoder' },
-                  { key: 'waiting_for_card', label: 'Waiting for card' },
-                  { key: 'writing', label: t('checkin.writing') },
-                  { key: 'completed', label: 'Completed' },
-                ].map((step) => {
-                  const stepOrder = ['connecting','checking_encoder','waiting_for_card','writing','completed','success'];
-                  const currentIdx = stepOrder.indexOf(cardState);
-                  const stepIdx = stepOrder.indexOf(step.key);
-                  const isDone = currentIdx > stepIdx || cardState === 'success';
-                  const isActive = cardState === step.key;
-                  return (
-                    <div key={step.key} className="flex items-center gap-2 text-sm">
-                      {isDone ? <CheckCircle2 size={16} className="text-emerald-600"/> :
-                       isActive ? <Loader2 size={16} className="animate-spin text-blue-600"/> :
-                       <div className="w-4 h-4 rounded-full border-2 border-slate-200"/>}
-                      <span className={isDone ? 'text-emerald-600 font-medium' : isActive ? 'text-blue-600 font-medium' : 'text-slate-400'}>{step.label}</span>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Status message */}
-              <div className="flex items-center gap-2 pt-1">
-                {['connecting','checking_encoder','waiting_for_card','writing','completed'].includes(cardState) && <Loader2 size={18} className="animate-spin text-blue-600"/>}
-                {cardState === 'success' && <CheckCircle2 size={18} className="text-emerald-600"/>}
-                {['failed','unavailable'].includes(cardState) && <AlertCircle size={18} className="text-red-500"/>}
-                <span className={`text-sm font-medium ${['failed','unavailable'].includes(cardState) ? 'text-red-600' : cardState === 'success' ? 'text-emerald-600' : 'text-slate-700'}`}>{cardMessage}</span>
-              </div>
-
-              {/* Retry button on failure */}
-              {['failed','unavailable'].includes(cardState) && (
-                <Button size="sm" variant="outline" onClick={encodeCard}><KeyRound size={14}/> Retry encoding</Button>
-              )}
-            </div>
-          )}
-        </div>
 
         <div className="flex justify-end gap-2">
           {onNavigateToPayment && <Button size="sm" variant="outline" onClick={() => onNavigateToPayment(reservation.id)}><FileText size={14}/>{t('res.view_folio')}</Button>}
@@ -808,14 +650,6 @@ function CheckoutModal({ reservation, onClose, onNavigateToPayment, onNavigateTo
         status:'checked_out', actual_check_out: `${todayISO()}T${checkoutTime}:00`, check_out_time: checkoutTime
       }).eq('id', reservation.id);
       if(reservationError) throw reservationError;
-
-      try {
-        const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
-        const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
-        const provider = getLockProviderByType(lockType);
-        provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
-        await provider.invalidateGuestCard({ cardId: reservation.id });
-      } catch(e) { console.warn('Card invalidation failed', e); }
 
       await supabase.from('audit_logs').insert({
         organization_id: user!.organization_id, branch_id: reservation.branch_id, user_id: user!.id,
@@ -1273,44 +1107,6 @@ function ExtendStayModal({ reservation, onClose, onChargeSummary }: { reservatio
           .eq('reservation_id', reservation.id)
           .eq('status', 'active')
           .eq('room_id', reservation.room_id);
-      }
-
-      // Invalidate old guest card and encode new one if room changed
-      if (isRoomChanged) {
-        try {
-          const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
-          const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
-          const provider = getLockProviderByType(lockType);
-          provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
-          await provider.invalidateGuestCard({ cardId: reservation.id });
-
-          const newRoom = availableRooms.find(rm => rm.id === effectiveRoomId);
-          if (newRoom && guest) {
-            await provider.encodeGuestCard({
-              roomId: newRoom.id,
-              roomNumber: newRoom.room_number,
-              guestName: guest.full_name,
-              validFrom: new Date().toISOString(),
-              validUntil: `${newCheckoutDate}T${reservation.check_out_time}:00`,
-            });
-
-            await supabase.from('card_issuances').insert({
-              branch_id: reservation.branch_id,
-              reservation_id: reservation.id,
-              guest_id: guest.id,
-              room_id: newRoom.id,
-              issuance_type: 'replace',
-              card_sequence: 2,
-              valid_from: new Date().toISOString(),
-              valid_until: `${newCheckoutDate}T${reservation.check_out_time}:00`,
-              status: 'success',
-              provider_type: lockType,
-              performed_by: user!.id,
-            });
-          }
-        } catch (e) {
-          console.warn('Card re-encoding during room upgrade failed', e);
-        }
       }
 
       // Audit log
@@ -1794,44 +1590,6 @@ function UpgradeRoomModal({ reservation, reservationRooms, onClose, onChargeSumm
         } catch (invoiceErr: any) {
           console.error('Invoice sync during room upgrade failed:', invoiceErr);
           showToast(`Invoice update after upgrade: ${invoiceErr.message || invoiceErr}`, 'warning');
-        }
-      }
-
-      // Invalidate old guest card and encode new one if room changed
-      if (isRoomChanged) {
-        try {
-          const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', reservation.branch_id).maybeSingle();
-          const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
-          const provider = getLockProviderByType(lockType);
-          provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
-          await provider.invalidateGuestCard({ cardId: reservation.id });
-
-          const newRoom = availableRooms.find(rm => rm.id === effectiveRoomId);
-          if (newRoom && guest) {
-            await provider.encodeGuestCard({
-              roomId: newRoom.id,
-              roomNumber: newRoom.room_number,
-              guestName: guest.full_name,
-              validFrom: new Date().toISOString(),
-              validUntil: `${reservation.check_out_date}T${reservation.check_out_time}:00`,
-            });
-
-            await supabase.from('card_issuances').insert({
-              branch_id: reservation.branch_id,
-              reservation_id: reservation.id,
-              guest_id: guest.id,
-              room_id: newRoom.id,
-              issuance_type: 'replace',
-              card_sequence: 2,
-              valid_from: new Date().toISOString(),
-              valid_until: `${reservation.check_out_date}T${reservation.check_out_time}:00`,
-              status: 'success',
-              provider_type: lockType,
-              performed_by: user!.id,
-            });
-          }
-        } catch (e) {
-          console.warn('Card re-encoding during room upgrade failed', e);
         }
       }
 

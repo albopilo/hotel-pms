@@ -41,10 +41,6 @@ export type FolioItemType =
   | 'deposit'
   | 'refund';
 
-export type CardIssuanceType = 'issue' | 'replace' | 'invalidate' | 'extend';
-export type CardIssuanceStatus = 'pending' | 'success' | 'failed';
-export type LockProviderType = 'mock' | 'production';
-
 export interface Organization {
   id: string;
   name: string;
@@ -326,58 +322,6 @@ export interface AuditLog {
   previous_value: Record<string, unknown> | null;
   new_value: Record<string, unknown> | null;
   reason: string | null;
-  created_at: string;
-}
-
-export interface HotelLockIntegration {
-  id: string;
-  branch_id: string;
-  provider_type: LockProviderType;
-  lock_system: string;
-  lock_model: string;
-  card_technology: string;
-  bridge_url: string | null;
-  bridge_token: string | null;
-  encoder_port: string | null;
-  dll_path: string | null;
-  hotel_identifier: string | null;
-  encoding_profile: string | null;
-  auto_poll_enabled: boolean;
-  is_enabled: boolean;
-  connection_status: 'connected' | 'disconnected';
-  encoder_status: 'connected' | 'disconnected';
-  last_heartbeat: string | null;
-  last_success_encoding: string | null;
-  last_error: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface HotelLockEvent {
-  id: string;
-  integration_id: string | null;
-  branch_id: string;
-  event_type: string;
-  event_data: Record<string, unknown> | null;
-  status: 'info' | 'success' | 'warning' | 'error';
-  message: string;
-  created_at: string;
-}
-
-export interface CardIssuance {
-  id: string;
-  branch_id: string;
-  reservation_id: string;
-  guest_id: string | null;
-  room_id: string | null;
-  issuance_type: CardIssuanceType;
-  card_sequence: number;
-  valid_from: string | null;
-  valid_until: string | null;
-  status: CardIssuanceStatus;
-  failure_reason: string | null;
-  provider_type: LockProviderType;
-  performed_by: string;
   created_at: string;
 }
 

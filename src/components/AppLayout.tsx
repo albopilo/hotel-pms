@@ -8,7 +8,7 @@ import {
   LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, FileText,
   Receipt, Wallet, FileSpreadsheet, Moon, Building2, DoorOpen,
   Settings, ScrollText, CreditCard, Tags, Globe, LogOut, Search,
-  ChevronDown, Hotel, KeyRound, BookOpen, Award, Gift, Activity,
+  ChevronDown, ChevronRight, Hotel, BookOpen, Award, Gift, Activity,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { UserRole } from '@/types/database';
@@ -19,7 +19,7 @@ export type PageKey =
   | 'checkin_checkout' | 'folio' | 'payments' | 'invoices'
   | 'reports' | 'night_audit'
   | 'branches' | 'room_types' | 'users' | 'charge_categories'
-  | 'payment_settings' | 'hotel_lock' | 'system_settings' | 'audit_logs'
+  | 'payment_settings' | 'system_settings' | 'audit_logs'
   | 'booking_sources' | 'guide'
   | 'm13_members' | 'm13_settings' | 'm13_rewards' | 'm13_activity';
 
@@ -28,7 +28,7 @@ interface NavItem {
   labelKey: string;
   icon: ReactNode;
   roles: UserRole[];
-  group: 'main' | 'admin';
+  group: 'main' | 'loyalty' | 'hotel';
 }
 
 const navItems: NavItem[] = [
@@ -42,20 +42,21 @@ const navItems: NavItem[] = [
   { key: 'invoices', labelKey: 'nav.invoices', icon: <Receipt size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'reports', labelKey: 'nav.reports', icon: <FileSpreadsheet size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'night_audit', labelKey: 'nav.night_audit', icon: <Moon size={20} />, roles: ['super_admin', 'manager'], group: 'main' },
-  { key: 'branches', labelKey: 'nav.branches', icon: <Building2 size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'room_types', labelKey: 'nav.room_types', icon: <DoorOpen size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
-  { key: 'booking_sources', labelKey: 'nav.booking_sources', icon: <Tags size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'users', labelKey: 'nav.users', icon: <Users size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'charge_categories', labelKey: 'nav.charge_categories', icon: <Tags size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'payment_settings', labelKey: 'nav.payment_settings', icon: <CreditCard size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'hotel_lock', labelKey: 'nav.hotel_lock', icon: <KeyRound size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
-  { key: 'system_settings', labelKey: 'nav.system_settings', icon: <Settings size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'audit_logs', labelKey: 'nav.audit_logs', icon: <ScrollText size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
   { key: 'guide', labelKey: 'nav.guide', icon: <BookOpen size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
-  { key: 'm13_members', labelKey: 'nav.m13_members', icon: <Award size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'admin' },
-  { key: 'm13_settings', labelKey: 'nav.m13_settings', icon: <Award size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'm13_rewards', labelKey: 'nav.m13_rewards', icon: <Gift size={20} />, roles: ['super_admin'], group: 'admin' },
-  { key: 'm13_activity', labelKey: 'nav.m13_activity', icon: <Activity size={20} />, roles: ['super_admin', 'manager'], group: 'admin' },
+
+  { key: 'm13_members', labelKey: 'nav.m13_members', icon: <Award size={18} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'loyalty' },
+  { key: 'm13_settings', labelKey: 'nav.m13_settings', icon: <Award size={18} />, roles: ['super_admin'], group: 'loyalty' },
+  { key: 'm13_rewards', labelKey: 'nav.m13_rewards', icon: <Gift size={18} />, roles: ['super_admin'], group: 'loyalty' },
+  { key: 'm13_activity', labelKey: 'nav.m13_activity', icon: <Activity size={18} />, roles: ['super_admin', 'manager'], group: 'loyalty' },
+
+  { key: 'branches', labelKey: 'nav.branches', icon: <Building2 size={18} />, roles: ['super_admin'], group: 'hotel' },
+  { key: 'room_types', labelKey: 'nav.room_types', icon: <DoorOpen size={18} />, roles: ['super_admin', 'manager'], group: 'hotel' },
+  { key: 'booking_sources', labelKey: 'nav.booking_sources', icon: <Tags size={18} />, roles: ['super_admin'], group: 'hotel' },
+  { key: 'charge_categories', labelKey: 'nav.charge_categories', icon: <Tags size={18} />, roles: ['super_admin'], group: 'hotel' },
+  { key: 'payment_settings', labelKey: 'nav.payment_settings', icon: <CreditCard size={18} />, roles: ['super_admin'], group: 'hotel' },
+  { key: 'audit_logs', labelKey: 'nav.audit_logs', icon: <ScrollText size={18} />, roles: ['super_admin', 'manager'], group: 'hotel' },
+  { key: 'users', labelKey: 'nav.users', icon: <Users size={18} />, roles: ['super_admin'], group: 'hotel' },
+  { key: 'system_settings', labelKey: 'nav.system_settings', icon: <Settings size={18} />, roles: ['super_admin'], group: 'hotel' },
 ];
 
 interface LayoutProps {
@@ -74,6 +75,8 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [loyaltyOpen, setLoyaltyOpen] = useState(false);
+  const [hotelOpen, setHotelOpen] = useState(false);
   const langRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
@@ -91,7 +94,11 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
   const role = user.role;
   const visibleItems = navItems.filter((item) => item.roles.includes(role));
   const mainItems = visibleItems.filter((item) => item.group === 'main');
-  const adminItems = visibleItems.filter((item) => item.group === 'admin');
+  const loyaltyItems = visibleItems.filter((item) => item.group === 'loyalty');
+  const hotelItems = visibleItems.filter((item) => item.group === 'hotel');
+
+  const isLoyaltyActive = loyaltyItems.some((item) => item.key === currentPage);
+  const isHotelActive = hotelItems.some((item) => item.key === currentPage);
 
   const handleLanguageChange = async (lang: Language) => {
     setLanguage(lang);
@@ -102,7 +109,6 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
 
   return (
     <div className="flex h-screen bg-slate-50">
-      {/* Sidebar */}
       <aside className={`${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0 fixed md:static z-40 w-64 bg-slate-900 text-slate-300 flex flex-col transition-transform duration-200`}>
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-700">
           <div className="w-9 h-9 rounded-lg bg-blue-600 flex items-center justify-center">
@@ -120,16 +126,46 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
               <NavButton key={item.key} item={item} active={currentPage === item.key} onClick={() => { onNavigate(item.key); setSidebarOpen(false); }} t={t} />
             ))}
           </div>
-          {adminItems.length > 0 && (
+
+          {loyaltyItems.length > 0 && (
             <>
-              <div className="px-5 pt-4 pb-1">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Administration</p>
+              <div className="px-3 pt-4 pb-1">
+                <button
+                  onClick={() => setLoyaltyOpen(!loyaltyOpen)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${isLoyaltyActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  {loyaltyOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {t('nav.loyalty_group')}
+                </button>
               </div>
-              <div className="px-3">
-                {adminItems.map((item) => (
-                  <NavButton key={item.key} item={item} active={currentPage === item.key} onClick={() => { onNavigate(item.key); setSidebarOpen(false); }} t={t} />
-                ))}
+              {loyaltyOpen && (
+                <div className="px-3">
+                  {loyaltyItems.map((item) => (
+                    <NavButton key={item.key} item={item} active={currentPage === item.key} onClick={() => { onNavigate(item.key); setSidebarOpen(false); }} t={t} indent />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+
+          {hotelItems.length > 0 && (
+            <>
+              <div className="px-3 pt-4 pb-1">
+                <button
+                  onClick={() => setHotelOpen(!hotelOpen)}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider transition-colors ${isHotelActive ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                  {hotelOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {t('nav.hotel_group')}
+                </button>
               </div>
+              {hotelOpen && (
+                <div className="px-3">
+                  {hotelItems.map((item) => (
+                    <NavButton key={item.key} item={item} active={currentPage === item.key} onClick={() => { onNavigate(item.key); setSidebarOpen(false); }} t={t} indent />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </nav>
@@ -141,15 +177,12 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
 
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setSidebarOpen(false)} />}
 
-      {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Top bar */}
         <header className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-4">
           <button onClick={() => setSidebarOpen(!sidebarOpen)} className="md:hidden text-slate-600">
             <Search size={20} />
           </button>
 
-          {/* Search */}
           <div className="relative flex-1 max-w-md">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
@@ -161,7 +194,6 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
             />
           </div>
 
-          {/* Branch switcher */}
           {branches.length > 0 && (
             <select
               value={selectedBranchId || ''}
@@ -175,7 +207,6 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
             </select>
           )}
 
-          {/* Language switcher */}
           <div ref={langRef} className="relative">
             <button onClick={() => setLangOpen(!langOpen)} className="flex items-center gap-1 text-sm text-slate-600 hover:text-slate-900 px-2 py-2">
               <Globe size={18} />
@@ -190,7 +221,6 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
             )}
           </div>
 
-          {/* User menu */}
           <div ref={userRef} className="relative">
             <button onClick={() => setUserOpen(!userOpen)} className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900">
               <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center text-xs font-bold">
@@ -214,23 +244,21 @@ export function AppLayout({ currentPage, onNavigate, children, searchQuery, onSe
           </div>
         </header>
 
-        {/* Page content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-6">
           {children}
         </main>
       </div>
 
-      {/* Floating warning modal — visible on every page */}
       <WarningModal />
     </div>
   );
 }
 
-function NavButton({ item, active, onClick, t }: { item: NavItem; active: boolean; onClick: () => void; t: (k: string) => string }) {
+function NavButton({ item, active, onClick, t, indent }: { item: NavItem; active: boolean; onClick: () => void; t: (k: string) => string; indent?: boolean }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors mb-0.5 ${
+      className={`w-full flex items-center gap-2.5 ${indent ? 'px-3 pl-6' : 'px-3'} py-2 rounded-lg text-sm font-medium transition-colors mb-0.5 ${
         active ? 'bg-blue-600 text-white' : 'text-slate-300 hover:bg-slate-800 hover:text-white'
       }`}
     >

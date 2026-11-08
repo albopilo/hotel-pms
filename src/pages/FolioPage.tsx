@@ -16,11 +16,10 @@ import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format'
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
 import { openPrintTab } from '@/lib/printRoute';
 import { ConfirmModal } from '@/components/ui/Modal';
-import { getLockProviderByType, integrationToConfig } from '@/lib/hotel-lock/provider';
 import { folioService, paymentService, chargeService, FinancialError } from '@/services/financial';
 import { parseDbError } from '@/lib/error-handler';
 import { saveDraft, loadDraft, clearDraft } from '@/lib/formDraft';
-import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType, ReservationRoom, HotelLockIntegration } from '@/types/database';
+import type { Folio, FolioItem, Reservation, Guest, Room, ChargeCategory, PaymentMethod, BookingSource, RoomType, ReservationRoom } from '@/types/database';
 
 const ADD_CHARGE_DRAFT_KEY = 'folio_add_charge_draft';
 const TAKE_PAYMENT_DRAFT_KEY = 'folio_take_payment_draft';
@@ -527,11 +526,6 @@ function RoomTransferModal({ folio, reservation, currentRoom, userId, orgId, bra
         action: 'room_transfer', object_type: 'reservation', object_id: folio.reservation_id,
         previous_value: { room: currentRoom?.room_number }, new_value: { room: rooms.find((r) => r.id === form.to_room_id)?.room_number },
       });
-      const { data: lockInteg } = await supabase.from('hotel_lock_integrations').select('*').eq('branch_id', branchId).maybeSingle();
-      const lockType = (lockInteg as HotelLockIntegration | null)?.provider_type || 'mock';
-      const provider = getLockProviderByType(lockType);
-      provider.configure(integrationToConfig(lockInteg as HotelLockIntegration | null));
-      await provider.invalidateGuestCard({ cardId: folio.reservation_id });
       showToast('Room transferred', 'success');
       clearDraft(ROOM_TRANSFER_DRAFT_KEY);
       setSaving(false);

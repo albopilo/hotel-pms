@@ -17,7 +17,6 @@ import { FolioPage } from '@/pages/FolioPage';
 import { InvoicesPage } from '@/pages/InvoicesPage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { NightAuditPage } from '@/pages/NightAuditPage';
-import { HotelLockPage } from '@/pages/HotelLockPage';
 import { RoomTypesPage } from '@/pages/RoomTypesPage';
 import { BranchesPage } from '@/pages/BranchesPage';
 import { BookingSourcesPage } from '@/pages/BookingSourcesPage';
@@ -101,8 +100,6 @@ function AuthenticatedApp() {
         return <ReportsPage />;
       case 'night_audit':
         return <NightAuditPage />;
-      case 'hotel_lock':
-        return <HotelLockPage />;
       case 'room_types':
         return <RoomTypesPage />;
       case 'branches':

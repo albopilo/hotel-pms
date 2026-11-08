@@ -3,7 +3,7 @@ import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { BookOpen, LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, Wallet, Receipt, FileSpreadsheet, Moon, Building2, DoorOpen, Settings, ScrollText, CreditCard, Tags, KeyRound, Users as UsersIcon, ChevronDown, ChevronUp, Lightbulb, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Info } from 'lucide-react';
+import { BookOpen, LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, Wallet, Receipt, FileSpreadsheet, Moon, Building2, DoorOpen, Settings, ScrollText, CreditCard, Tags, Users as UsersIcon, ChevronDown, ChevronUp, Lightbulb, CircleCheck as CheckCircle2, CircleAlert as AlertCircle, Info } from 'lucide-react';
 import type { UserRole } from '@/types/database';
 
 interface GuideSection {
@@ -100,7 +100,6 @@ const SECTIONS: GuideSection[] = [
     steps: [
       { en: 'The left column shows arrivals (confirmed reservations ready for check-in). Click "Check In" to process a guest.', id: 'Kolom kiri menampilkan kedatangan (reservasi dikonfirmasi siap untuk check-in). Klik "Check In" untuk memproses tamu.' },
       { en: 'During check-in, set the actual arrival time. The system compares the full date and time against the scheduled check-in (date + standard time). If the actual arrival is earlier, an early check-in charge can be added.', id: 'Saat check-in, atur waktu kedatangan aktual. Sistem membandingkan tanggal dan waktu lengkap dengan jadwal check-in (tanggal + waktu standar). Jika kedatangan lebih awal, biaya check-in awal dapat ditambahkan.' },
-      { en: 'You can encode a room key card (in development/mock mode for now). Click "Encode Room Card" before completing check-in.', id: 'Anda dapat mengenkoded kartu kunci kamar (dalam mode pengembangan/mock untuk saat ini). Klik "Enkoded Kartu Kamar" sebelum menyelesaikan check-in.' },
       { en: 'The right column shows today\'s departures. Click "Check Out" to process. The system shows a full charge summary and balance.', id: 'Kolom kanan menampilkan keberangkatan hari ini. Klik "Check Out" untuk memproses. Sistem menampilkan ringkasan biaya lengkap dan saldo.' },
       { en: 'If the guest checks out late (past the standard time or past the checkout date), a late checkout warning appears with an option to add a charge.', id: 'Jika tamu check-out terlambat (melewati waktu standar atau melewati tanggal checkout), peringatan check-out terlambat muncul dengan opsi untuk menambah biaya.' },
       { en: 'A "Departures Later" section shows guests checking out on future dates, so you can plan ahead.', id: 'Bagian "Keberangkatan Nanti" menampilkan tamu yang check-out pada tanggal mendatang, sehingga Anda dapat merencanakan ke depan.' },
@@ -169,25 +168,6 @@ const SECTIONS: GuideSection[] = [
     ],
     tip: { en: 'You don\'t need to manually trigger the night audit — it runs automatically. Just review the results and any exceptions each morning.', id: 'Anda tidak perlu memicu audit malam secara manual — ini berjalan otomatis. Cukup tinjau hasil dan pengecualian setiap pagi.' },
     visual: <NightAuditVisual />,
-  },
-  {
-    id: 'hotel_lock',
-    icon: <KeyRound size={20} />,
-    titleEn: 'Hotel Lock Integration',
-    titleId: 'Integrasi Kunci Hotel',
-    roles: ['super_admin', 'manager', 'receptionist'],
-    steps: [
-      { en: 'This page shows the status of the hotel lock system. You can see the bridge connection, encoder status, and last heartbeat. The system supports two modes: Mock (for testing) and Production (connects to a real bridge device).', id: 'Halaman ini menunjukkan status sistem kunci hotel. Anda dapat melihat koneksi bridge, status enkoder, dan heartbeat terakhir. Sistem mendukung dua mode: Mock (untuk pengujian) dan Produksi (terhubung ke perangkat bridge sungguhan).' },
-      { en: 'Setup: A Super Admin must configure the integration per branch. Go to Administration → Branches, select a branch, and set the lock provider type (Mock or Production). For Production mode, enter the bridge URL (e.g. http://192.168.1.100:3000) and API key.', id: 'Pengaturan: Super Admin harus mengkonfigurasi integrasi per cabang. Buka Administrasi → Cabang, pilih cabang, dan atur jenis provider kunci (Mock atau Produksi). Untuk mode Produksi, masukkan URL bridge (mis. http://192.168.1.100:3000) dan API key.' },
-      { en: 'The bridge is a small application that runs on a computer connected to the card encoder hardware. It receives encoding commands from the hotel system and sends them to the encoder via a DLL/SDK.', id: 'Bridge adalah aplikasi kecil yang berjalan di komputer yang terhubung ke perangkat enkoder kartu. Bridge menerima perintah enkoding dari sistem hotel dan mengirimkannya ke enkoder melalui DLL/SDK.' },
-      { en: 'Use "Test Connection" to check if the bridge is reachable. Use "Test Encoder" to check the card encoder hardware status.', id: 'Gunakan "Tes Koneksi" untuk memeriksa apakah bridge dapat dijangkau. Gunakan "Tes Enkoder" untuk memeriksa status perangkat enkoder kartu.' },
-      { en: 'Use "Test Card" to perform a test card encoding. This verifies the full workflow from connection to card write.', id: 'Gunakan "Tes Kartu" untuk melakukan enkoding kartu uji. Ini memverifikasi alur kerja lengkap dari koneksi hingga penulisan kartu.' },
-      { en: 'During check-in, click "Encode Room Card" to write a guest key card. The system communicates with the bridge to encode the card with the room number and stay dates.', id: 'Saat check-in, klik "Enkoded Kartu Kamar" untuk menulis kartu kunci tamu. Sistem berkomunikasi dengan bridge untuk mengenkoded kartu dengan nomor kamar dan tanggal menginap.' },
-      { en: 'At check-out, the guest key card is automatically invalidated so it no longer opens the room. When a room is transferred, the old card is also invalidated.', id: 'Saat check-out, kartu kunci tamu otomatis dibatalkan sehingga tidak dapat lagi membuka kamar. Saat kamar dipindahkan, kartu lama juga dibatalkan.' },
-      { en: 'Recent card issuances and integration logs are shown at the bottom, so you can track all key card activity.', id: 'Penerbitan kartu terbaru dan log integrasi ditampilkan di bagian bawah, sehingga Anda dapat melacak semua aktivitas kartu kunci.' },
-    ],
-    tip: { en: 'Troubleshooting: If "Test Connection" fails, check that the bridge application is running on the encoder computer and that the bridge URL is correct. If "Test Encoder" fails, verify the encoder hardware is connected and the correct DLL is configured. If card encoding fails, ensure a blank card is placed on the encoder before clicking encode.', id: 'Pemecahan Masalah: Jika "Tes Koneksi" gagal, periksa bahwa aplikasi bridge berjalan di komputer enkoder dan URL bridge sudah benar. Jika "Tes Enkoder" gagal, verifikasi perangkat enkoder terhubung dan DLL yang benar dikonfigurasi. Jika enkoding kartu gagal, pastikan kartu kosong diletakkan di enkoder sebelum mengklik enkoded.' },
-    visual: <LockVisual />,
   },
   {
     id: 'admin',
@@ -654,38 +634,3 @@ function AuditVisual() {
   );
 }
 
-function LockVisual() {
-  return (
-    <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-      <div className="grid grid-cols-3 gap-2">
-        <div className="bg-white rounded-lg p-3 border border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="rounded p-1.5 bg-emerald-50 text-emerald-600"><KeyRound size={16} /></div>
-            <div>
-              <p className="text-xs text-slate-500">Bridge</p>
-              <p className="text-sm font-bold text-emerald-700">Connected</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="rounded p-1.5 bg-emerald-50 text-emerald-600"><KeyRound size={16} /></div>
-            <div>
-              <p className="text-xs text-slate-500">Encoder</p>
-              <p className="text-sm font-bold text-emerald-700">Connected</p>
-            </div>
-          </div>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-slate-200">
-          <div className="flex items-center gap-2">
-            <div className="rounded p-1.5 bg-blue-50 text-blue-600"><Info size={16} /></div>
-            <div>
-              <p className="text-xs text-slate-500">Mode</p>
-              <p className="text-sm font-bold text-amber-700">Mock</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
