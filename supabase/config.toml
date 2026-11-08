@@ -1,5 +1,8 @@
 [functions.create-user]
 verify_jwt = true
 
+[functions.m13-send-member-emails]
+verify_jwt = false
+
 [functions.m13-create-member]
 verify_jwt = true

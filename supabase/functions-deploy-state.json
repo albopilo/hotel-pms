@@ -1,0 +1,17 @@
+{
+  "projectId": "72759935",
+  "functions": {
+    "create-user": {
+      "hasChanged": false,
+      "hash": "6637faf5a1a89f867aad13b5e64b0b3b86ed223ac7dc715038d35c8f890ea001"
+    },
+    "m13-create-member": {
+      "hasChanged": false,
+      "hash": "44c61fb83da5e6cad71ad325853c396f1241f0ed5a03ee71fa5bd7a73fae6af4"
+    },
+    "m13-send-member-emails": {
+      "hasChanged": false,
+      "hash": "125129f77e08429b1cc458529263dc968112df2c9bc7516b47068cecb5e4d2bb"
+    }
+  }
+}
