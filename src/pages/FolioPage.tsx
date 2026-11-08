@@ -53,7 +53,7 @@ export function FolioPage({ searchQuery, reservationId, onNavigateToInvoice, onS
     setLoading(true);
     const data = await fetchAll<FolioListRow>('folios', {
       select: '*, guest:guests(full_name), reservation:reservations(room:rooms(room_number))',
-      filters: (q) => q.in('branch_id', branchIds),
+      filters: (q) => q.in('branch_id', branchIds).eq('is_archived', false),
       order: { column: 'created_at', ascending: false },
     });
     setFolios(data);

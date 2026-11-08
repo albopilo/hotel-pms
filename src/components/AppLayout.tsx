@@ -8,7 +8,7 @@ import {
   LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, FileText,
   Receipt, Wallet, FileSpreadsheet, Moon, Building2, DoorOpen,
   Settings, ScrollText, CreditCard, Tags, Globe, LogOut, Search,
-  ChevronDown, ChevronRight, Hotel, BookOpen, Award, Gift, Activity,
+  ChevronDown, ChevronRight, Hotel, BookOpen, Award, Gift, Activity, Archive,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { UserRole } from '@/types/database';
@@ -19,7 +19,7 @@ export type PageKey =
   | 'checkin_checkout' | 'folio' | 'payments' | 'invoices'
   | 'reports' | 'night_audit'
   | 'branches' | 'room_types' | 'users' | 'charge_categories'
-  | 'payment_settings' | 'system_settings' | 'audit_logs'
+  | 'payment_settings' | 'system_settings' | 'audit_logs' | 'archive'
   | 'booking_sources' | 'guide'
   | 'm13_members' | 'm13_settings' | 'm13_rewards' | 'm13_activity';
 
@@ -55,6 +55,7 @@ const navItems: NavItem[] = [
   { key: 'charge_categories', labelKey: 'nav.charge_categories', icon: <Tags size={18} />, roles: ['super_admin'], group: 'hotel' },
   { key: 'payment_settings', labelKey: 'nav.payment_settings', icon: <CreditCard size={18} />, roles: ['super_admin'], group: 'hotel' },
   { key: 'audit_logs', labelKey: 'nav.audit_logs', icon: <ScrollText size={18} />, roles: ['super_admin', 'manager'], group: 'hotel' },
+  { key: 'archive', labelKey: 'nav.archive', icon: <Archive size={18} />, roles: ['super_admin', 'manager'], group: 'hotel' },
   { key: 'users', labelKey: 'nav.users', icon: <Users size={18} />, roles: ['super_admin'], group: 'hotel' },
   { key: 'system_settings', labelKey: 'nav.system_settings', icon: <Settings size={18} />, roles: ['super_admin'], group: 'hotel' },
 ];

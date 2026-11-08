@@ -220,7 +220,7 @@ export const invoiceService = {
   async getInvoicesByBranch(branchIds: string[]) {
     const data = await fetchAll('invoices', {
       select: `*, guests(id,full_name,phone,email),branches(id,name,address),reservations(id,reservation_number,room_id,rooms(id,room_number)),invoice_items(id,description,category,quantity,unit_amount,amount)`,
-      filters: (q) => q.in('branch_id', branchIds),
+      filters: (q) => q.in('branch_id', branchIds).eq('is_archived', false),
       order: { column: 'created_at', ascending: false },
     });
     return data;

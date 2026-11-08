@@ -25,6 +25,7 @@ import { ChargeCategoriesPage } from '@/pages/ChargeCategoriesPage';
 import { PaymentSettingsPage } from '@/pages/PaymentSettingsPage';
 import { SystemSettingsPage } from '@/pages/SystemSettingsPage';
 import { AuditLogsPage } from '@/pages/AuditLogsPage';
+import { ArchivePage } from '@/pages/ArchivePage';
 import { GuidePage } from '@/pages/GuidePage';
 import { LoyaltyMembersPage } from '@/pages/m13/LoyaltyMembersPage';
 import { LoyaltySettingsPage } from '@/pages/m13/LoyaltySettingsPage';
@@ -116,6 +117,8 @@ function AuthenticatedApp() {
         return <SystemSettingsPage />;
       case 'audit_logs':
         return <AuditLogsPage />;
+      case 'archive':
+        return <ArchivePage />;
       case 'm13_members':
         return <LoyaltyMembersPage />;
       case 'm13_settings':

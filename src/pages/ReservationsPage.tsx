@@ -101,7 +101,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
   const branchIds = useMemo(() => selectedBranchId ? [selectedBranchId] : branches.map(b => b.id), [selectedBranchId, branches]);
 
   const buildQuery = useCallback((opts: { all?: boolean; limit?: number } = {}) => {
-    let q = supabase.from('reservations').select('*', { count: 'exact' }).in('branch_id', branchIds).order('created_at', { ascending: false });
+    let q = supabase.from('reservations').select('*', { count: 'exact' }).in('branch_id', branchIds).eq('is_archived', false).order('created_at', { ascending: false });
     if (statusFilter !== 'all') q = q.eq('status', statusFilter);
     if (opts.all) {
       // no limit — load everything
@@ -142,7 +142,7 @@ export function ReservationsPage({ searchQuery = '', initialGuestId, onInitialGu
     setLoadingMore(true);
     const allData = await fetchAll<Reservation>('reservations', {
       filters: (q) => {
-        let qq = q.in('branch_id', branchIds);
+        let qq = q.in('branch_id', branchIds).eq('is_archived', false);
         if (statusFilter !== 'all') qq = qq.eq('status', statusFilter);
         return qq;
       },

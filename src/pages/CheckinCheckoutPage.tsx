@@ -53,8 +53,8 @@ export function CheckinCheckoutPage({ initialReservationId, searchQuery, onNavig
     setLoading(true);
 
     const [{ data: res }, { data: co }, g, { data: r }] = await Promise.all([
-      supabase.from('reservations').select('*').in('branch_id', branchIds).in('status', ['confirmed', 'checked_in']).order('check_in_date'),
-      supabase.from('reservations').select('*').in('branch_id', branchIds).eq('status', 'checked_out').order('actual_check_out', { ascending: false }).limit(20),
+      supabase.from('reservations').select('*').in('branch_id', branchIds).eq('is_archived', false).in('status', ['confirmed', 'checked_in']).order('check_in_date'),
+      supabase.from('reservations').select('*').in('branch_id', branchIds).eq('is_archived', false).eq('status', 'checked_out').order('actual_check_out', { ascending: false }).limit(20),
       fetchAll<Guest>('guests'),
       supabase.from('rooms').select('*').in('branch_id', branchIds)
     ]);

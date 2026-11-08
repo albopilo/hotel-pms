@@ -26,6 +26,12 @@ const translations: Record<string, { en: string; id: string }> = {
   'nav.audit_logs': { en: 'Audit Logs', id: 'Log Audit' },
   'nav.guide': { en: 'User Guide', id: 'Panduan Pengguna' },
   'nav.booking_sources': { en: 'Booking Sources', id: 'Sumber Pemesanan' },
+  'nav.archive': { en: 'Archive', id: 'Arsip' },
+  'archive.title': { en: 'Archived Reservations', id: 'Reservasi Diarsipkan' },
+  'archive.description': { en: 'Reservations whose stay ended more than 3 months ago. Read-only.', id: 'Reservasi yang masa inapnya berakhir lebih dari 3 bulan lalu. Hanya lihat.' },
+  'archive.search_placeholder': { en: 'Search by reservation number or guest name', id: 'Cari berdasarkan nomor reservasi atau nama tamu' },
+  'archive.empty': { en: 'No archived reservations found', id: 'Tidak ada reservasi diarsipkan' },
+  'archive.error': { en: 'Could not load archived reservations', id: 'Tidak dapat memuat reservasi diarsipkan' },
 
   // Common
   'common.search': { en: 'Search', id: 'Cari' },
