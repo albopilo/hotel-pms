@@ -12,6 +12,7 @@ import { Input, Select, Textarea, MoneyInput } from '@/components/ui/Form';
 import { Badge } from '@/components/ui/Badge';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
 import { Pagination } from '@/components/ui/Pagination';
+import { ApplyAdvancePaymentModal } from '@/components/ApplyAdvancePaymentModal';
 import { formatIDR, formatDateTime, formatDate, formatTime } from '@/lib/format';
 import { Plus, FileText, Search, ArrowRightLeft, TriangleAlert as AlertTriangle, Receipt, User as UserIcon } from 'lucide-react';
 import { openPrintTab } from '@/lib/printRoute';
@@ -146,6 +147,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
   const [loading, setLoading] = useState(true);
   const [showAddCharge, setShowAddCharge] = useState(false);
   const [showTakePayment, setShowTakePayment] = useState(false);
+  const [showApplyAdvance, setShowApplyAdvance] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [showPostStay, setShowPostStay] = useState(false);
   const [voidTarget, setVoidTarget] = useState<FolioItem | null>(null);
@@ -326,6 +328,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
             <>
               <Button size="sm" onClick={() => setShowAddCharge(true)}><Plus size={14} /> {t('folio.add_charge')}</Button>
               <Button size="sm" variant="success" onClick={() => setShowTakePayment(true)}><Plus size={14} /> {t('folio.take_payment')}</Button>
+              <Button size="sm" variant="outline" onClick={() => setShowApplyAdvance(true)}>Apply advance payment</Button>
               <Button size="sm" variant="outline" onClick={() => setShowTransfer(true)}><ArrowRightLeft size={14} /> {t('res.transfer_room')}</Button>
             </>
           )}
@@ -343,6 +346,7 @@ function FolioDetailModal({ folio, onClose, onNavigateToInvoice, onSelectReserva
       </Modal>
 
       {showAddCharge && <AddChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowAddCharge(false)} onSaved={async () => { setShowAddCharge(false); await reloadItems(); openPrintTab({ type: 'charge-summary', folioId: folio.id }); }} />}
+      {showApplyAdvance && <ApplyAdvancePaymentModal folio={folio} userId={user!.id} onClose={() => setShowApplyAdvance(false)} onApplied={async () => { setShowApplyAdvance(false); await reloadItems(); }} />}
       {showTakePayment && <TakePaymentModal folio={folio} reservation={reservation} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowTakePayment(false)} onSaved={async (paymentId?: string) => { setShowTakePayment(false); await reloadItems(); if (paymentId) openPrintTab({ type: 'receipt', paymentId }); }} />}
       {showTransfer && <RoomTransferModal folio={folio} reservation={reservation} currentRoom={room} userId={user!.id} orgId={user!.organization_id} branchId={folio.branch_id} onClose={() => setShowTransfer(false)} onSaved={onClose} />}
       {showPostStay && <PostStayChargeModal folio={folio} reservation={reservation} room={room} chargeCats={chargeCats} paymentMethods={paymentMethods} userId={user!.id} orgId={user!.organization_id} onClose={() => setShowPostStay(false)} onSaved={async () => { setShowPostStay(false); await reloadItems(); }} />}

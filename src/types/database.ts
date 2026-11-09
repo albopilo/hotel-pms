@@ -250,6 +250,32 @@ export interface FolioItem {
   additional_charge_id: string | null;
 }
 
+export type AdvancePaymentStatus = 'available' | 'claimed' | 'cancelled';
+
+export interface AdvancePayment {
+  id: string;
+  organization_id: string;
+  branch_id: string;
+  guest_name: string;
+  expected_check_in_date: string;
+  amount: number;
+  payment_method_id: string;
+  payment_method_code: string;
+  status: AdvancePaymentStatus;
+  business_date: string;
+  notes: string | null;
+  received_by: string;
+  claimed_folio_id: string | null;
+  claimed_at: string | null;
+  claimed_by: string | null;
+  cancelled_at: string | null;
+  cancelled_by: string | null;
+  cancelled_business_date: string | null;
+  cancel_reason: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PaymentMethod {
   id: string;
   organization_id: string;

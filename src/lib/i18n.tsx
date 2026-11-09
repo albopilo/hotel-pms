@@ -6,6 +6,7 @@ const translations: Record<string, { en: string; id: string }> = {
   // Navigation
   'nav.dashboard': { en: 'Dashboard', id: 'Dasbor' },
   'nav.reservations': { en: 'Reservations', id: 'Reservasi' },
+  'nav.advance_payments': { en: 'Advance Payments', id: 'Pembayaran Muka' },
   'nav.calendar': { en: 'Calendar', id: 'Kalender' },
   'nav.rooms': { en: 'Rooms', id: 'Kamar' },
   'nav.guests': { en: 'Guests', id: 'Tamu' },

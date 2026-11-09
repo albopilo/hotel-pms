@@ -8,14 +8,14 @@ import {
   LayoutDashboard, CalendarDays, BedDouble, Users, LogIn, FileText,
   Receipt, Wallet, FileSpreadsheet, Moon, Building2, DoorOpen,
   Settings, ScrollText, CreditCard, Tags, Globe, LogOut, Search,
-  ChevronDown, ChevronRight, Hotel, BookOpen, Award, Gift, Activity, Archive,
+  ChevronDown, ChevronRight, Hotel, BookOpen, Award, Gift, Activity, Archive, HandCoins,
 } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import type { UserRole } from '@/types/database';
 import { WarningModal } from '@/components/WarningModal';
 
 export type PageKey =
-  | 'dashboard' | 'reservations' | 'calendar' | 'rooms' | 'guests'
+  | 'dashboard' | 'reservations' | 'advance_payments' | 'calendar' | 'rooms' | 'guests'
   | 'checkin_checkout' | 'folio' | 'payments' | 'invoices'
   | 'reports' | 'night_audit'
   | 'branches' | 'room_types' | 'users' | 'charge_categories'
@@ -34,6 +34,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { key: 'dashboard', labelKey: 'nav.dashboard', icon: <LayoutDashboard size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'reservations', labelKey: 'nav.reservations', icon: <CalendarDays size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
+  { key: 'advance_payments', labelKey: 'nav.advance_payments', icon: <HandCoins size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'calendar', labelKey: 'nav.calendar', icon: <CalendarDays size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'rooms', labelKey: 'nav.rooms', icon: <BedDouble size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },
   { key: 'guests', labelKey: 'nav.guests', icon: <Users size={20} />, roles: ['super_admin', 'manager', 'receptionist'], group: 'main' },

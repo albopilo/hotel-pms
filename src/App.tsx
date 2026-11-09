@@ -9,6 +9,7 @@ import { PrintRoute } from '@/pages/PrintRoute';
 import { LoginPage } from '@/pages/LoginPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { ReservationsPage } from '@/pages/ReservationsPage';
+import { AdvancePaymentsPage } from '@/pages/AdvancePaymentsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
 import { RoomsPage } from '@/pages/RoomsPage';
 import { GuestsPage } from '@/pages/GuestsPage';
@@ -85,6 +86,8 @@ function AuthenticatedApp() {
         return <DashboardPage />;
       case 'reservations':
         return <ReservationsPage searchQuery={searchQuery} initialGuestId={newReservationGuestId} onInitialGuestIdConsumed={() => setNewReservationGuestId(null)} onSelectReservation={handleSelectReservation} onNavigateToPayment={handleNavigateToPayment} onNavigateToInvoice={handleNavigateToInvoice} />;
+      case 'advance_payments':
+        return <AdvancePaymentsPage />;
       case 'calendar':
         return <CalendarPage onSelectReservation={handleSelectReservation} />;
       case 'rooms':
