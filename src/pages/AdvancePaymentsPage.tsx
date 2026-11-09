@@ -121,7 +121,8 @@ export function AdvancePaymentsPage() {
       {showCreate && (
         <CreateAdvancePaymentModal
           methods={methods}
-          branchId={selectedBranchId || branches[0]?.id || ''}
+          branches={branches}
+          initialBranchId={selectedBranchId || branches[0]?.id || ''}
           onClose={() => setShowCreate(false)}
           onCreated={() => { setShowCreate(false); loadRows(); }}
         />
@@ -138,14 +139,16 @@ export function AdvancePaymentsPage() {
   );
 }
 
-function CreateAdvancePaymentModal({ methods, branchId, onClose, onCreated }: {
+function CreateAdvancePaymentModal({ methods, branches, initialBranchId, onClose, onCreated }: {
   methods: PaymentMethod[];
-  branchId: string;
+  branches: { id: string; name: string }[];
+  initialBranchId: string;
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { user, branches } = useAuth();
+  const { user } = useAuth();
   const { showToast } = useToast();
+  const [branchId, setBranchId] = useState(initialBranchId);
   const [guestName, setGuestName] = useState('');
   const [checkIn, setCheckIn] = useState('');
   const [amount, setAmount] = useState('');
@@ -156,6 +159,7 @@ function CreateAdvancePaymentModal({ methods, branchId, onClose, onCreated }: {
 
   const submit = async () => {
     const next: Record<string, string> = {};
+    if (!branchId) next.branch = 'Select a branch';
     if (!guestName.trim()) next.guestName = 'Guest name is required';
     if (!checkIn) next.checkIn = 'Expected check-in date is required';
     else if (checkIn < todayISO()) next.checkIn = 'Check-in date must be today or later';
@@ -163,7 +167,7 @@ function CreateAdvancePaymentModal({ methods, branchId, onClose, onCreated }: {
     if (!numericAmount || numericAmount <= 0) next.amount = 'Amount must be greater than zero';
     const method = methods.find((m) => m.id === methodId);
     if (!method) next.method = 'Select a payment method';
-    if (!branchId || !user) next.branch = 'No branch selected';
+    if (!user) next.branch = 'No user session';
     setErrors(next);
     if (Object.keys(next).length > 0 || !method || !user) return;
 
@@ -197,6 +201,10 @@ function CreateAdvancePaymentModal({ methods, branchId, onClose, onCreated }: {
         </div>
       }>
       <div className="space-y-4">
+        <Select label="Branch" value={branchId} onChange={(e) => setBranchId(e.target.value)} error={errors.branch}>
+          <option value="">Select branch</option>
+          {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </Select>
         <Input label="Guest name" value={guestName} onChange={(e) => setGuestName(e.target.value)} error={errors.guestName} />
         <Input label="Expected check-in date" type="date" min={todayISO()} value={checkIn} onChange={(e) => setCheckIn(e.target.value)} error={errors.checkIn} />
         <MoneyInput label="Amount paid" value={amount} onChange={setAmount} error={errors.amount} />
@@ -205,7 +213,6 @@ function CreateAdvancePaymentModal({ methods, branchId, onClose, onCreated }: {
           {methods.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
         </Select>
         <Input label="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
-        {errors.branch && <p className="text-xs text-red-500">{errors.branch}</p>}
       </div>
     </Modal>
   );

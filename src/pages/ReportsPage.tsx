@@ -702,7 +702,56 @@ export function ReportsPage() {
             room_number: res?.room?.room_number || '-', business_date: p.business_date,
           });
         });
+        // ── Advance payment receipts and refunds ─────────────────────────────
+        // Advance receipts (money received before check-in) live in the
+        // advance_payments table, not the payments table, so they must be fetched
+        // separately. When an advance is applied to a folio, the service inserts a
+        // folio_item (item_type='payment') but NOT a payments row — so there is no
+        // double-counting with the regular payments above.
+        const { data: advReceipts } = await supabase.from('advance_payments').select('*')
+          .in('branch_id', branchIds)
+          .in('status', ['available', 'claimed'])
+          .gte('business_date', dateFrom).lte('business_date', dateTo);
+
+        const { data: advRefunds } = await supabase.from('advance_payments').select('*')
+          .in('branch_id', branchIds)
+          .eq('status', 'cancelled')
+          .gte('cancelled_business_date', dateFrom).lte('cancelled_business_date', dateTo);
+
+        let totalAdvanceReceipts = 0;
+        let totalAdvanceRefunds = 0;
+        const advanceReceiptDetails: PaymentDetailRow[] = [];
+        const advanceRefundDetails: PaymentDetailRow[] = [];
+
+        (advReceipts || []).forEach((a: any) => {
+          totalAdvanceReceipts += Number(a.amount);
+          advanceReceiptDetails.push({
+            payment_number: 'ADV-' + String(a.id).slice(0, 8).toUpperCase(),
+            amount: Number(a.amount),
+            reservation_id: '', folio_id: a.claimed_folio_id || '',
+            guest_id: null, guest_name: a.guest_name,
+            room_number: '-', business_date: a.business_date,
+          });
+        });
+
+        (advRefunds || []).forEach((a: any) => {
+          totalAdvanceRefunds += Number(a.amount);
+          advanceRefundDetails.push({
+            payment_number: 'REF-' + String(a.id).slice(0, 8).toUpperCase(),
+            amount: -Number(a.amount),
+            reservation_id: '', folio_id: '',
+            guest_id: null, guest_name: a.guest_name,
+            room_number: '-', business_date: a.cancelled_business_date || a.business_date,
+          });
+        });
+
         const paymentRows: PaymentBlockRow[] = Object.entries(payByMethod).map(([label, val]) => ({ label, amount: val.amount, details: val.details }));
+        if (advanceReceiptDetails.length > 0) {
+          paymentRows.push({ label: 'Advance Payment Receipts', amount: totalAdvanceReceipts, details: advanceReceiptDetails });
+        }
+        if (advanceRefundDetails.length > 0) {
+          paymentRows.push({ label: 'Advance Payment Refunds', amount: -totalAdvanceRefunds, details: advanceRefundDetails });
+        }
         const totalPayments = paymentRows.reduce((s, r) => s + r.amount, 0);
 
         const chargeItems = fi.filter((x) => x.item_type === 'charge' && x.amount > 0 && x.category !== DEPOSIT_CATEGORY);
@@ -728,7 +777,7 @@ export function ReportsPage() {
 
         setDailyBlocks({ payments: paymentRows, charges: chargeRows });
         setData(chargeItems);
-        setSummary({ totalPayments, totalCharges, netIncome: totalCharges - discounts + tax, discounts, tax });
+        setSummary({ totalPayments, totalCharges, netIncome: totalCharges - discounts + tax, discounts, tax, advanceReceipts: totalAdvanceReceipts, advanceRefunds: totalAdvanceRefunds });
       }
 
       else if (report.key === 'monthly_income_report') {
@@ -1534,7 +1583,7 @@ function DailyIncomeReport({ blocks, summary }: { blocks: { payments: PaymentBlo
 
       {/* Net summary */}
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="bg-slate-50 rounded-lg p-3">
             <p className="text-xs text-slate-500">Total Charges</p>
             <p className="text-lg font-bold text-slate-800">{formatIDR(summary.totalCharges)}</p>
@@ -1547,6 +1596,18 @@ function DailyIncomeReport({ blocks, summary }: { blocks: { payments: PaymentBlo
             <p className="text-xs text-slate-500">Tax</p>
             <p className="text-lg font-bold text-slate-800">{formatIDR(summary.tax)}</p>
           </div>
+          {summary.advanceReceipts > 0 && (
+            <div className="bg-emerald-50 rounded-lg p-3">
+              <p className="text-xs text-slate-500">Advance Receipts</p>
+              <p className="text-lg font-bold text-emerald-700">{formatIDR(summary.advanceReceipts)}</p>
+            </div>
+          )}
+          {summary.advanceRefunds > 0 && (
+            <div className="bg-red-50 rounded-lg p-3">
+              <p className="text-xs text-slate-500">Advance Refunds</p>
+              <p className="text-lg font-bold text-red-600">-{formatIDR(summary.advanceRefunds)}</p>
+            </div>
+          )}
           <div className="bg-slate-100 rounded-lg p-3 border border-slate-300">
             <p className="text-xs text-slate-500">Net Income</p>
             <p className="text-lg font-bold text-slate-900">{formatIDR(summary.netIncome)}</p>
@@ -1572,7 +1633,7 @@ function PaymentRowGroup({ row, isOpen, onToggle, onViewFolio }: {
       <tr className="border-b border-slate-100 cursor-pointer hover:bg-slate-50" onClick={onToggle}>
         <td className="py-2 px-3 text-slate-400">{isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}</td>
         <td className="py-2 px-3 font-medium text-slate-700">{row.label}</td>
-        <td className="text-right py-2 px-3 font-medium text-emerald-700">{formatIDR(row.amount)}</td>
+        <td className={`text-right py-2 px-3 font-medium ${row.amount < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{formatIDR(row.amount)}</td>
       </tr>
       {isOpen && row.details.length > 0 && (
         <tr className="bg-slate-50/50">
@@ -1595,7 +1656,7 @@ function PaymentRowGroup({ row, isOpen, onToggle, onViewFolio }: {
                       <td className="py-1.5 px-3 font-mono text-slate-600">{d.payment_number}</td>
                       <td className="py-1.5 px-3 text-slate-700">{d.guest_name}</td>
                       <td className="py-1.5 px-3 text-slate-600">{d.room_number}</td>
-                      <td className="text-right py-1.5 px-3 font-medium text-emerald-700">{formatIDR(d.amount)}</td>
+                      <td className={`text-right py-1.5 px-3 font-medium ${d.amount < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{formatIDR(d.amount)}</td>
                       <td className="py-1.5 px-3 text-slate-400">{formatDate(d.business_date)}</td>
                       <td className="text-center py-1.5 px-3">
                         {d.reservation_id && (
