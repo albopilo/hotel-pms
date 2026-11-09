@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/lib/toast';
+import { useI18n } from '@/lib/i18n';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { LoadingPage, EmptyState } from '@/components/ui/States';
@@ -17,6 +18,7 @@ export function ApplyAdvancePaymentModal({ folio, userId, onClose, onApplied }: 
   onApplied: () => void;
 }) {
   const { showToast } = useToast();
+  const { t } = useI18n();
   const [rows, setRows] = useState<AdvancePayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -30,11 +32,11 @@ export function ApplyAdvancePaymentModal({ folio, userId, onClose, onApplied }: 
         .eq('branch_id', folio.branch_id)
         .eq('status', 'available')
         .order('expected_check_in_date');
-      if (error) showToast('Could not load advance payments', 'error');
+      if (error) showToast(t('adv.load_error'), 'error');
       else setRows((data as AdvancePayment[]) || []);
       setLoading(false);
     })();
-  }, [folio.branch_id, showToast]);
+  }, [folio.branch_id, showToast, t]);
 
   const selected = rows.find((r) => r.id === selectedId) || null;
 
@@ -43,26 +45,26 @@ export function ApplyAdvancePaymentModal({ folio, userId, onClose, onApplied }: 
     setSaving(true);
     try {
       await advancePaymentService.applyToFolio(selected, folio, userId);
-      showToast('Advance payment applied to folio', 'success');
+      showToast(t('adv.apply_success'), 'success');
       onApplied();
     } catch (e) {
-      showToast(e instanceof FinancialError ? e.message : 'Could not apply advance payment', 'error');
+      showToast(e instanceof FinancialError ? e.message : t('adv.apply_error'), 'error');
       setSaving(false);
     }
   };
 
   return (
-    <Modal open onClose={onClose} title="Apply advance payment" size="md"
+    <Modal open onClose={onClose} title={t('adv.apply_title')} size="md"
       footer={
         <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button variant="outline" onClick={onClose} disabled={saving}>{t('common.cancel')}</Button>
           <Button onClick={apply} disabled={!selected} loading={saving}>
-            {selected ? `Apply ${formatIDR(Number(selected.amount))}` : 'Apply'}
+            {selected ? `${t('adv.apply_btn')} ${formatIDR(Number(selected.amount))}` : t('adv.apply_btn')}
           </Button>
         </div>
       }>
       {loading ? <LoadingPage /> : rows.length === 0 ? (
-        <EmptyState icon={<HandCoins size={40} />} title="No available advance payments" message="Record one from the Advance Payments page first." />
+        <EmptyState icon={<HandCoins size={40} />} title={t('adv.no_available')} message={t('adv.no_available_desc')} />
       ) : (
         <ul className="space-y-2">
           {rows.map((r) => (
@@ -79,7 +81,7 @@ export function ApplyAdvancePaymentModal({ folio, userId, onClose, onApplied }: 
                   <span className="font-medium text-slate-800">{formatIDR(Number(r.amount))}</span>
                 </div>
                 <div className="text-xs text-slate-500">
-                  Check-in {formatDate(r.expected_check_in_date)} · {r.payment_method_code}
+                  {t('adv.check_in_label')} {formatDate(r.expected_check_in_date)} · {r.payment_method_code}
                 </div>
               </button>
             </li>
